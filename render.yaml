@@ -9,6 +9,7 @@ services:
     region: singapore
     branch: main
     rootDir: .
+    # IMPORTANT: Use npm, NOT bun (Render Node runtime doesn't have bun)
     buildCommand: npm install && npm run build
     startCommand: npm run start
     healthCheckPath: /
@@ -18,9 +19,7 @@ services:
         value: production
       - key: NEXT_TELEMETRY_DISABLED
         value: "1"
-      - key: PORT
-        value: "10000"
-      # REQUIRED: Set this to your Apps Script Web App URL
+      # REQUIRED: Set this in Render dashboard to your Apps Script Web App URL
       - key: APPS_SCRIPT_URL
         sync: false
       # Optional: for auto-enquiry cron security
@@ -30,3 +29,6 @@ services:
 # Note: No database service needed!
 # All data is stored in your Google Sheet.
 # Free tier works perfectly because there's no local file storage requirement.
+#
+# IMPORTANT: In Render dashboard, set Node Version to 20.x
+# (Settings → Environment → Node Version → 20.11.0 or just 20)

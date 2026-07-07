@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "engines": {
-    "node": ">=18.0.0"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "build": "next build && mkdir -p .next/standalone/.next && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public",
     "start": "node .next/standalone/server.js",
+    "start:prod": "NODE_ENV=production node .next/standalone/server.js",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -69,7 +70,6 @@
     "react-resizable-panels": "^3.0.3",
     "react-syntax-highlighter": "^15.6.1",
     "recharts": "^2.15.4",
-    "sharp": "^0.34.3",
     "sonner": "^2.0.6",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",

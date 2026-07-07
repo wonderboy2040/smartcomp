@@ -192,9 +192,29 @@ Vercel also supports the auto-enquiry cron job (1st & 15th of month) via `vercel
 
 ## Troubleshooting
 
-### HTTP 502 Error on Render
+### 🔥 HTTP 502 Error on Render (MOST COMMON)
 
-**Cause**: App failed to start. Most common reasons:
+**Step 1: Set Node Version to 20** (CRITICAL!)
+1. Go to render.com → your service → **Settings**
+2. Find **Node Version** field
+3. Change from `18.x` to `20.11.0`
+4. Save → Manual Deploy → Clear cache & deploy
+
+**Step 2: Verify Build & Start Commands**
+- Build Command: `npm install && npm run build`
+- Start Command: `npm run start`
+
+**Step 3: Set Environment Variables**
+- `APPS_SCRIPT_URL` = your Apps Script Web App URL (REQUIRED)
+- `NODE_ENV` = `production`
+- `NEXT_TELEMETRY_DISABLED` = `1`
+
+**Step 4: Clear Cache**
+- Render dashboard → Manual Deploy → **Clear build cache & deploy**
+
+See `RENDER-502-FIX.md` for detailed guide.
+
+### Other Common Issues
 
 1. **Using `bun` instead of `npm`**: Render Node runtime doesn't have bun.
    - ✅ Fix: Use `npm install && npm run build` for build, `npm run start` for start
@@ -210,7 +230,6 @@ Vercel also supports the auto-enquiry cron job (1st & 15th of month) via `vercel
 
 4. **Port issue**: Render assigns PORT=10000 automatically.
    - Next.js standalone server reads `PORT` env var automatically
-   - render.yaml has `PORT: "10000"` set
 
 ### Render Free Tier Sleep Issue
 
