@@ -97,15 +97,15 @@ That's it! The app will automatically detect the env var and load. All devices a
 ## Local Development
 
 ```bash
-# Install dependencies
-bun install
+# Install dependencies (npm or bun)
+npm install
 
 # Set env var
 cp .env.example .env
 # Edit .env and add your APPS_SCRIPT_URL
 
 # Start dev server
-bun run dev
+npm run dev
 ```
 
 Open `http://localhost:3000`. If `APPS_SCRIPT_URL` is not set, you'll see a setup wizard with instructions.
@@ -118,13 +118,16 @@ Open `http://localhost:3000`. If `APPS_SCRIPT_URL` is not set, you'll see a setu
 2. Go to [render.com](https://render.com) → New **Web Service**
 3. Connect your GitHub repo
 4. Settings auto-detected from `render.yaml`:
-   - Build: `bun install`
-   - Start: `bun run start`
+   - **Runtime**: Node
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm run start`
 5. In Render dashboard, add environment variable:
    - `APPS_SCRIPT_URL` = your Apps Script Web App URL
 6. Deploy!
 
-**No database service needed** - this is why free tier works.
+**Important**: 
+- Use `npm` commands, NOT `bun` (Render doesn't have bun installed by default)
+- No database service needed - data is in Google Sheets
 
 ### Vercel
 
@@ -186,6 +189,49 @@ Vercel also supports the auto-enquiry cron job (1st & 15th of month) via `vercel
 4. **Data ownership** - Your data stays in your Google Sheet, not locked in a vendor DB
 5. **Easy backup** - Just backup your Google Sheet
 6. **No migrations** - Apps Script handles schema automatically
+
+## Troubleshooting
+
+### HTTP 502 Error on Render
+
+**Cause**: App failed to start. Most common reasons:
+
+1. **Using `bun` instead of `npm`**: Render Node runtime doesn't have bun.
+   - ✅ Fix: Use `npm install && npm run build` for build, `npm run start` for start
+   - render.yaml already configured correctly
+
+2. **Missing `APPS_SCRIPT_URL` env var**: App won't start without it.
+   - Go to Render dashboard → your service → Environment
+   - Add `APPS_SCRIPT_URL` with your Apps Script Web App URL
+
+3. **Build failed**: Check Render build logs for errors.
+   - Common: Missing dependencies, TypeScript errors
+   - Our config has `typescript.ignoreBuildErrors: true` to skip TS issues
+
+4. **Port issue**: Render assigns PORT=10000 automatically.
+   - Next.js standalone server reads `PORT` env var automatically
+   - render.yaml has `PORT: "10000"` set
+
+### Render Free Tier Sleep Issue
+
+Render free tier sleeps after 15 min of inactivity. First request after sleep takes 30-50 sec.
+
+**Solutions**:
+- Use [UptimeRobot](https://uptimerobot.com) (free) to ping your URL every 10 min
+- Or upgrade to paid plan ($7/month)
+
+### Google Sheets Connection Failed
+
+1. Verify Apps Script is deployed as **Web app** (not API)
+2. Check "Who has access" is set to **Anyone**
+3. Copy the URL ending with `/exec` (not `/dev`)
+4. Test in Apps Script editor: Run → `testSetup` function
+
+### App Loads but Shows "Not Configured"
+
+- `APPS_SCRIPT_URL` env var not set on Render/Vercel
+- OR env var set but app needs redeploy
+- Try: Render dashboard → Manual Deploy → Clear cache & deploy
 
 ## License
 
