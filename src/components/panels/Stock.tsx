@@ -127,7 +127,7 @@ export function StockPanel() {
                 <CardContent className="p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-900 text-sm">{item.name}</p>
+                      <p className="font-medium text-slate-900 text-sm">{item?.name || ""}</p>
                       <p className="text-[10px] text-slate-500">{item.sku}</p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
@@ -213,7 +213,7 @@ export function StockPanel() {
                       <TableRow key={item.id} className="hover:bg-slate-50">
                         <TableCell>
                           <div>
-                            <p className="font-medium text-slate-900">{item.name}</p>
+                            <p className="font-medium text-slate-900">{item?.name || ""}</p>
                             <p className="text-xs text-slate-500">{item.sku}</p>
                           </div>
                         </TableCell>

@@ -135,14 +135,14 @@ export function QuotationsPanel() {
           </CardContent></Card>
         ) : (
           filtered.map((q) => {
-            const expired = new Date(q.validTill) < new Date() && q.status === 'draft'
+            const expired = new Date(q?.validTill || Date.now()) < new Date() && q.status === 'draft'
             return (
               <Card key={q.id} className="border-slate-200">
                 <CardContent className="p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 text-sm">{q.number}</p>
-                      <p className="text-[10px] text-slate-500">{new Date(q.date).toLocaleDateString('en-IN')}</p>
+                      <p className="text-[10px] text-slate-500">{new Date(q?.date || Date.now()).toLocaleDateString('en-IN')}</p>
                     </div>
                     <Badge variant="outline" className={
                       q.status === 'converted' ? 'bg-green-50 text-green-700 border-green-200 text-[9px]'
@@ -157,7 +157,7 @@ export function QuotationsPanel() {
                     <div>
                       <p className="text-base font-bold text-slate-900">{formatCurrency(q.grandTotal)}</p>
                       <p className="text-[10px] text-slate-500">
-                        Valid: {new Date(q.validTill).toLocaleDateString('en-IN')}
+                        Valid: {new Date(q?.validTill || Date.now()).toLocaleDateString('en-IN')}
                         {expired && <span className="text-red-500 ml-1">Expired</span>}
                       </p>
                     </div>
@@ -215,15 +215,15 @@ export function QuotationsPanel() {
                   </TableRow>
                 ) : (
                   filtered.map((q) => {
-                    const expired = new Date(q.validTill) < new Date() && q.status === 'draft'
+                    const expired = new Date(q?.validTill || Date.now()) < new Date() && q.status === 'draft'
                     return (
                       <TableRow key={q.id} className="hover:bg-slate-50">
                         <TableCell className="font-medium text-slate-900">{q.number}</TableCell>
                         <TableCell className="text-sm text-slate-600">
-                          {new Date(q.date).toLocaleDateString('en-IN')}
+                          {new Date(q?.date || Date.now()).toLocaleDateString('en-IN')}
                         </TableCell>
                         <TableCell className="text-sm text-slate-600">
-                          {new Date(q.validTill).toLocaleDateString('en-IN')}
+                          {new Date(q?.validTill || Date.now()).toLocaleDateString('en-IN')}
                           {expired && <span className="block text-[10px] text-red-500">Expired</span>}
                         </TableCell>
                         <TableCell>

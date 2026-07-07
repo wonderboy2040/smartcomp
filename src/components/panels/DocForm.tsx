@@ -94,14 +94,14 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
     setItems([
       ...items,
       {
-        itemId: item.id,
-        name: item.name,
-        sku: item.sku,
-        hsnCode: item.hsnCode,
+        itemId: item?.id,
+        name: item?.name || '',
+        sku: item?.sku || '',
+        hsnCode: item?.hsnCode || '',
         quantity: 1,
-        rate: item.sellingPrice,
-        gstApplicable: item.gstApplicable,
-        gstRate: item.gstRate,
+        rate: Number(item?.sellingPrice) || 0,
+        gstApplicable: item?.gstApplicable === true || item?.gstApplicable === 'true',
+        gstRate: Number(item?.gstRate) || 0,
         costPrice: item.costPrice,
         discount: 0,
       },
@@ -255,7 +255,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                       return (
                         <TableRow key={idx}>
                           <TableCell>
-                            <div className="font-medium text-sm">{item.name}</div>
+                            <div className="font-medium text-sm">{item?.name || ""}</div>
                             {item.sku && <div className="text-[10px] text-slate-500">{item.sku}</div>}
                           </TableCell>
                           <TableCell>
@@ -320,7 +320,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                     <div key={idx} className="p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="font-medium text-sm">{item.name}</div>
+                          <div className="font-medium text-sm">{item?.name || ""}</div>
                           {item.sku && <div className="text-[10px] text-slate-500">{item.sku}</div>}
                         </div>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0 flex-shrink-0" onClick={() => removeItem(idx)}>
@@ -578,7 +578,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                 {filteredStock.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>
-                      <div className="font-medium text-sm">{item.name}</div>
+                      <div className="font-medium text-sm">{item?.name || ""}</div>
                       <div className="text-[10px] text-slate-500">{item.sku}</div>
                     </TableCell>
                     <TableCell className="text-center text-xs">

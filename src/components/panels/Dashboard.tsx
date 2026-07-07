@@ -229,7 +229,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => voi
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-xs sm:text-sm font-medium text-slate-900 truncate">{inv.number}</p>
-                      <p className="text-[10px] sm:text-xs text-slate-500 truncate">{inv.customer.name}</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 truncate">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
                     </div>
                     <div className="text-right flex-shrink-0 ml-2">
                       <p className="text-xs sm:text-sm font-semibold text-slate-900">{formatCurrency(inv.grandTotal)}</p>
@@ -280,8 +280,8 @@ export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => voi
                     onClick={() => onNavigate('payments')}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900 truncate">{inv.customer.name}</p>
-                      <p className="text-xs text-slate-500">{inv.number} · {new Date(inv.date).toLocaleDateString('en-IN')}</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
+                      <p className="text-xs text-slate-500">{inv?.number || ''} · {inv?.date ? new Date(inv.date).toLocaleDateString('en-IN') : ''}</p>
                     </div>
                     <div className="text-right flex-shrink-0 ml-2">
                       <p className="text-sm font-semibold text-red-600">{formatCurrency(inv.amountDue)}</p>
@@ -320,8 +320,8 @@ export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => voi
                     className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 border border-amber-100"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-500">{item.sku}</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">{item?.name || 'Unnamed'}</p>
+                      <p className="text-xs text-slate-500">{item?.sku || ''}</p>
                     </div>
                     <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-[10px] flex-shrink-0">
                       {item.quantity} {item.unit}
@@ -359,8 +359,8 @@ export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => voi
                     className="flex items-center justify-between p-2.5 rounded-lg hover:bg-slate-50 transition-colors"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-900 truncate">{e.supplier.name}</p>
-                      <p className="text-xs text-slate-500">{new Date(e.sentAt).toLocaleDateString('en-IN')}</p>
+                      <p className="text-sm font-medium text-slate-900 truncate">{e?.supplier?.name || e?.supplierName || 'Unknown'}</p>
+                      <p className="text-xs text-slate-500">{e?.sentAt ? new Date(e.sentAt).toLocaleDateString('en-IN') : ''}</p>
                     </div>
                     <Badge
                       variant="outline"

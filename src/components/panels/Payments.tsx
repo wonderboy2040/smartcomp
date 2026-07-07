@@ -65,7 +65,7 @@ export function PaymentsPanel() {
 
   const totalDue = pendingInvoices.reduce((s, i) => s + i.amountDue, 0)
   const todayPayments = (payments || []).filter(
-    (p) => new Date(p.date).toDateString() === new Date().toDateString()
+    (p) => new Date(p?.date || Date.now()).toDateString() === new Date().toDateString()
   )
   const todayTotal = todayPayments.reduce((s, p) => s + p.amount, 0)
 
@@ -220,7 +220,7 @@ export function PaymentsPanel() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 text-sm truncate">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
-                      <p className="text-[10px] text-slate-500">{inv.number} · {new Date(inv.date).toLocaleDateString('en-IN')}</p>
+                      <p className="text-[10px] text-slate-500">{inv.number} · {new Date(inv?.date || Date.now()).toLocaleDateString('en-IN')}</p>
                     </div>
                     <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[9px] flex-shrink-0">
                       {inv.paymentStatus}
@@ -273,7 +273,7 @@ export function PaymentsPanel() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 text-sm">{p.invoice.number}</p>
                       <p className="text-[10px] text-slate-500 truncate">{p?.invoice?.customer?.name || p?.customerName || ''}</p>
-                      <p className="text-[9px] text-slate-400">{new Date(p.date).toLocaleDateString('en-IN')} · {new Date(p.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-[9px] text-slate-400">{new Date(p?.date || Date.now()).toLocaleDateString('en-IN')} · {new Date(p?.date || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 flex-shrink-0" onClick={() => handleDeletePayment(p.id)}>
                       <Trash2 className="w-3.5 h-3.5 text-red-500" />
@@ -333,7 +333,7 @@ export function PaymentsPanel() {
                     filteredPending.map((inv) => (
                       <TableRow key={inv.id} className="hover:bg-slate-50">
                         <TableCell className="font-medium">{inv.number}</TableCell>
-                        <TableCell className="text-sm">{new Date(inv.date).toLocaleDateString('en-IN')}</TableCell>
+                        <TableCell className="text-sm">{new Date(inv?.date || Date.now()).toLocaleDateString('en-IN')}</TableCell>
                         <TableCell>
                           <div>
                             <p className="text-sm font-medium">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
@@ -402,9 +402,9 @@ export function PaymentsPanel() {
                     filteredPayments.map((p) => (
                       <TableRow key={p.id} className="hover:bg-slate-50">
                         <TableCell className="text-sm">
-                          {new Date(p.date).toLocaleDateString('en-IN')}
+                          {new Date(p?.date || Date.now()).toLocaleDateString('en-IN')}
                           <div className="text-[10px] text-slate-500">
-                            {new Date(p.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(p?.date || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">{p.invoice.number}</TableCell>
@@ -456,7 +456,7 @@ export function PaymentsPanel() {
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm gap-2">
                   <span className="text-slate-600 flex-shrink-0">Customer:</span>
-                  <span className="font-medium text-right truncate">{selectedInvoice.customer.name}</span>
+                  <span className="font-medium text-right truncate">{selectedInvoice?.customer?.name || selectedInvoice?.customerName || 'Walk-in'}</span>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm gap-2">
                   <span className="text-slate-600 flex-shrink-0">Grand Total:</span>
