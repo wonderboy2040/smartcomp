@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, updateRow } from '@/lib/sheets-client'
 import { buildEnquiryMessage, generateWhatsAppLink, parseRateResponse } from '@/lib/whatsapp'
+import { isCloudApiConfigured, sendTemplateMessage, sendTextMessage, normalizePhone } from '@/lib/whatsapp-cloud'
 
 export async function GET(req: NextRequest) {
   try {
@@ -74,6 +75,9 @@ export async function POST(req: NextRequest) {
     const suppliers = allSuppliers.filter((s) => supplierIds.includes(s.id))
 
     const results = []
+    const cloudApiOn = isCloudApiConfigured()
+    const itemsListText = items.map((i, idx) => `${idx + 1}. ${String(i?.name || '')}${i?.sku ? ` (SKU: ${i.sku})` : ''}`).join('\n')
+
     for (const supplier of suppliers) {
       // Defensive: phone may be stored as number in Sheets. Coerce to string.
       const rawPhone = supplier.whatsappNumber || supplier.phone || ''
@@ -100,17 +104,51 @@ export async function POST(req: NextRequest) {
         isAuto,
       })
 
+      let autoSent = false
+      let sendStatus: 'sent' | 'failed' | 'skipped' = 'skipped'
+      let sendError: string | undefined
+
+      if (cloudApiOn) {
+        // Auto-send via WhatsApp Cloud API.
+        // Strategy: try template message first (works outside 24h window).
+        // If that fails, fall back to free-text (works if supplier messaged in last 24h).
+        const normalized = normalizePhone(phone)
+        if (!normalized) {
+          sendStatus = 'failed'
+          sendError = 'Invalid phone number'
+        } else {
+          const tmpl = await sendTemplateMessage(phone, supplierName, itemsListText)
+          if (tmpl.success) {
+            autoSent = true
+            sendStatus = 'sent'
+          } else {
+            // Try free-text as fallback (in case template isn't approved yet, or 24h window is open)
+            const txt = await sendTextMessage(phone, message)
+            if (txt.success) {
+              autoSent = true
+              sendStatus = 'sent'
+            } else {
+              sendStatus = 'failed'
+              sendError = tmpl.error || txt.error || 'Send failed'
+            }
+          }
+        }
+      }
+
       results.push({
         enquiryId: enquiry.id,
         supplierId: String(supplier.id || ''),
         supplierName,
         phone,
-        whatsappLink: link,
+        whatsappLink: link, // always include as fallback view
         message,
+        autoSent,
+        sendStatus,
+        sendError,
       })
     }
 
-    return NextResponse.json({ success: true, results })
+    return NextResponse.json({ success: true, results, cloudApiOn })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }

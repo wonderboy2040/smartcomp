@@ -12,10 +12,21 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
+  // CRITICAL: clean up stale build artifacts so old chunks don't linger
+  // and cause "This page couldn't load" after deploys
+  cleanDistDir: true,
   // Ensure the service worker is served with the correct MIME type
   // and is not cached aggressively (so updates reach clients quickly).
   async headers() {
     return [
+      {
+        // HTML pages must NEVER be cached aggressively — always revalidate
+        // so a new deploy is picked up on next navigation.
+        source: "/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg).*)",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
       {
         source: "/sw.js",
         headers: [

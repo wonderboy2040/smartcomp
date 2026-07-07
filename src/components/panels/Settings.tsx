@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast'
 import {
   Store, Settings as SettingsIcon, FileSpreadsheet, RefreshCw,
   CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy,
-  ExternalLink, Loader2, ShieldCheck, Zap, Cloud
+  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send
 } from 'lucide-react'
 
 export function SettingsPanel() {
@@ -33,9 +33,12 @@ export function SettingsPanel() {
       </div>
 
       <Tabs defaultValue="shop">
-        <TabsList className="grid w-full grid-cols-3 h-auto">
+        <TabsList className="grid w-full grid-cols-4 h-auto">
           <TabsTrigger value="shop" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
             <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden xs:inline sm:inline">Shop</span><span className="xs:hidden sm:hidden">Shop</span>
+          </TabsTrigger>
+          <TabsTrigger value="whatsapp" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
+            <Cloud className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> WhatsApp
           </TabsTrigger>
           <TabsTrigger value="sync" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
             <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Sync
@@ -47,6 +50,9 @@ export function SettingsPanel() {
 
         <TabsContent value="shop" className="mt-4">
           <ShopSettings />
+        </TabsContent>
+        <TabsContent value="whatsapp" className="mt-4">
+          <WhatsAppSettings />
         </TabsContent>
         <TabsContent value="sync" className="mt-4">
           <SyncStatus />
@@ -344,6 +350,134 @@ function DataSettings() {
           <p>No local database - works on Render/Vercel free tier.</p>
           <p>Multi-device support: all devices share the same Google Sheet data.</p>
           <p>To view raw data: open your Google Sheet directly.</p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function WhatsAppSettings() {
+  const { toast } = useToast()
+  const { data: status, refetch } = useFetch<any>('/api/whatsapp/status', undefined)
+  const [testPhone, setTestPhone] = useState('')
+  const [testMsg, setTestMsg] = useState('Hello from Smart Computers Panel — this is a test message.')
+  const [sending, setSending] = useState(false)
+
+  const handleTest = async () => {
+    if (!testPhone) {
+      toast({ title: 'Enter a phone number', variant: 'destructive' })
+      return
+    }
+    setSending(true)
+    try {
+      const r = await apiPost('/api/whatsapp/test-send', { phone: testPhone, message: testMsg })
+      if (r.success) {
+        toast({ title: 'Test message sent', description: `Message ID: ${r.messageId || 'OK'}` })
+      } else {
+        toast({ title: 'Send failed', description: r.error || 'Unknown error', variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const configured = !!status?.configured
+
+  return (
+    <Card className="border-slate-200">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+          <Cloud className="w-5 h-5 text-green-600" /> WhatsApp Cloud API
+        </CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
+          Configure automatic message sending and incoming reply capture. Set the env vars below in your Render dashboard.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Status */}
+        <div className={`rounded-lg p-3 ${configured ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+          <div className="flex items-start gap-2">
+            {configured ? <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" /> : <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />}
+            <div className="text-sm flex-1">
+              <p className={`font-medium ${configured ? 'text-emerald-900' : 'text-amber-900'}`}>
+                {configured ? 'Cloud API: Connected' : 'Cloud API: Not configured'}
+              </p>
+              {configured ? (
+                <div className="text-xs text-emerald-700 mt-1 space-y-0.5">
+                  <p>Business number: <code className="bg-white px-1 rounded">{status?.businessNumber}</code></p>
+                  <p>Phone Number ID: <code className="bg-white px-1 rounded">{status?.phoneNumberId}</code></p>
+                  <p>Template: <code className="bg-white px-1 rounded">{status?.templateName}</code></p>
+                  <p>Webhook verify token: {status?.verifyTokenSet ? '✓ set' : '✗ not set'}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-700 mt-1">
+                  Set the env vars below in Render dashboard to enable automatic sending + reply capture.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Required env vars */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-slate-700">Required Environment Variables (set in Render dashboard):</p>
+          <div className="bg-slate-900 text-slate-100 rounded-lg p-3 text-xs font-mono space-y-1 overflow-x-auto">
+            <div><span className="text-emerald-400">WA_TOKEN</span>=your_permanent_access_token</div>
+            <div><span className="text-emerald-400">WA_PHONE_NUMBER_ID</span>=123456789012345</div>
+            <div><span className="text-emerald-400">WA_BUSINESS_NUMBER</span>=919876543210</div>
+            <div><span className="text-emerald-400">WA_VERIFY_TOKEN</span>=smartcomp_wh_2026</div>
+            <div><span className="text-emerald-400">WA_TEMPLATE_NAME</span>=rate_enquiry  <span className="text-slate-500"># optional, default: rate_enquiry</span></div>
+          </div>
+        </div>
+
+        {/* Setup steps */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-slate-700">Setup steps (one-time, ~15 min):</p>
+          <ol className="text-xs text-slate-600 space-y-1.5 list-decimal list-inside">
+            <li>Go to <a href="https://business.facebook.com" target="_blank" rel="noreferrer" className="text-blue-600 underline">business.facebook.com</a> → create a Meta Business account (free).</li>
+            <li>Add a new app → choose "Business" type → add "WhatsApp" product.</li>
+            <li>Get a new SIM with a number you don't use for personal WhatsApp. Add it as a test number in Meta.</li>
+            <li>Copy the <strong>Permanent Access Token</strong> and <strong>Phone Number ID</strong> from WhatsApp → API Setup.</li>
+            <li>Set these as <code className="bg-slate-100 px-1 rounded">WA_TOKEN</code> and <code className="bg-slate-100 px-1 rounded">WA_PHONE_NUMBER_ID</code> env vars in Render.</li>
+            <li>Create a message template named <code className="bg-slate-100 px-1 rounded">rate_enquiry</code> in WhatsApp → Message Templates (body: "Hello {'{1}'}, please provide rates for: {'{2}'}"). Wait for approval (~2 hours).</li>
+            <li>In WhatsApp → Configuration, set webhook URL to <code className="bg-slate-100 px-1 rounded">https://your-render-url/api/whatsapp/webhook</code> and verify token = <code className="bg-slate-100 px-1 rounded">WA_VERIFY_TOKEN</code> value. Subscribe to "messages" field.</li>
+            <li>Redeploy on Render. Done — messages auto-send and replies auto-capture.</li>
+          </ol>
+        </div>
+
+        {/* Test message */}
+        <div className="space-y-2 pt-2 border-t border-slate-200">
+          <p className="text-sm font-medium text-slate-700">Send Test Message</p>
+          <p className="text-xs text-slate-500">Verify your Cloud API setup is working. The recipient must have messaged your business number in the last 24h (otherwise use a template).</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Input
+              placeholder="e.g. 919876543210"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              className="sm:col-span-1"
+            />
+            <Input
+              placeholder="Message"
+              value={testMsg}
+              onChange={(e) => setTestMsg(e.target.value)}
+              className="sm:col-span-2"
+            />
+          </div>
+          <Button onClick={handleTest} disabled={!configured || sending} size="sm" className="bg-green-600 hover:bg-green-700">
+            {sending ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Sending...</> : <><Send className="w-3.5 h-3.5 mr-1" /> Send Test</>}
+          </Button>
+          {!configured && (
+            <p className="text-xs text-amber-600 mt-1">Configure WA_TOKEN and WA_PHONE_NUMBER_ID first.</p>
+          )}
+        </div>
+
+        {/* Webhook URL reminder */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+          <p className="font-medium flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> Webhook URL for Meta dashboard:</p>
+          <code className="block bg-white px-2 py-1 rounded mt-1 break-all">https://your-render-domain.com/api/whatsapp/webhook</code>
+          <p className="mt-1">Verify token: the value you set as <code className="bg-white px-1 rounded">WA_VERIFY_TOKEN</code> env var.</p>
         </div>
       </CardContent>
     </Card>

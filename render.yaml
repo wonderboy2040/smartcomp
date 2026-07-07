@@ -38,6 +38,19 @@ services:
       # Leave empty to disable PIN protection.
       - key: APP_PIN
         sync: false
+      # OPTIONAL: WhatsApp Cloud API — enables auto-send + auto-capture replies.
+      # If these are NOT set, the app falls back to wa.me manual mode.
+      # Setup guide: see README → "WhatsApp Cloud API Setup" section.
+      - key: WA_TOKEN
+        sync: false
+      - key: WA_PHONE_NUMBER_ID
+        sync: false
+      - key: WA_BUSINESS_NUMBER
+        sync: false
+      - key: WA_VERIFY_TOKEN
+        sync: false
+      - key: WA_TEMPLATE_NAME
+        value: "rate_enquiry"
       # Optional: for auto-enquiry cron security
       # - key: CRON_SECRET
       #   sync: false

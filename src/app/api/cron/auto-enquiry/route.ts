@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, isConfigured } from '@/lib/sheets-client'
 import { buildEnquiryMessage, generateWhatsAppLink } from '@/lib/whatsapp'
+import { isCloudApiConfigured, sendTemplateMessage, sendTextMessage } from '@/lib/whatsapp-cloud'
 
 // Cron job: Auto-create enquiries on 1st and 15th of month
 // Vercel cron config in vercel.json: "0 10 1,15 * *"
@@ -44,6 +45,9 @@ export async function POST(req: NextRequest) {
     const todayStr = today.toISOString().slice(0, 10)
 
     const created = []
+    const cloudApiOn = isCloudApiConfigured()
+    const itemsListText = items.map((i, idx) => `${idx + 1}. ${String(i?.name || '')}${i?.sku ? ` (SKU: ${i.sku})` : ''}`).join('\n')
+
     for (const supplier of suppliers) {
       // Check if already sent today
       const alreadySent = existingEnquiries.some(
@@ -73,10 +77,21 @@ export async function POST(req: NextRequest) {
         isAuto: true,
       })
 
-      created.push({ enquiryId: enquiry.id, supplierName: supplier.name, whatsappLink: link })
+      let sendStatus = 'skipped'
+      if (cloudApiOn && phone) {
+        const tmpl = await sendTemplateMessage(phone, String(supplier.name || 'Sir/Madam'), itemsListText)
+        if (tmpl.success) {
+          sendStatus = 'sent'
+        } else {
+          const txt = await sendTextMessage(phone, message)
+          sendStatus = txt.success ? 'sent' : 'failed'
+        }
+      }
+
+      created.push({ enquiryId: enquiry.id, supplierName: supplier.name, whatsappLink: link, sendStatus })
     }
 
-    return NextResponse.json({ success: true, message: `Auto-created ${created.length} enquiries`, enquiries: created })
+    return NextResponse.json({ success: true, message: `Auto-created ${created.length} enquiries`, enquiries: created, cloudApiOn })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }

@@ -341,3 +341,111 @@ Your existing data is **never** at risk during the upgrade - the data-safe `ensu
 
 ## License
 Private project. All rights reserved.
+
+---
+
+## WhatsApp Cloud API Setup (Auto-Send + Auto-Capture Replies)
+
+This edition includes a complete **WhatsApp Cloud API integration**. When configured, the panel will:
+
+1. **Auto-send** enquiry messages from your business WhatsApp number (no manual "Send" button clicking)
+2. **Auto-capture** supplier replies via webhook — replies appear in the WhatsApp panel automatically (every 15s refresh)
+3. **Auto-parse** rates from the reply text using pattern matching
+4. Fall back to wa.me manual mode if Cloud API env vars are not set
+
+### Prerequisites
+- A **Meta Business account** (free) — create at https://business.facebook.com
+- A **new phone number** with a SIM you don't use for personal WhatsApp (Cloud API requires migrating the number away from any existing WhatsApp account)
+- ~15 minutes for setup + ~2 hours for template approval
+
+### Step-by-step setup
+
+#### 1. Create Meta Business account
+1. Go to https://business.facebook.com → log in with Facebook → create a Business Account.
+2. Verify your business (you can skip business verification for development mode, but you'll need it for production).
+
+#### 2. Create a Meta App with WhatsApp
+1. Go to https://developers.facebook.com/apps → **Create App** → **Business** type.
+2. Add product: **WhatsApp**.
+3. Note your **App ID** and **App Secret**.
+
+#### 3. Add your business phone number
+1. In the WhatsApp product → **Phone Numbers** → **Add Phone Number**.
+2. Enter a number that is NOT currently registered with WhatsApp (you'll get an SMS/voice verification code).
+3. Note the **Phone Number ID** (long number, ~15 digits) — this becomes `WA_PHONE_NUMBER_ID`.
+
+#### 4. Generate a permanent access token
+1. In the WhatsApp product → **API Setup** → **Generate Access Token**.
+2. **IMPORTANT**: Copy it immediately — you won't see it again. This becomes `WA_TOKEN`.
+3. Make it permanent: System User → Add → assign `whatsapp_business_messaging` permission.
+
+#### 5. Create the "rate_enquiry" message template
+1. In WhatsApp → **Message Templates** → **Create Template**.
+2. Name: `rate_enquiry`, Language: `English (en)`, Category: `Marketing` or `Utility`.
+3. Body (use exactly these placeholders):
+   ```
+   Hello {{1}}, please provide latest rates for the following items:
+
+   {{2}}
+
+   Please reply in this format so I can update my records:
+   1. Item Name: Rs.XXXX (GST: Yes/No)
+   2. ...
+
+   Thank you!
+   ```
+4. Submit for review — approval takes ~2 hours (sometimes up to 24h).
+
+#### 6. Set environment variables in Render
+In your Render service → **Environment** → add:
+| Key | Value |
+|-----|-------|
+| `WA_TOKEN` | your permanent access token |
+| `WA_PHONE_NUMBER_ID` | phone number ID from step 3 |
+| `WA_BUSINESS_NUMBER` | your business number in E.164 (e.g. `919876543210`, no `+`) |
+| `WA_VERIFY_TOKEN` | any random string (e.g. `smartcomp_wh_2026`) — you'll reuse this in the webhook config |
+| `WA_TEMPLATE_NAME` | `rate_enquiry` (or your custom name) |
+
+#### 7. Configure the webhook (incoming replies)
+1. In WhatsApp → **Configuration** → **Webhook**.
+2. **Callback URL**: `https://your-render-domain.com/api/whatsapp/webhook`
+3. **Verify Token**: the same value you set as `WA_VERIFY_TOKEN`.
+4. Click **Verify and Save** — Meta will send a GET challenge, our server validates it.
+5. Under **Webhook fields**, subscribe to: `messages` (and optionally `message_status`).
+
+#### 8. Test
+1. In your panel → **Settings → WhatsApp** tab → enter a test phone → **Send Test**.
+2. The recipient must have messaged your business number in the last 24h (otherwise you'll get a "template required" error — that's normal, use Generate Messages which uses the template).
+3. When a supplier replies, their reply will appear in the WhatsApp panel within ~15 seconds, automatically parsed into rates.
+
+### Important notes
+
+- **Free tier**: Meta gives 1000 service conversations per month for free. Each initiated conversation with a supplier counts as 1.
+- **24h window**: After a supplier replies, you have 24h to send free-text messages to them. Outside that window, only templates work.
+- **Template required for first contact**: Until a supplier has replied to you, you can ONLY send template messages (not free text). The code handles this automatically — `Generate Messages` always uses the template.
+- **Phone number format**: Make sure supplier phone numbers in your Google Sheet are in E.164 format (country code + number, e.g. `919876543210`). The code normalizes common formats (10-digit → assumes India `91`).
+- **Webhook URL must be HTTPS**: Render provides this automatically.
+- **Don't use your personal number**: Once a number is registered with Cloud API, it can't be used in the regular WhatsApp app simultaneously. Use a dedicated business SIM.
+
+### Troubleshooting WhatsApp Cloud API
+
+**"template not found" / "template parameter count mismatch"**
+- Make sure the template body in Meta matches exactly: two `{{1}}` and `{{2}}` placeholders.
+- Wait for template approval status to be "Approved" (not "Pending" or "Rejected").
+- Check the template language is `en` (not `en_US` or `en_GB`).
+
+**Webhook verification fails**
+- Make sure `WA_VERIFY_TOKEN` in Render matches exactly what you entered in Meta.
+- Make sure the URL is `https://` (not `http://`).
+- Check Render logs for the GET request from Meta.
+
+**Messages send but replies don't appear**
+- Verify webhook is subscribed to `messages` field (not just `message_status`).
+- Check the supplier's phone number in your Google Sheet matches the number they're replying from (the webhook matches by phone).
+- Look at Render logs for the incoming POST — our webhook returns `{success: true, handled: N}`.
+
+**"recipient phone number not in allowed list" (development mode)**
+- In development mode, you can only send to test phone numbers you've added in WhatsApp → API Setup → "To" field. Add your supplier numbers there, or complete business verification to go live.
+
+**Want to disable Cloud API and go back to manual wa.me mode?**
+- Set `WA_TOKEN=""` (empty) in Render and redeploy. The app automatically falls back to opening wa.me tabs.

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useFetch, apiPost, apiPut } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +35,17 @@ export function WhatsAppPanel() {
   const { data: enquiries, loading, refetch } = useFetch<any[]>('/api/enquiries?limit=100', undefined)
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
   const { data: items } = useFetch<any[]>('/api/items', undefined)
+  const { data: waStatus } = useFetch<any>('/api/whatsapp/status', undefined)
+  const cloudApiOn = !!waStatus?.configured
+
+  // Auto-refresh every 15s when on the enquiries tab, so incoming webhook replies show up live.
+  useEffect(() => {
+    if (tab !== 'enquiries') return
+    const id = setInterval(() => {
+      invalidate('/api/enquiries')
+    }, 15000)
+    return () => clearInterval(id)
+  }, [tab])
 
   const filteredEnquiries = (enquiries || []).filter((e) => {
     if (!search) return true
@@ -57,14 +68,26 @@ export function WhatsAppPanel() {
         itemIds: payload.itemIds,
         allItems: payload.allItems,
       })
-      // Open all WhatsApp links
-      for (const r of res.results) {
-        window.open(r.whatsappLink, '_blank')
+
+      if (cloudApiOn && res.results?.[0]?.autoSent) {
+        // Cloud API: messages were sent automatically from the server.
+        const sent = res.results.filter((r: any) => r.sendStatus === 'sent').length
+        const failed = res.results.filter((r: any) => r.sendStatus === 'failed').length
+        toast({
+          title: `${sent} enquiry message(s) sent automatically`,
+          description: failed > 0 ? `${failed} failed — check supplier phone numbers` : 'Replies will appear here automatically',
+          variant: failed > 0 ? 'destructive' : 'default',
+        })
+      } else {
+        // Fallback wa.me mode — open tabs for manual send
+        for (const r of res.results) {
+          if (r.whatsappLink) window.open(r.whatsappLink, '_blank')
+        }
+        toast({
+          title: `${res.results.length} enquiry message(s) generated`,
+          description: 'WhatsApp opened - please send each message manually',
+        })
       }
-      toast({
-        title: `${res.results.length} enquiry message(s) generated`,
-        description: 'WhatsApp opened - please send each message manually',
-      })
       setDialogOpen(false)
       refetch()
     } catch (e: any) {
@@ -177,6 +200,23 @@ export function WhatsAppPanel() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Cloud API status banner */}
+      {waStatus && (
+        <div className={`rounded-lg p-3 flex items-start gap-3 ${cloudApiOn ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+          {cloudApiOn ? <Check className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" /> : <Bot className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />}
+          <div className="text-sm flex-1">
+            <p className={`font-medium ${cloudApiOn ? 'text-emerald-900' : 'text-amber-900'}`}>
+              {cloudApiOn ? 'WhatsApp Cloud API: Connected' : 'WhatsApp Cloud API: Not configured (manual mode)'}
+            </p>
+            <p className={`text-xs mt-0.5 ${cloudApiOn ? 'text-emerald-700' : 'text-amber-700'}`}>
+              {cloudApiOn
+                ? `Messages will auto-send from your business number (${waStatus.businessNumber}). Supplier replies will appear here automatically. Template: ${waStatus.templateName}`
+                : 'Generate Messages will open wa.me tabs — you must manually hit Send in each. Configure WA_TOKEN / WA_PHONE_NUMBER_ID env vars for automatic sending + reply capture.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Info banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-3">
@@ -329,6 +369,7 @@ export function WhatsAppPanel() {
         suppliers={suppliers || []}
         items={items || []}
         onSend={handleSendEnquiry}
+        cloudApiOn={cloudApiOn}
       />
 
       {/* Response dialog */}
@@ -425,13 +466,14 @@ export function WhatsAppPanel() {
 }
 
 function SendEnquiryDialog({
-  open, onOpenChange, suppliers, items, onSend,
+  open, onOpenChange, suppliers, items, onSend, cloudApiOn,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   suppliers: any[]
   items: any[]
   onSend: (payload: { supplierIds: string[]; itemIds: string[]; allItems: boolean }) => void
+  cloudApiOn: boolean
 }) {
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([])
   const [selectedItems, setSelectedItems] = useState<string[]>([])
@@ -467,6 +509,13 @@ function SendEnquiryDialog({
       <DialogContent className="sm:max-w-3xl max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">Send Rate Enquiry</DialogTitle>
+          {cloudApiOn ? (
+            <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+              <Check className="w-3 h-3" /> Auto-send enabled — messages will be sent automatically from your business number
+            </p>
+          ) : (
+            <p className="text-xs text-amber-600 mt-1">Manual mode — wa.me links will open, you must hit Send in each tab</p>
+          )}
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -574,7 +623,7 @@ function SendEnquiryDialog({
             disabled={selectedSuppliers.length === 0 || (!allItems && selectedItems.length === 0)}
             className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
           >
-            <Send className="w-4 h-4 mr-1.5" /> Generate Messages
+            <Send className="w-4 h-4 mr-1.5" /> {cloudApiOn ? 'Send Enquiries' : 'Generate Messages'}
           </Button>
         </DialogFooter>
       </DialogContent>
