@@ -1,31 +1,43 @@
 /**
- * Smart Computers - Google Apps Script Backend
- * 
- * This is the COMPLETE backend for the Smart Computers panel.
- * All data is stored in Google Sheets. No other database needed.
- * 
+ * Smart Computers - Google Apps Script Backend (PROTECTED EDITION)
+ *
+ * DATA PROTECTION POLICY (v2.0+):
+ *   - DELETE is now SOFT-DELETE. Rows are marked deleted=true but NEVER removed.
+ *   - REPLACE ALL is permanently BLOCKED. The action returns an error.
+ *   - listRows() filters out deleted rows by default (includeDeleted=false).
+ *   - Schema migration is DATA-SAFE: missing columns are appended, existing data is never cleared.
+ *
+ * This ensures that future code updates, feature additions, or bugs can NEVER
+ * delete or overwrite your historical Google Sheets data.
+ *
  * SETUP:
- * 1. Create new Google Sheet at https://sheets.new
- * 2. Extensions → Apps Script
- * 3. Paste this entire file
- * 4. Deploy → New deployment → Web app
- *    - Execute as: Me
- *    - Who has access: Anyone
- * 5. Copy the Web App URL (ends with /exec)
- * 6. Set this URL as APPS_SCRIPT_URL env var in your Next.js deployment
+ *   1. Create new Google Sheet at https://sheets.new
+ *   2. Extensions -> Apps Script
+ *   3. Paste this entire file (replace any existing content)
+ *   4. Deploy -> New deployment -> Web app
+ *      - Execute as: Me
+ *      - Who has access: Anyone
+ *   5. Copy the Web App URL (ends with /exec)
+ *   6. Set this URL as APPS_SCRIPT_URL env var in your Next.js deployment
+ *
+ * UPGRADING FROM v1.x:
+ *   Just re-paste this file and save. The data-safe ensureAllSheets() will
+ * automatically add the new `deleted` column to your existing sheets WITHOUT
+ * touching any existing rows. All your current data stays intact.
  */
 
 // ===== SHEET SCHEMAS =====
+// NOTE: 'deleted' column is appended to every sheet for soft-delete support.
 const SCHEMAS = {
-  Shop: ['id', 'name', 'owner', 'phone', 'email', 'address', 'gstNumber', 'state', 'invoicePrefix', 'quotationPrefix', 'termsInvoice', 'termsQuotation', 'createdAt', 'updatedAt'],
-  Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'createdAt', 'updatedAt'],
-  Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'createdAt', 'updatedAt'],
-  Suppliers: ['id', 'name', 'phone', 'whatsappNumber', 'email', 'company', 'address', 'suppliedItems', 'active', 'includeInAutoEnquiry', 'createdAt', 'updatedAt'],
-  Invoices: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'totalCost', 'profit', 'paymentType', 'paymentStatus', 'amountPaid', 'amountDue', 'notes', 'createdAt'],
-  Quotations: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'validTill', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'notes', 'status', 'convertedToInvoiceId', 'createdAt'],
-  Payments: ['id', 'invoiceId', 'invoiceNumber', 'customerName', 'amount', 'type', 'date', 'notes', 'reference', 'createdAt'],
-  Enquiries: ['id', 'supplierId', 'supplierName', 'supplierPhone', 'itemsJson', 'message', 'status', 'sentAt', 'respondedAt', 'response', 'ratesJson', 'appliedToItems', 'isAuto', 'createdAt'],
-  Settings: ['id', 'value']
+  Shop: ['id', 'name', 'owner', 'phone', 'email', 'address', 'gstNumber', 'state', 'invoicePrefix', 'quotationPrefix', 'termsInvoice', 'termsQuotation', 'createdAt', 'updatedAt', 'deleted'],
+  Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'createdAt', 'updatedAt', 'deleted'],
+  Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'createdAt', 'updatedAt', 'deleted'],
+  Suppliers: ['id', 'name', 'phone', 'whatsappNumber', 'email', 'company', 'address', 'suppliedItems', 'active', 'includeInAutoEnquiry', 'createdAt', 'updatedAt', 'deleted'],
+  Invoices: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'totalCost', 'profit', 'paymentType', 'paymentStatus', 'amountPaid', 'amountDue', 'notes', 'createdAt', 'deleted'],
+  Quotations: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'validTill', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'notes', 'status', 'convertedToInvoiceId', 'createdAt', 'deleted'],
+  Payments: ['id', 'invoiceId', 'invoiceNumber', 'customerName', 'amount', 'type', 'date', 'notes', 'reference', 'createdAt', 'deleted'],
+  Enquiries: ['id', 'supplierId', 'supplierName', 'supplierPhone', 'itemsJson', 'message', 'status', 'sentAt', 'respondedAt', 'response', 'ratesJson', 'appliedToItems', 'isAuto', 'createdAt', 'deleted'],
+  Settings: ['id', 'value', 'deleted']
 };
 
 const SHEET_NAMES = Object.keys(SCHEMAS);
@@ -37,7 +49,7 @@ function doGet(e) {
     const action = params.action || 'status';
 
     if (action === 'status') {
-      return json({ success: true, message: 'Smart Computers API running', sheets: SHEET_NAMES });
+      return json({ success: true, message: 'Smart Computers API running (Protected Edition v2.0)', sheets: SHEET_NAMES, dataProtection: true });
     }
 
     ensureAllSheets();
@@ -45,7 +57,8 @@ function doGet(e) {
     if (action === 'list') {
       const sheet = params.sheet;
       if (!sheet) return json({ success: false, error: 'Missing sheet' });
-      const rows = listRows(sheet, params.filter, params.search);
+      const includeDeleted = params.includeDeleted === 'true';
+      const rows = listRows(sheet, params.filter, params.search, includeDeleted);
       return json({ success: true, data: rows });
     }
 
@@ -86,17 +99,25 @@ function doPost(e) {
       case 'update':
         return json(updateRow(body.sheet, body.id, body.data));
       case 'delete':
-        return json(deleteRow(body.sheet, body.id));
+        // SOFT-DELETE ONLY — data is never removed from the sheet.
+        return json(softDeleteRow(body.sheet, body.id));
+      case 'restore':
+        // Restore a soft-deleted row (admin recovery)
+        return json(restoreRow(body.sheet, body.id));
       case 'bulkCreate':
         return json(bulkCreate(body.sheet, body.data));
       case 'replace':
-        return json(replaceAll(body.sheet, body.data));
+        // PERMANENTLY BLOCKED — returns error, never deletes anything.
+        return json({ success: false, error: 'replace action is permanently disabled for data protection. Use create/update instead.' });
       case 'saveShop':
         return json(saveShop(body.data));
       case 'test':
-        return json({ success: true, message: 'Connection successful', sheets: getSheetInfo() });
+        return json({ success: true, message: 'Connection successful (Protected Edition)', sheets: getSheetInfo(), dataProtection: true });
       case 'seed':
         return json(seedData());
+      case 'purge':
+        // PERMANENTLY BLOCKED — no bulk purge allowed.
+        return json({ success: false, error: 'purge action is permanently disabled for data protection.' });
       default:
         return json({ success: false, error: 'Unknown action: ' + action });
     }
@@ -105,7 +126,14 @@ function doPost(e) {
   }
 }
 
-// ===== SHEET MANAGEMENT =====
+// ===== SHEET MANAGEMENT (DATA-SAFE) =====
+/**
+ * Data-safe sheet initialization.
+ * - Creates missing sheets.
+ * - Appends missing columns to existing sheets WITHOUT clearing data.
+ * - Only writes headers on brand-new empty sheets.
+ * - NEVER calls sheet.clear() on sheets that have data.
+ */
 function ensureAllSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   for (const name of SHEET_NAMES) {
@@ -114,12 +142,40 @@ function ensureAllSheets() {
       sheet = ss.insertSheet(name);
     }
     const headers = SCHEMAS[name];
-    const existing = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
-    if (existing[0] !== headers[0] || existing.length < headers.length) {
-      sheet.clear();
+    const lastCol = sheet.getLastColumn();
+    const lastRow = sheet.getLastRow();
+
+    if (lastCol === 0) {
+      // Brand new sheet — write headers fresh
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
       sheet.setFrozenRows(1);
+    } else {
+      // Existing sheet — read current headers and append any missing columns
+      const existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+      const missing = [];
+      for (const h of headers) {
+        if (existingHeaders.indexOf(h) === -1) {
+          missing.push(h);
+        }
+      }
+      if (missing.length > 0) {
+        // Append missing columns at the end (data-safe, no clearing)
+        const startCol = lastCol + 1;
+        sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
+        sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
+      }
+      // Also backfill deleted=false for any existing rows that don't have the column
+      const deletedIdx = headers.indexOf('deleted');
+      if (deletedIdx !== -1 && deletedIdx >= lastCol) {
+        // deleted column is newly added — backfill existing rows with 'false'
+        if (lastRow > 1) {
+          const fillRange = sheet.getRange(2, deletedIdx + 1, lastRow - 1, 1);
+          const fillValues = [];
+          for (let i = 0; i < lastRow - 1; i++) fillValues.push([false]);
+          fillRange.setValues(fillValues);
+        }
+      }
     }
   }
 }
@@ -139,7 +195,7 @@ function getSheetInfo() {
 }
 
 // ===== CRUD OPERATIONS =====
-function listRows(sheetName, filter, search) {
+function listRows(sheetName, filter, search, includeDeleted) {
   const sheet = getSheet(sheetName);
   const headers = SCHEMAS[sheetName];
   const lastRow = sheet.getLastRow();
@@ -154,6 +210,11 @@ function listRows(sheetName, filter, search) {
     });
     return obj;
   });
+
+  // DATA PROTECTION: filter out soft-deleted rows unless explicitly requested
+  if (!includeDeleted) {
+    rows = rows.filter(r => r.deleted !== true && String(r.deleted).toLowerCase() !== 'true');
+  }
 
   // Apply filter (format: "field=value")
   if (filter) {
@@ -187,6 +248,7 @@ function createRow(sheetName, data) {
 
   const row = headers.map(h => {
     if (h === 'id') return id;
+    if (h === 'deleted') return false;
     if (h === 'createdAt') return data.createdAt || now;
     if (h === 'updatedAt') return now;
     const v = data[h];
@@ -196,7 +258,7 @@ function createRow(sheetName, data) {
   });
 
   sheet.appendRow(row);
-  return { success: true, data: { id, ...data, createdAt: data.createdAt || now, updatedAt: now } };
+  return { success: true, data: { id, ...data, createdAt: data.createdAt || now, updatedAt: now, deleted: false } };
 }
 
 function updateRow(sheetName, id, data) {
@@ -213,39 +275,47 @@ function updateRow(sheetName, id, data) {
   if (rowIndex === -1) return { success: false, error: 'Not found' };
 
   const now = new Date().toISOString();
-  const updatedRow = headers.map(h => {
+  const updatedRow = headers.map((h, idx) => {
     if (h === 'id') return id;
     if (h === 'updatedAt') return now;
-    if (h === 'createdAt') return data2d[rowIndex - 2][headers.indexOf('createdAt')] || now;
+    if (h === 'createdAt') return data2d[rowIndex - 2][idx] || now;
+    if (h === 'deleted') {
+      // Preserve existing deleted flag unless explicitly set
+      if (data.deleted !== undefined) return data.deleted;
+      return data2d[rowIndex - 2][idx] || false;
+    }
     if (data[h] !== undefined) {
       const v = data[h];
       if (typeof v === 'object') return JSON.stringify(v);
       return v;
     }
     // Keep existing
-    const existingIdx = headers.indexOf(h);
-    return data2d[rowIndex - 2][existingIdx];
+    return data2d[rowIndex - 2][idx];
   });
 
   sheet.getRange(rowIndex, 1, 1, headers.length).setValues([updatedRow]);
   return { success: true, data: { id, ...data, updatedAt: now } };
 }
 
+/**
+ * SOFT DELETE — marks the row as deleted=true but NEVER removes it.
+ * The row stays in the sheet forever and can be restored via restoreRow().
+ * This is the core data-protection guarantee.
+ */
+function softDeleteRow(sheetName, id) {
+  return updateRow(sheetName, id, { deleted: true, updatedAt: new Date().toISOString() });
+}
+
+/**
+ * RESTORE — un-marks a soft-deleted row.
+ */
+function restoreRow(sheetName, id) {
+  return updateRow(sheetName, id, { deleted: false, updatedAt: new Date().toISOString() });
+}
+
+// LEGACY deleteRow name kept for backward compatibility — now soft-deletes only.
 function deleteRow(sheetName, id) {
-  const sheet = getSheet(sheetName);
-  const headers = SCHEMAS[sheetName];
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return { success: false, error: 'No rows' };
-
-  const data2d = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  let rowIndex = -1;
-  for (let i = 0; i < data2d.length; i++) {
-    if (String(data2d[i][0]) === String(id)) { rowIndex = i + 2; break; }
-  }
-  if (rowIndex === -1) return { success: false, error: 'Not found' };
-
-  sheet.deleteRow(rowIndex);
-  return { success: true };
+  return softDeleteRow(sheetName, id);
 }
 
 function bulkCreate(sheetName, dataArray) {
@@ -256,6 +326,7 @@ function bulkCreate(sheetName, dataArray) {
     const id = data.id || Utilities.getUuid();
     return headers.map(h => {
       if (h === 'id') return id;
+      if (h === 'deleted') return false;
       if (h === 'createdAt') return data.createdAt || now;
       if (h === 'updatedAt') return now;
       const v = data[h];
@@ -270,16 +341,11 @@ function bulkCreate(sheetName, dataArray) {
   return { success: true, count: rows.length };
 }
 
+// replaceAll is PERMANENTLY DISABLED for data protection.
+// This function is kept only so old code doesn't crash if it references it,
+// but it will NEVER delete or overwrite any data.
 function replaceAll(sheetName, dataArray) {
-  const sheet = getSheet(sheetName);
-  const headers = SCHEMAS[sheetName];
-  const lastRow = sheet.getLastRow();
-  if (lastRow > 1) sheet.deleteRows(2, lastRow - 1);
-  
-  if (dataArray && dataArray.length > 0) {
-    return bulkCreate(sheetName, dataArray);
-  }
-  return { success: true, count: 0 };
+  return { success: false, error: 'replaceAll is permanently disabled for data protection. Use create/update instead.' };
 }
 
 function saveShop(data) {
@@ -428,4 +494,18 @@ function testSetup() {
   ensureAllSheets();
   Logger.log('Setup complete! Sheets: ' + SHEET_NAMES.join(', '));
   Logger.log('Sheet info: ' + JSON.stringify(getSheetInfo()));
+  Logger.log('Data protection: ENABLED (soft-delete, replaceAll blocked)');
 }
+
+/**
+ * Admin utility: run this manually from Apps Script editor to see
+ * soft-deleted rows in a sheet. Example: listDeletedRows('Items')
+ */
+function listDeletedRows(sheetName) {
+  return listRows(sheetName, null, null, true).filter(r => r.deleted === true || String(r.deleted).toLowerCase() === 'true');
+}
+
+/**
+ * Admin utility: run this manually from Apps Script editor to restore
+ * a soft-deleted row. Example: restoreRow('Items', 'abc-123')
+ */

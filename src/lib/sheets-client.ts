@@ -1,12 +1,20 @@
 /**
- * Server-side client for Google Apps Script backend
+ * Server-side client for Google Apps Script backend (PROTECTED EDITION)
+ *
+ * DATA PROTECTION:
+ *   - deleteRow() performs a SOFT-DELETE (sets deleted=true via updateRow).
+ *     The row is never removed from the Google Sheet.
+ *   - replaceAll() is PERMANENTLY BLOCKED — it always throws an error.
+ *   - bulkCreate() still works (only appends, never deletes).
+ *
  * All data operations go through this client.
  * APPS_SCRIPT_URL must be set in environment variables.
  */
 
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL
 
-// Simple in-memory cache (5 minute TTL)
+// Server-side in-memory cache (5 minute TTL)
+// On Render free tier the server may sleep, so this mainly helps within an active session.
 const cache = new Map<string, { data: any; expires: number }>()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
@@ -25,9 +33,9 @@ function setCached(key: string, data: any) {
 
 function invalidateCache(sheet?: string) {
   if (sheet) {
-    // Invalidate specific sheet caches
+    // Invalidate specific sheet caches + dashboard (dashboard aggregates all sheets)
     for (const key of cache.keys()) {
-      if (key.includes(`:${sheet}:`) || key.includes(`:dashboard:`)) {
+      if (key.includes(`:${sheet}:`) || key.includes(`:dashboard:`) || key.includes(`:shop:`)) {
         cache.delete(key)
       }
     }
@@ -56,6 +64,8 @@ async function callAppsScript(payload: any): Promise<any> {
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(payload),
     redirect: 'follow',
+    // Performance: add a reasonable timeout via AbortController
+    ...{ signal: AbortSignal.timeout(30000) },
   })
   if (!res.ok) {
     throw new Error(`Apps Script HTTP ${res.status}`)
@@ -79,6 +89,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
   const res = await fetch(url.toString(), {
     method: 'GET',
     redirect: 'follow',
+    ...{ signal: AbortSignal.timeout(30000) },
   })
   if (!res.ok) {
     throw new Error(`Apps Script HTTP ${res.status}`)
@@ -94,11 +105,11 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
 // ===== LIST =====
 export async function listRows<T = any>(
   sheet: string,
-  options: { filter?: string; search?: string; useCache?: boolean } = {}
+  options: { filter?: string; search?: string; useCache?: boolean; includeDeleted?: boolean } = {}
 ): Promise<T[]> {
   const useCache = options.useCache !== false
-  const cacheKey = `list:${sheet}:${options.filter || ''}:${options.search || ''}`
-  
+  const cacheKey = `list:${sheet}:${options.filter || ''}:${options.search || ''}:${options.includeDeleted ? '1' : '0'}`
+
   if (useCache) {
     const cached = getCached<T[]>(cacheKey)
     if (cached) return cached
@@ -107,10 +118,11 @@ export async function listRows<T = any>(
   const params: Record<string, string> = { action: 'list', sheet }
   if (options.filter) params.filter = options.filter
   if (options.search) params.search = options.search
+  if (options.includeDeleted) params.includeDeleted = 'true'
 
   const res = await getFromAppsScript(params)
   if (!res.success) throw new Error(res.error || 'Failed to list')
-  
+
   if (useCache) setCached(cacheKey, res.data)
   return res.data as T[]
 }
@@ -138,7 +150,9 @@ export async function updateRow<T = any>(sheet: string, id: string, data: any): 
   return res.data as T
 }
 
-// ===== DELETE =====
+// ===== DELETE (SOFT-DELETE ONLY) =====
+// This performs a SOFT DELETE: marks the row as deleted=true but NEVER removes
+// it from the Google Sheet. The data is permanently safe.
 export async function deleteRow(sheet: string, id: string): Promise<boolean> {
   const res = await callAppsScript({ action: 'delete', sheet, id })
   if (!res.success) throw new Error(res.error || 'Failed to delete')
@@ -146,7 +160,15 @@ export async function deleteRow(sheet: string, id: string): Promise<boolean> {
   return true
 }
 
-// ===== BULK CREATE =====
+// ===== RESTORE (un-soft-delete) =====
+export async function restoreRow(sheet: string, id: string): Promise<boolean> {
+  const res = await callAppsScript({ action: 'restore', sheet, id })
+  if (!res.success) throw new Error(res.error || 'Failed to restore')
+  invalidateCache(sheet)
+  return true
+}
+
+// ===== BULK CREATE (append only — safe) =====
 export async function bulkCreate(sheet: string, data: any[]): Promise<number> {
   const res = await callAppsScript({ action: 'bulkCreate', sheet, data })
   if (!res.success) throw new Error(res.error || 'Failed to bulk create')
@@ -154,12 +176,14 @@ export async function bulkCreate(sheet: string, data: any[]): Promise<number> {
   return res.count
 }
 
-// ===== REPLACE ALL =====
-export async function replaceAll(sheet: string, data: any[]): Promise<number> {
-  const res = await callAppsScript({ action: 'replace', sheet, data })
-  if (!res.success) throw new Error(res.error || 'Failed to replace')
-  invalidateCache(sheet)
-  return res.count
+// ===== REPLACE ALL — PERMANENTLY BLOCKED =====
+// This function exists for backward compatibility but ALWAYS throws.
+// It will never delete or overwrite any data.
+export async function replaceAll(_sheet: string, _data: any[]): Promise<number> {
+  throw new Error(
+    'replaceAll() is permanently disabled for data protection. ' +
+    'Google Sheets data can never be bulk-overwritten. Use createRow() or updateRow() instead.'
+  )
 }
 
 // ===== SHOP =====
@@ -202,7 +226,7 @@ export async function testConnection(): Promise<{ success: boolean; message: str
     }
     const res = await callAppsScript({ action: 'test' })
     return res.success
-      ? { success: true, message: 'Connected to Google Sheets successfully!' }
+      ? { success: true, message: 'Connected to Google Sheets successfully! (Protected Edition)' }
       : { success: false, message: res.error || 'Connection failed' }
   } catch (e: any) {
     return { success: false, message: e?.message || 'Connection failed' }

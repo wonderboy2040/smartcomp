@@ -1,5 +1,14 @@
-# Render deployment config - Smart Computers Panel
+# Render deployment config - Smart Computers Panel (Protected Edition v2.0)
 # No database needed! Data is stored in your Google Sheet via Apps Script.
+#
+# DATA PROTECTION (built-in, always on):
+#   - DELETE = soft-delete (rows marked deleted=true, never removed)
+#   - replaceAll = permanently blocked
+#   - Schema migration = data-safe (appends columns, never clears)
+#
+# PIN PROTECTION (optional, set APP_PIN to enable):
+#   - 4-digit numeric PIN required to access the panel
+#   - Set APP_PIN in Render dashboard (DO NOT commit it)
 
 services:
   - type: web
@@ -23,6 +32,11 @@ services:
         value: "false"
       # REQUIRED: Set this in Render dashboard to your Apps Script Web App URL
       - key: APPS_SCRIPT_URL
+        sync: false
+      # OPTIONAL BUT RECOMMENDED: 4-digit PIN to lock the panel
+      # Set to a 4-digit number like "1234" in the Render dashboard.
+      # Leave empty to disable PIN protection.
+      - key: APP_PIN
         sync: false
       # Optional: for auto-enquiry cron security
       # - key: CRON_SECRET

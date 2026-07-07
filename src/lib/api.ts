@@ -1,48 +1,162 @@
-import { useEffect, useState, useCallback } from 'react'
+/**
+ * Optimistic UI data layer with a shared client-side cache.
+ *
+ * PERFORMANCE:
+ *   - useFetch() returns cached data INSTANTLY on re-mount / re-render.
+ *   - After apiPost / apiPut / apiDelete, the relevant cache entries are
+ *     updated optimistically so the UI reflects changes without waiting for
+ *     a full refetch round-trip to Google Apps Script.
+ *   - DELETE is truly optimistic: the item disappears from the UI before the
+ *     server even responds. If the server fails, the change is rolled back.
+ *
+ * This keeps the same function signatures (useFetch / apiPost / apiPut /
+ * apiDelete / refetch) so every existing panel works unchanged but feels
+ * dramatically faster.
+ */
 
-export function useFetch<T>(url: string | null, options?: RequestInit) {
-  const [state, setState] = useState<{
-    data: T | null
-    loading: boolean
-    error: string | null
-  }>({
-    data: null,
-    loading: !!url,
-    error: null,
-  })
+import { useEffect, useState, useCallback, useRef } from 'react'
 
-  const bodyKey = options?.body ? JSON.stringify(options.body) : ''
+// ===== GLOBAL CACHE + SUBSCRIBERS =====
+type Updater<T> = (prev: T | undefined) => T
 
-  const doFetch = useCallback(() => {
-    if (!url) {
-      setState({ data: null, loading: false, error: null })
-      return
-    }
-    setState((s) => ({ ...s, loading: true, error: null }))
-    fetch(url, options)
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((d) => {
-        setState({ data: d, loading: false, error: null })
-      })
-      .catch((e) => {
-        setState({ data: null, loading: false, error: e.message || 'Failed' })
-      })
-  }, [url, bodyKey])
+const cache = new Map<string, any>()
+const timestamps = new Map<string, number>()
+const subscribers = new Map<string, Set<() => void>>()
+const inflight = new Map<string, Promise<any>>()
 
-  useEffect(() => {
-    doFetch()
-  }, [doFetch])
+const STALE_MS = 30 * 1000 // data is considered fresh for 30s; older data triggers background refetch
 
-  const refetch = useCallback(() => {
-    doFetch()
-  }, [doFetch])
-
-  return { data: state.data, loading: state.loading, error: state.error, refetch }
+function notify(key: string) {
+  const subs = subscribers.get(key)
+  if (subs) subs.forEach((fn) => fn())
 }
 
+function notifyPattern(prefix: string) {
+  // Notify all subscribers whose key starts with prefix (handles query-string variants)
+  for (const key of subscribers.keys()) {
+    if (key === prefix || key.startsWith(prefix + '?') || key.startsWith(prefix + '#')) {
+      const subs = subscribers.get(key)
+      if (subs) subs.forEach((fn) => fn())
+    }
+  }
+}
+
+function setCache(key: string, data: any) {
+  cache.set(key, data)
+  timestamps.set(key, Date.now())
+  notify(key)
+}
+
+export function mutate<T>(key: string, dataOrUpdater: T | Updater<T>) {
+  const prev = cache.get(key)
+  const next =
+    typeof dataOrUpdater === 'function'
+      ? (dataOrUpdater as Updater<T>)(prev as T | undefined)
+      : dataOrUpdater
+  setCache(key, next)
+}
+
+/** Invalidate (force refetch on next mount) all cache entries matching a prefix. */
+export function invalidate(prefix: string) {
+  for (const key of Array.from(cache.keys())) {
+    if (key === prefix || key.startsWith(prefix + '?') || key.startsWith(prefix + '#') || prefix === '*') {
+      timestamps.set(key, 0) // mark stale
+    }
+  }
+  notifyPattern(prefix)
+}
+
+/** Derive the list URL from a detail URL.  /api/items/123  ->  /api/items */
+function listUrlOf(detailUrl: string): string {
+  const clean = detailUrl.split('?')[0].split('#')[0]
+  const parts = clean.split('/')
+  // drop the last segment if it looks like an id (non-empty, no equals sign)
+  if (parts.length > 2) {
+    return parts.slice(0, -1).join('/')
+  }
+  return clean
+}
+
+/** Extract the id from a detail URL.  /api/items/123  ->  123 */
+function idOf(detailUrl: string): string | null {
+  const clean = detailUrl.split('?')[0].split('#')[0]
+  const parts = clean.split('/')
+  return parts[parts.length - 1] || null
+}
+
+// ===== useFetch =====
+export function useFetch<T>(url: string | null, options?: RequestInit) {
+  const bodyKey = options?.body ? JSON.stringify(options.body) : ''
+  const optsRef = useRef(options)
+  optsRef.current = options
+
+  const [, setTick] = useState(0)
+  const forceRender = useCallback(() => setTick((t) => t + 1), [])
+
+  // Subscribe to cache changes for this url
+  useEffect(() => {
+    if (!url) return
+    const key = url
+    if (!subscribers.has(key)) subscribers.set(key, new Set())
+    subscribers.get(key)!.add(forceRender)
+    return () => {
+      subscribers.get(key)?.delete(forceRender)
+    }
+  }, [url, forceRender])
+
+  // Trigger fetch on mount / url change
+  useEffect(() => {
+    if (!url) return
+    const cached = cache.get(url)
+    const ts = timestamps.get(url) || 0
+    const isStale = Date.now() - ts > STALE_MS
+
+    if (!cached || isStale) {
+      // Background fetch (don't clear existing cached data while loading)
+      doFetch(url, optsRef.current)
+    }
+  }, [url, bodyKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refetch = useCallback(() => {
+    if (!url) return
+    // Force a fresh fetch bypassing cache
+    timestamps.set(url, 0)
+    doFetch(url, optsRef.current)
+  }, [url, bodyKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const data: T | null = url ? (cache.get(url) ?? null) : null
+  const hasEverLoaded = url ? timestamps.has(url) : false
+  const loading = !!url && !hasEverLoaded
+  const error = url ? (cache.get(`__error:${url}`) ?? null) : null
+
+  return { data, loading, error, refetch }
+}
+
+function doFetch(url: string, options?: RequestInit) {
+  if (inflight.has(url)) return inflight.get(url)!
+  const p = fetch(url, options)
+    .then(async (r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await r.json()
+      setCache(url, d)
+      cache.delete(`__error:${url}`)
+      return d
+    })
+    .catch((e) => {
+      cache.set(`__error:${url}`, e?.message || 'Failed')
+      notify(url)
+      throw e
+    })
+    .finally(() => {
+      inflight.delete(url)
+    })
+  inflight.set(url, p)
+  return p
+}
+
+// ===== apiPost (CREATE) =====
+// After a successful create, prepend the new item to every cached list URL
+// that matches the same base path. This makes "Add" feel instant — no refetch needed.
 export async function apiPost(url: string, body: any) {
   const r = await fetch(url, {
     method: 'POST',
@@ -51,9 +165,24 @@ export async function apiPost(url: string, body: any) {
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || 'Failed')
+
+  // Optimistic: prepend to all cached variants of this list URL
+  // url is the list endpoint itself (e.g. /api/items)
+  const base = url.split('?')[0].split('#')[0]
+  for (const key of Array.from(cache.keys())) {
+    const keyBase = key.split('?')[0].split('#')[0]
+    if (keyBase === base && Array.isArray(cache.get(key))) {
+      mutate<any[]>(key, (prev) => (prev ? [data, ...prev] : [data]))
+    }
+  }
+  // Also invalidate dashboard so it refreshes in background
+  invalidate('/api/dashboard')
+  invalidate('/api/sheets/sync')
   return data
 }
 
+// ===== apiPut (UPDATE) =====
+// After a successful update, replace the matching item in every cached list.
 export async function apiPut(url: string, body: any) {
   const r = await fetch(url, {
     method: 'PUT',
@@ -62,12 +191,60 @@ export async function apiPut(url: string, body: any) {
   })
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || 'Failed')
+
+  const listUrl = listUrlOf(url)
+  const updatedId = data?.id || idOf(url)
+  for (const key of Array.from(cache.keys())) {
+    const keyBase = key.split('?')[0].split('#')[0]
+    if (keyBase === listUrl && Array.isArray(cache.get(key))) {
+      mutate<any[]>(key, (prev) =>
+        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...data } : x)) : prev
+      )
+    }
+  }
+  invalidate('/api/dashboard')
+  invalidate('/api/sheets/sync')
   return data
 }
 
+// ===== apiDelete (TRUE OPTIMISTIC with rollback) =====
+// The item disappears from the UI INSTANTLY, before the server responds.
+// If the server call fails, the item is restored.
 export async function apiDelete(url: string) {
-  const r = await fetch(url, { method: 'DELETE' })
-  const data = await r.json()
-  if (!r.ok) throw new Error(data.error || 'Failed')
-  return data
+  const listUrl = listUrlOf(url)
+  const targetId = idOf(url)
+
+  // Snapshot all affected caches for potential rollback
+  const snapshots = new Map<string, any>()
+  for (const key of Array.from(cache.keys())) {
+    const keyBase = key.split('?')[0].split('#')[0]
+    if (keyBase === listUrl && Array.isArray(cache.get(key))) {
+      snapshots.set(key, cache.get(key))
+      mutate<any[]>(key, (prev) =>
+        prev ? prev.filter((x) => String(x?.id) !== String(targetId)) : prev
+      )
+    }
+  }
+
+  try {
+    const r = await fetch(url, { method: 'DELETE' })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(data.error || 'Failed')
+    invalidate('/api/dashboard')
+    invalidate('/api/sheets/sync')
+    return data
+  } catch (e) {
+    // Rollback: restore the snapshots
+    for (const [key, snap] of snapshots) {
+      setCache(key, snap)
+    }
+    throw e
+  }
+}
+
+// ===== helper: prefetch a URL (warms the cache) =====
+export function prefetch(url: string) {
+  if (!cache.has(url) || Date.now() - (timestamps.get(url) || 0) > STALE_MS) {
+    doFetch(url)
+  }
 }
