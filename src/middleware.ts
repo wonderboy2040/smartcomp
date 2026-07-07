@@ -69,6 +69,7 @@ function isPublic(pathname: string): boolean {
   if (pathname === '/manifest.json' || pathname === '/manifest.webmanifest') return true
   if (pathname === '/sw.js' || pathname === '/sw-register.js' || pathname === '/offline.html') return true
   if (pathname === '/robots.txt' || pathname === '/logo.svg' || pathname === '/icon.svg') return true
+  if (pathname === '/clear-cache.html') return true
   return false
 }
 
