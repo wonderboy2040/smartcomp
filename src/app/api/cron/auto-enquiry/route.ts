@@ -51,15 +51,18 @@ export async function POST(req: NextRequest) {
       )
       if (alreadySent) continue
 
-      const message = buildEnquiryMessage(shopData.name, items.map((i) => ({ name: i.name, sku: i.sku })))
-      const phone = supplier.whatsappNumber || supplier.phone
+      const message = buildEnquiryMessage(
+        String(shopData?.name || 'Smart Computers'),
+        items.map((i) => ({ name: String(i?.name || ''), sku: String(i?.sku || '') }))
+      )
+      const phone = String(supplier.whatsappNumber || supplier.phone || '')
       const link = generateWhatsAppLink(phone, message)
 
       const enquiry = await createRow('Enquiries', {
-        supplierId: supplier.id,
-        supplierName: supplier.name,
+        supplierId: String(supplier.id || ''),
+        supplierName: String(supplier.name || 'Unknown'),
         supplierPhone: phone,
-        itemsJson: JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))),
+        itemsJson: JSON.stringify(items.map((i) => ({ id: String(i?.id || ''), name: String(i?.name || ''), sku: String(i?.sku || '') }))),
         message,
         status: 'sent',
         sentAt: new Date().toISOString(),

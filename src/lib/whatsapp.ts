@@ -8,7 +8,10 @@ export interface WhatsAppMessage {
 
 // Generate wa.me link for opening WhatsApp with prefilled message
 export function generateWhatsAppLink(phone: string, message: string): string {
-  const cleanPhone = phone.replace(/[^\d]/g, '')
+  // Defensive: Google Sheets may store phone as a number, not a string.
+  // Coerce to string before calling .replace(). Also handle null/undefined.
+  const phoneStr = String(phone ?? '')
+  const cleanPhone = phoneStr.replace(/[^\d]/g, '')
   const encoded = encodeURIComponent(message)
   return `https://wa.me/${cleanPhone}?text=${encoded}`
 }
@@ -24,12 +27,14 @@ export function buildEnquiryMessage(
     month: 'short',
     year: 'numeric',
   })
-  let msg = `*${shopName}*\n`
+  let msg = `*${String(shopName || 'Smart Computers')}*\n`
   msg += `*Rate Enquiry* - ${today}\n`
   if (enquiryNumber) msg += `Ref: ${enquiryNumber}\n`
   msg += `\nHello Sir/Madam,\n\nPlease provide latest rates for the following items:\n\n`
   items.forEach((item, i) => {
-    msg += `${i + 1}. ${item.name}${item.sku ? ` (SKU: ${item.sku})` : ''}\n`
+    const name = String(item?.name || '')
+    const sku = String(item?.sku || '')
+    msg += `${i + 1}. ${name}${sku ? ` (SKU: ${sku})` : ''}\n`
   })
   msg += `\nPlease reply in this format so I can update my records:\n`
   msg += `\`\`\`\n1. Item Name: Rs.XXXX (GST: Yes/No)\n2. ...\n\`\`\`\n`
@@ -46,11 +51,15 @@ export function buildInvoiceShareMessage(
   amount: number,
   dueDate?: Date
 ): string {
-  let msg = `*${shopName}*\n\n`
-  msg += `Dear ${customerName},\n\n`
+  const sn = String(shopName || 'Smart Computers')
+  const cn = String(customerName || 'Customer')
+  const num = String(number || '')
+  const amt = Number(amount) || 0
+  let msg = `*${sn}*\n\n`
+  msg += `Dear ${cn},\n\n`
   msg += `Please find attached ${docType === 'invoice' ? 'invoice' : 'quotation'}:\n\n`
-  msg += `*${docType === 'invoice' ? 'Invoice' : 'Quotation'} No:* ${number}\n`
-  msg += `*Amount:* Rs. ${amount.toFixed(2)}\n`
+  msg += `*${docType === 'invoice' ? 'Invoice' : 'Quotation'} No:* ${num}\n`
+  msg += `*Amount:* Rs. ${amt.toFixed(2)}\n`
   if (docType === 'invoice' && dueDate) {
     msg += `*Due Date:* ${dueDate.toLocaleDateString('en-IN')}\n`
   } else if (docType === 'quotation' && dueDate) {
@@ -68,11 +77,15 @@ export function buildPaymentReminderMessage(
   amount: number,
   dueDate?: Date
 ): string {
-  let msg = `*${shopName}*\n\n`
-  msg += `Dear ${customerName},\n\n`
+  const sn = String(shopName || 'Smart Computers')
+  const cn = String(customerName || 'Customer')
+  const inum = String(invoiceNumber || '')
+  const amt = Number(amount) || 0
+  let msg = `*${sn}*\n\n`
+  msg += `Dear ${cn},\n\n`
   msg += `This is a gentle reminder for the pending payment:\n\n`
-  msg += `*Invoice No:* ${invoiceNumber}\n`
-  msg += `*Amount Due:* Rs. ${amount.toFixed(2)}\n`
+  msg += `*Invoice No:* ${inum}\n`
+  msg += `*Amount Due:* Rs. ${amt.toFixed(2)}\n`
   if (dueDate) msg += `*Due Date:* ${dueDate.toLocaleDateString('en-IN')}\n`
   msg += `\nKindly arrange the payment at your earliest convenience.\n\nThank you!`
   return msg
@@ -115,8 +128,9 @@ export function parseRateResponse(
     }
 
     if (matched && matched[1] && matched[2]) {
-      const itemNameRaw = matched[1].trim()
-      const rate = parseFloat(matched[2].replace(/[.,]/g, m => m === ',' ? '' : '.'))
+      const itemNameRaw = String(matched[1] || '').trim()
+      const rateStr = String(matched[2] || '')
+      const rate = parseFloat(rateStr.replace(/[.,]/g, m => m === ',' ? '' : '.'))
       
       // Find matching original item
       const matchedItem = originalItems.find(

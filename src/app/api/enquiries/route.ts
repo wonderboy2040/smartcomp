@@ -75,15 +75,21 @@ export async function POST(req: NextRequest) {
 
     const results = []
     for (const supplier of suppliers) {
-      const message = buildEnquiryMessage(shop.name, items.map((i) => ({ name: i.name, sku: i.sku })))
-      const phone = supplier.whatsappNumber || supplier.phone
+      // Defensive: phone may be stored as number in Sheets. Coerce to string.
+      const rawPhone = supplier.whatsappNumber || supplier.phone || ''
+      const phone = String(rawPhone)
+      const supplierName = String(supplier.name || 'Unknown Supplier')
+      const message = buildEnquiryMessage(
+        String(shop?.name || 'Smart Computers'),
+        items.map((i) => ({ name: String(i?.name || ''), sku: String(i?.sku || '') }))
+      )
       const link = generateWhatsAppLink(phone, message)
 
       const enquiry = await createRow('Enquiries', {
-        supplierId: supplier.id,
-        supplierName: supplier.name,
+        supplierId: String(supplier.id || ''),
+        supplierName,
         supplierPhone: phone,
-        itemsJson: JSON.stringify(items.map((i) => ({ id: i.id, name: i.name, sku: i.sku }))),
+        itemsJson: JSON.stringify(items.map((i) => ({ id: String(i?.id || ''), name: String(i?.name || ''), sku: String(i?.sku || '') }))),
         message,
         status: 'sent',
         sentAt: new Date().toISOString(),
@@ -96,8 +102,8 @@ export async function POST(req: NextRequest) {
 
       results.push({
         enquiryId: enquiry.id,
-        supplierId: supplier.id,
-        supplierName: supplier.name,
+        supplierId: String(supplier.id || ''),
+        supplierName,
         phone,
         whatsappLink: link,
         message,
