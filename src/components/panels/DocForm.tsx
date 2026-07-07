@@ -86,7 +86,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
   const filteredStock = (stockItems || []).filter((i) => {
     if (!itemSearch) return true
     const q = itemSearch.toLowerCase()
-    return i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q)
+    return String(i?.name || '').toLowerCase().includes(q) || String(i?.sku || '').toLowerCase().includes(q)
   })
 
   const addStockItem = (item: any) => {

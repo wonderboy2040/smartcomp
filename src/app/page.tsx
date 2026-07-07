@@ -192,15 +192,17 @@ export default function Home() {
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">
-          {active === 'dashboard' && <DashboardView onNavigate={handleNavigate} />}
-          {active === 'stock' && <StockPanel />}
-          {active === 'invoices' && <InvoicesPanel />}
-          {active === 'quotations' && <QuotationsPanel />}
-          {active === 'payments' && <PaymentsPanel />}
-          {active === 'customers' && <CustomersPanel />}
-          {active === 'suppliers' && <SuppliersPanel />}
-          {active === 'whatsapp' && <WhatsAppPanel />}
-          {active === 'settings' && <SettingsPanel />}
+          {/* Keep all panels mounted; just hide inactive ones with CSS so switching
+              is instant and we don't refetch from Apps Script on every tab switch. */}
+          <div className={active === 'dashboard' ? 'block' : 'hidden'}><DashboardView onNavigate={handleNavigate} /></div>
+          <div className={active === 'stock' ? 'block' : 'hidden'}><StockPanel /></div>
+          <div className={active === 'invoices' ? 'block' : 'hidden'}><InvoicesPanel /></div>
+          <div className={active === 'quotations' ? 'block' : 'hidden'}><QuotationsPanel /></div>
+          <div className={active === 'payments' ? 'block' : 'hidden'}><PaymentsPanel /></div>
+          <div className={active === 'customers' ? 'block' : 'hidden'}><CustomersPanel /></div>
+          <div className={active === 'suppliers' ? 'block' : 'hidden'}><SuppliersPanel /></div>
+          <div className={active === 'whatsapp' ? 'block' : 'hidden'}><WhatsAppPanel /></div>
+          <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>
         </div>
       </main>
     </div>

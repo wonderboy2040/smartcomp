@@ -372,7 +372,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => voi
                           : 'bg-slate-50 text-slate-600 border-slate-200 text-[10px]'
                       }
                     >
-                      {e.status.replace('_', ' ')}
+                      {String(e?.status || '').replace('_', ' ')}
                     </Badge>
                   </div>
                 ))}

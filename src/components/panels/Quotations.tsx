@@ -35,8 +35,8 @@ export function QuotationsPanel() {
       const s = search.toLowerCase()
       return (
         q.number.toLowerCase().includes(s) ||
-        q.customer.name.toLowerCase().includes(s) ||
-        q.customer.phone.includes(s)
+        String(q?.customer?.name || q?.customerName || '').toLowerCase().includes(s) ||
+        String(q?.customer?.phone || q?.customerPhone || '').includes(s)
       )
     }
     return true
@@ -152,7 +152,7 @@ export function QuotationsPanel() {
                       : 'bg-slate-50 text-slate-700 border-slate-200 text-[9px]'
                     }>{q.status}</Badge>
                   </div>
-                  <p className="text-sm text-slate-700 mt-1 truncate">{q.customer.name}</p>
+                  <p className="text-sm text-slate-700 mt-1 truncate">{q?.customer?.name || q?.customerName || 'Walk-in'}</p>
                   <div className="flex items-center justify-between mt-2">
                     <div>
                       <p className="text-base font-bold text-slate-900">{formatCurrency(q.grandTotal)}</p>
@@ -228,8 +228,8 @@ export function QuotationsPanel() {
                         </TableCell>
                         <TableCell>
                           <div>
-                            <p className="text-sm font-medium text-slate-900">{q.customer.name}</p>
-                            {q.customer.phone && (
+                            <p className="text-sm font-medium text-slate-900">{q?.customer?.name || q?.customerName || 'Walk-in'}</p>
+                            {q?.customer?.phone && (
                               <p className="text-[10px] text-slate-500">{q.customer.phone}</p>
                             )}
                           </div>

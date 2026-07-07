@@ -32,7 +32,7 @@ export function SuppliersPanel() {
   const filtered = (suppliers || []).filter((s) => {
     if (!search) return true
     const q = search.toLowerCase()
-    return s.name.toLowerCase().includes(q) || s.phone.includes(q) || (s.company || '').toLowerCase().includes(q)
+    return String(s?.name || '').toLowerCase().includes(q) || String(s?.phone || '').includes(q) || String(s?.company || '').toLowerCase().includes(q)
   })
 
   const handleAdd = () => {

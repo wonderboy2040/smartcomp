@@ -35,9 +35,9 @@ export function InvoicesPanel() {
     if (search) {
       const q = search.toLowerCase()
       return (
-        inv.number.toLowerCase().includes(q) ||
-        inv.customer.name.toLowerCase().includes(q) ||
-        inv.customer.phone.includes(q)
+        String(inv?.number || '').toLowerCase().includes(q) ||
+        String(inv?.customer?.name || inv?.customerName || '').toLowerCase().includes(q) ||
+        String(inv?.customer?.phone || inv?.customerPhone || '').includes(q)
       )
     }
     return true
@@ -154,7 +154,7 @@ export function InvoicesPanel() {
                     </Button>
                   </div>
                 </div>
-                <p className="text-sm text-slate-700 mt-1 truncate">{inv.customer.name}</p>
+                <p className="text-sm text-slate-700 mt-1 truncate">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
                 <div className="flex items-center justify-between mt-2">
                   <div>
                     <p className="text-base font-bold text-slate-900">{formatCurrency(inv.grandTotal)}</p>
@@ -222,8 +222,8 @@ export function InvoicesPanel() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="text-sm font-medium text-slate-900">{inv.customer.name}</p>
-                          {inv.customer.phone && (
+                          <p className="text-sm font-medium text-slate-900">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
+                          {inv?.customer?.phone && (
                             <p className="text-[10px] text-slate-500">{inv.customer.phone}</p>
                           )}
                         </div>

@@ -50,16 +50,16 @@ export function PaymentsPanel() {
   const filteredPending = pendingInvoices.filter((i) => {
     if (!search) return true
     const q = search.toLowerCase()
-    return i.number.toLowerCase().includes(q) || i.customer.name.toLowerCase().includes(q)
+    return String(i?.number || '').toLowerCase().includes(q) || String(i?.customer?.name || i?.customerName || '').toLowerCase().includes(q)
   })
 
   const filteredPayments = (payments || []).filter((p) => {
     if (!search) return true
     const q = search.toLowerCase()
     return (
-      p.invoice.number.toLowerCase().includes(q) ||
-      p.invoice.customer.name.toLowerCase().includes(q) ||
-      p.type.toLowerCase().includes(q)
+      String(p?.invoice?.number || p?.invoiceNumber || '').toLowerCase().includes(q) ||
+      String(p?.invoice?.customer?.name || p?.customerName || '').toLowerCase().includes(q) ||
+      String(p?.type || '').toLowerCase().includes(q)
     )
   })
 
@@ -219,7 +219,7 @@ export function PaymentsPanel() {
                 <CardContent className="p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-900 text-sm truncate">{inv.customer.name}</p>
+                      <p className="font-medium text-slate-900 text-sm truncate">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
                       <p className="text-[10px] text-slate-500">{inv.number} · {new Date(inv.date).toLocaleDateString('en-IN')}</p>
                     </div>
                     <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[9px] flex-shrink-0">
@@ -272,7 +272,7 @@ export function PaymentsPanel() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900 text-sm">{p.invoice.number}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{p.invoice.customer.name}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{p?.invoice?.customer?.name || p?.customerName || ''}</p>
                       <p className="text-[9px] text-slate-400">{new Date(p.date).toLocaleDateString('en-IN')} · {new Date(p.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 flex-shrink-0" onClick={() => handleDeletePayment(p.id)}>
@@ -336,8 +336,8 @@ export function PaymentsPanel() {
                         <TableCell className="text-sm">{new Date(inv.date).toLocaleDateString('en-IN')}</TableCell>
                         <TableCell>
                           <div>
-                            <p className="text-sm font-medium">{inv.customer.name}</p>
-                            {inv.customer.phone && (
+                            <p className="text-sm font-medium">{inv?.customer?.name || inv?.customerName || 'Walk-in'}</p>
+                            {inv?.customer?.phone && (
                               <p className="text-[10px] text-slate-500">{inv.customer.phone}</p>
                             )}
                           </div>
@@ -408,7 +408,7 @@ export function PaymentsPanel() {
                           </div>
                         </TableCell>
                         <TableCell className="font-medium">{p.invoice.number}</TableCell>
-                        <TableCell className="text-sm">{p.invoice.customer.name}</TableCell>
+                        <TableCell className="text-sm">{p?.invoice?.customer?.name || p?.customerName || ''}</TableCell>
                         <TableCell className="text-right font-semibold text-emerald-600">
                           +{formatCurrency(p.amount)}
                         </TableCell>

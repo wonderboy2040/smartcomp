@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listRows, createRow, getRow, updateRow } from '@/lib/sheets-client'
+import { listRows, createRow, updateRow } from '@/lib/sheets-client'
 import { buildEnquiryMessage, generateWhatsAppLink, parseRateResponse } from '@/lib/whatsapp'
 
 export async function GET(req: NextRequest) {
@@ -22,7 +22,19 @@ export async function GET(req: NextRequest) {
       ...e,
       appliedToItems: e.appliedToItems === true || e.appliedToItems === 'true',
       isAuto: e.isAuto === true || e.isAuto === 'true',
-      supplier: supplierMap.get(e.supplierId) || { id: e.supplierId, name: e.supplierName, phone: e.supplierPhone },
+      // Always provide a non-null supplier object so the UI never crashes on .name/.phone
+      supplier: supplierMap.get(e.supplierId) || {
+        id: String(e.supplierId || ''),
+        name: String(e.supplierName || 'Unknown Supplier'),
+        phone: String(e.supplierPhone || ''),
+        whatsappNumber: String(e.supplierPhone || ''),
+      },
+      // Defensive string coercion for status (Sheets may return number/blank)
+      status: String(e.status || 'sent'),
+      itemsJson: String(e.itemsJson || '[]'),
+      message: String(e.message || ''),
+      response: String(e.response || ''),
+      ratesJson: String(e.ratesJson || '[]'),
     }))
 
     return NextResponse.json(result)
@@ -40,8 +52,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Select at least one supplier' }, { status: 400 })
     }
 
-    // Get shop
-    const shop = await getRow<any>('Shop') || { name: 'Smart Computers' }
+    // Get shop (listRows returns array; take first)
+    const shopRows = await listRows<any>('Shop', { useCache: true })
+    const shop = shopRows[0] || { name: 'Smart Computers' }
 
     // Get items
     let items: any[] = []

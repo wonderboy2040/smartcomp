@@ -39,7 +39,11 @@ export function WhatsAppPanel() {
   const filteredEnquiries = (enquiries || []).filter((e) => {
     if (!search) return true
     const q = search.toLowerCase()
-    return e.supplier.name.toLowerCase().includes(q) || e.status.toLowerCase().includes(q)
+    // Defensive: supplier may be undefined for soft-deleted/old enquiries
+    const supplierName = String(e?.supplier?.name || e?.supplierName || '').toLowerCase()
+    const status = String(e?.status || '').toLowerCase()
+    const supplierPhone = String(e?.supplier?.phone || e?.supplierPhone || '').toLowerCase()
+    return supplierName.includes(q) || status.includes(q) || supplierPhone.includes(q)
   })
 
   const handleSendEnquiry = async (payload: {
@@ -204,7 +208,7 @@ export function WhatsAppPanel() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1">
-                        <p className="font-medium text-slate-900 text-sm truncate">{e.supplier.name}</p>
+                        <p className="font-medium text-slate-900 text-sm truncate">{e?.supplier?.name || e?.supplierName || 'Unknown'}</p>
                         {e.isAuto && (
                           <Bot className="w-3 h-3 text-violet-600 flex-shrink-0" />
                         )}
@@ -216,7 +220,7 @@ export function WhatsAppPanel() {
                       : e.status === 'responded' ? 'bg-blue-50 text-blue-700 border-blue-200 text-[9px]'
                       : 'bg-amber-50 text-amber-700 border-amber-200 text-[9px]'
                     } flex-shrink-0>
-                      {e.status.replace('_', ' ')}
+                      {String(e.status || 'sent').replace('_', ' ')}
                     </Badge>
                   </div>
                   <div className="mt-2">
@@ -279,8 +283,8 @@ export function WhatsAppPanel() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium text-slate-900">{e.supplier.name}</div>
-                          <div className="text-[10px] text-slate-500">{e.supplier.phone}</div>
+                          <div className="font-medium text-slate-900">{e?.supplier?.name || e?.supplierName || 'Unknown'}</div>
+                          <div className="text-[10px] text-slate-500">{e?.supplier?.phone || e?.supplierPhone || ''}</div>
                         </TableCell>
                         <TableCell>
                           <div className="text-xs text-slate-600 max-w-xs truncate">
@@ -297,7 +301,7 @@ export function WhatsAppPanel() {
                               : 'bg-amber-50 text-amber-700 border-amber-200 text-[10px]'
                             }
                           >
-                            {e.status.replace('_', ' ')}
+                            {String(e.status || 'sent').replace('_', ' ')}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-xs text-slate-600">
@@ -318,17 +322,14 @@ export function WhatsAppPanel() {
         </CardContent>
       </Card>
 
-      {/* Send enquiry dialog */}
-      {dialogOpen && (
-        <SendEnquiryDialog
-          key={`dialog-${Date.now()}`}
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          suppliers={suppliers || []}
-          items={items || []}
-          onSend={handleSendEnquiry}
-        />
-      )}
+      {/* Send enquiry dialog - stable key to prevent remount/flicker */}
+      <SendEnquiryDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        suppliers={suppliers || []}
+        items={items || []}
+        onSend={handleSendEnquiry}
+      />
 
       {/* Response dialog */}
       <Dialog open={!!responseDialog} onOpenChange={(v) => !v && setResponseDialog(null)}>
