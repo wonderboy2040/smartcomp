@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut } from '@/lib/api'
+import { safeJsonParse } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -50,7 +51,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
     if (open) {
       if (editing) {
         setCustomerId(editing.customerId)
-        const parsedItems = (JSON.parse(editing.itemsJson || '[]') as any[]).map((i) => ({
+        const parsedItems = (safeJsonParse<any[]>(editing.itemsJson, []) as any[]).map((i) => ({
           ...i,
           discount: i.discount || 0,
         }))

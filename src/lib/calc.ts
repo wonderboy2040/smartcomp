@@ -106,15 +106,17 @@ export function formatNumber(n: number): string {
 // Generate next sequential number
 export async function nextNumber(
   prefix: string,
-  existing: { number: string }[]
+  existing: { number: string | number }[]
 ): Promise<string> {
   const year = new Date().getFullYear()
   const month = String(new Date().getMonth() + 1).padStart(2, '0')
   const base = `${prefix}${year}${month}`
   let max = 0
   for (const r of existing) {
-    if (r.number.startsWith(base)) {
-      const suffix = parseInt(r.number.slice(base.length), 10)
+    // Defensive: number may be stored as a number in Sheets, coerce to string
+    const num = String(r?.number || '')
+    if (num.startsWith(base)) {
+      const suffix = parseInt(num.slice(base.length), 10)
       if (!isNaN(suffix) && suffix > max) max = suffix
     }
   }

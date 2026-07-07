@@ -55,6 +55,8 @@ const PUBLIC_PATHS = [
   '/api/whatsapp/webhook',
   // Cron endpoint — secured by CRON_SECRET header, not PIN cookie.
   '/api/cron/auto-enquiry',
+  // Error logger — must work even before login so we can debug crash-on-load
+  '/api/log-error',
 ]
 
 function isPublic(pathname: string): boolean {

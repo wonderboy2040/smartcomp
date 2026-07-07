@@ -50,3 +50,42 @@ export function num(v: unknown, fallback = 0): number {
   const n = typeof v === "number" ? v : Number(v)
   return isNaN(n) ? fallback : n
 }
+
+/**
+ * Safe JSON.parse that never throws. Returns fallback on any error.
+ * Use this for parsing data from Google Sheets which can be empty/garbage.
+ */
+export function safeJsonParse<T>(str: unknown, fallback: T): T {
+  if (str === null || str === undefined || str === "") return fallback
+  try {
+    const parsed = JSON.parse(String(str))
+    return parsed ?? fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Safe date formatter — never throws on invalid dates.
+ */
+export function formatDate(v: unknown, locale = "en-IN"): string {
+  if (!v) return ""
+  try {
+    const d = new Date(v as any)
+    if (isNaN(d.getTime())) return ""
+    return d.toLocaleDateString(locale)
+  } catch {
+    return ""
+  }
+}
+
+export function formatDateTime(v: unknown, locale = "en-IN"): string {
+  if (!v) return ""
+  try {
+    const d = new Date(v as any)
+    if (isNaN(d.getTime())) return ""
+    return d.toLocaleString(locale)
+  } catch {
+    return ""
+  }
+}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
+import { safeJsonParse } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -102,12 +103,12 @@ export function WhatsAppPanel() {
   const handleOpenResponse = (enquiry: any) => {
     setResponseDialog(enquiry)
     setResponseText(enquiry.response || '')
-    setParsedRates(enquiry.ratesJson ? JSON.parse(enquiry.ratesJson) : [])
+    setParsedRates(safeJsonParse<any[]>(enquiry.ratesJson, []))
   }
 
   const handleParseResponse = async () => {
     try {
-      const items = JSON.parse(responseDialog.itemsJson || '[]')
+      const items = safeJsonParse<any[]>(responseDialog.itemsJson, [])
       const res = await apiPost('/api/whatsapp/parse', {
         response: responseText,
         items,
@@ -295,7 +296,7 @@ export function WhatsAppPanel() {
           </CardContent></Card>
         ) : (
           filteredEnquiries.map((e) => {
-            const items = JSON.parse(e.itemsJson || '[]')
+            const items = safeJsonParse<any[]>(e.itemsJson, [])
             return (
               <Card key={e.id} className="border-slate-200">
                 <CardContent className="p-3">
@@ -362,7 +363,7 @@ export function WhatsAppPanel() {
                   </TableRow>
                 ) : (
                   filteredEnquiries.map((e) => {
-                    const items = JSON.parse(e.itemsJson || '[]')
+                    const items = safeJsonParse<any[]>(e.itemsJson, [])
                     return (
                       <TableRow key={e.id} className="hover:bg-slate-50">
                         <TableCell className="text-sm">
