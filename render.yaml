@@ -9,8 +9,8 @@ services:
     region: singapore
     branch: main
     rootDir: .
-    # IMPORTANT: Use npm, NOT bun (Render Node runtime doesn't have bun)
-    buildCommand: npm install && npm run build
+    # IMPORTANT: Use npm with --include=dev for tailwindcss build deps
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm run start
     healthCheckPath: /
     autoDeploy: true
@@ -19,6 +19,8 @@ services:
         value: production
       - key: NEXT_TELEMETRY_DISABLED
         value: "1"
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
       # REQUIRED: Set this in Render dashboard to your Apps Script Web App URL
       - key: APPS_SCRIPT_URL
         sync: false
@@ -28,7 +30,6 @@ services:
 
 # Note: No database service needed!
 # All data is stored in your Google Sheet.
-# Free tier works perfectly because there's no local file storage requirement.
 #
-# IMPORTANT: In Render dashboard, set Node Version to 20.x
-# (Settings → Environment → Node Version → 20.11.0 or just 20)
+# Node version is auto-detected from .nvmrc file (set to 20.11.0)
+# and package.json engines field (node: 20.x)
