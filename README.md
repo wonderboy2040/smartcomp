@@ -449,3 +449,88 @@ In your Render service → **Environment** → add:
 
 **Want to disable Cloud API and go back to manual wa.me mode?**
 - Set `WA_TOKEN=""` (empty) in Render and redeploy. The app automatically falls back to opening wa.me tabs.
+
+---
+
+## Migrating WhatsApp Business App Number to Cloud API
+
+If you already use the WhatsApp Business app on a number and want to move it to Cloud API (so the panel can auto-send + auto-capture replies from that same number), you need to do a **number migration**. This is a one-time process.
+
+### What happens after migration
+- The WhatsApp Business app on that number **stops working** (you can't use it on your phone anymore for that number)
+- All sending/receiving goes through Cloud API (via this panel)
+- **Suppliers see messages from the same number** — no disruption for them
+- You can still receive voice calls / SMS on that number normally (only WhatsApp is affected)
+
+### Step-by-step migration (via the panel UI)
+
+**Prerequisite**: Complete steps 1-4 of the regular Cloud API setup (Meta Business account, WhatsApp app, phone number ID, access token, env vars in Render). The number you added in Meta must be the SAME number that's currently in your WhatsApp Business app.
+
+1. Go to **Settings → WhatsApp** tab in the panel.
+2. Scroll to **"Migrate WhatsApp Business Number"** card.
+3. Click **"Request Migration Code"** — Meta will SMS a 6-digit code to your business number.
+4. Enter the 6-digit code in the input field.
+5. Click **"Complete Migration"**.
+6. Done! Your number is now on Cloud API. The WhatsApp Business app on your phone will show "This account is registered on WhatsApp Business API" and stop working.
+
+### Troubleshooting migration
+
+**"This phone number is already registered" error during request**
+- The number is already on Cloud API. You don't need to migrate. Try sending a test message directly.
+
+**"Invalid code" or "code expired"**
+- The 6-digit code is valid for ~10 minutes. Click "Resend code" to get a new one.
+- Make sure you're entering the code from the SMS sent to the BUSINESS number (not your personal number).
+
+**Migration succeeded but messages don't send**
+- Wait 2-5 minutes for Meta to fully provision the number.
+- Check the test-send in Settings → WhatsApp → "Send Test Message".
+- Make sure your template `rate_enquiry` is approved.
+
+**Want to move the number back to WhatsApp Business app**
+- Use the "Deregister Number" button (in the Advanced section of the Migration card).
+- After deregister, install WhatsApp Business app fresh on your phone and register with the same number (you'll get a fresh SMS verification).
+
+### Important: Don't migrate your personal number
+If you migrate your personal WhatsApp number (the one you use to chat with friends/family), you will lose access to all your personal chats. Only migrate a **business-dedicated number**.
+
+---
+
+## Chat Export Mode (WhatsApp Business App + Free Auto-Capture)
+
+If you want to keep using the WhatsApp Business mobile app normally AND still capture supplier replies into the panel automatically (without paying for Cloud API or a BSP), use **Chat Export mode**.
+
+This mode is **free, requires no Meta setup, and works with your existing WhatsApp Business app**. The trade-off: importing replies is semi-manual (10 seconds per supplier — you tap "Export Chat" and upload the file).
+
+### How it works
+
+1. You send enquiries via the panel — wa.me links open in WhatsApp, you tap Send manually (as before).
+2. Suppliers reply to your WhatsApp Business app normally.
+3. When you want to capture replies into the panel:
+   - Open WhatsApp Business app → open the supplier's chat
+   - Tap ⋮ → More → **Export Chat** → **Without Media** → save/share the .txt file
+   - In the panel: WhatsApp → **Import Chat** button → upload the .txt file
+4. The panel auto-detects the supplier, parses their replies, extracts rates, and matches to the open enquiry.
+5. You can then "Apply Rates to Dashboard" as usual.
+
+### Advantages
+- ✅ 100% free, no Meta Business account, no Cloud API
+- ✅ WhatsApp Business app keeps working normally on your phone
+- ✅ All your existing chats, broadcast lists, catalog, auto-replies stay intact
+- ✅ No risk of account ban (uses only official WhatsApp features)
+- ✅ Works with any number of suppliers
+
+### Limitations
+- ⚠️ Sending is still manual (wa.me links → tap Send in each tab)
+- ⚠️ Reply capture is semi-manual (export + upload, ~10 sec per supplier)
+- ⚠️ No real-time auto-capture (you decide when to import)
+
+### When to use which mode
+
+| Mode | Setup | Cost | Send | Reply Capture |
+|------|-------|------|------|----------------|
+| **Chat Export** (this) | None | Free | Manual (wa.me) | Semi-manual (export + upload) |
+| **Cloud API** | Meta Business + SIM | Free (1000/mo) | Auto | Real-time webhook |
+| **wa.me (basic)** | None | Free | Manual | Manual paste |
+
+To use Chat Export mode: just leave `WA_TOKEN` env var empty. The "Import Chat" button in the WhatsApp panel will appear automatically.

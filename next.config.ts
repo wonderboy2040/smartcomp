@@ -13,18 +13,25 @@ const nextConfig: NextConfig = {
     },
   },
   // CRITICAL: clean up stale build artifacts so old chunks don't linger
-  // and cause "This page couldn't load" after deploys
   cleanDistDir: true,
-  // Ensure the service worker is served with the correct MIME type
-  // and is not cached aggressively (so updates reach clients quickly).
+  // Headers — ensure HTML is never cached aggressively (so new deploys
+  // are picked up immediately), but immutable hashed assets are cached forever.
   async headers() {
     return [
       {
-        // HTML pages must NEVER be cached aggressively — always revalidate
-        // so a new deploy is picked up on next navigation.
-        source: "/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg).*)",
+        // All HTML/JSON pages: never cache, always revalidate
+        source: "/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg|robots.txt).*)",
         headers: [
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Pragma", value: "no-cache" },
+          { key: "Expires", value: "0" },
+        ],
+      },
+      {
+        // _next/static/* chunks are content-hashed → safe to cache forever
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
         ],
       },
       {
@@ -48,10 +55,6 @@ const nextConfig: NextConfig = {
           { key: "Content-Type", value: "application/manifest+json; charset=utf-8" },
           { key: "Cache-Control", value: "public, max-age=3600" },
         ],
-      },
-      {
-        source: "/offline.html",
-        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
       },
     ];
   },

@@ -24,7 +24,10 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 30 * 1000 // data is considered fresh for 30s; older data triggers background refetch
+const STALE_MS = 15 * 1000 // data is considered fresh for 15s; older data triggers background refetch.
+// This is the key knob for "ultra-fast sync feel": any tab switch older than
+// 15s will silently refetch in the background, while still serving cached data
+// instantly for the user.
 
 function notify(key: string) {
   const subs = subscribers.get(key)
@@ -56,11 +59,26 @@ export function mutate<T>(key: string, dataOrUpdater: T | Updater<T>) {
   setCache(key, next)
 }
 
-/** Invalidate (force refetch on next mount) all cache entries matching a prefix. */
+/** Invalidate (force refetch on next mount) all cache entries matching a prefix.
+ *  Also immediately triggers background refetch for any mounted component
+ *  subscribed to the affected keys, so the UI updates without requiring a
+ *  tab switch or manual refresh. */
 export function invalidate(prefix: string) {
+  const affectedKeys: string[] = []
   for (const key of Array.from(cache.keys())) {
     if (key === prefix || key.startsWith(prefix + '?') || key.startsWith(prefix + '#') || prefix === '*') {
       timestamps.set(key, 0) // mark stale
+      affectedKeys.push(key)
+    }
+  }
+  // Notify subscribers (causes re-render) AND trigger background refetch
+  // for each affected key so fresh data is fetched immediately.
+  for (const key of affectedKeys) {
+    notify(key)
+    // Only refetch if a component is actually subscribed (otherwise it's
+    // pointless — it'll refetch on next mount anyway)
+    if (subscribers.has(key) && subscribers.get(key)!.size > 0) {
+      doFetch(key)
     }
   }
   notifyPattern(prefix)

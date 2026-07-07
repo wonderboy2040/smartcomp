@@ -156,6 +156,109 @@ export async function sendTemplateMessage(
 }
 
 /**
+ * Deregister a phone number from Cloud API.
+ * Use this if you need to re-register / re-migrate a number that was previously
+ * linked to WhatsApp Business app.
+ *
+ * After deregister, the number can be re-registered with Cloud API.
+ * Meta docs: https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers#deregister
+ */
+export async function deregisterPhone(): Promise<{ success: boolean; error?: string }> {
+  if (!isCloudApiConfigured()) {
+    return { success: false, error: 'WA_TOKEN / WA_PHONE_NUMBER_ID not configured' }
+  }
+  try {
+    const res = await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/deregister`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      signal: AbortSignal.timeout(15000),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { success: false, error: data?.error?.message || `HTTP ${res.status}` }
+    }
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network error' }
+  }
+}
+
+/**
+ * Initiate WhatsApp Business app → Cloud API migration.
+ *
+ * When you want to move a number that is currently registered with the WhatsApp
+ * Business app to Cloud API, Meta requires a 6-digit migration code. This function
+ * triggers Meta to send that code via SMS to the number.
+ *
+ * After receiving the code, the user enters it via /api/whatsapp/migrate (with
+ * the code), and Meta completes the migration.
+ *
+ * Meta docs: https://developers.facebook.com/docs/whatsapp/cloud-api/migrate-whatsapp-business-app-account
+ */
+export async function requestMigrationCode(): Promise<{ success: boolean; error?: string }> {
+  if (!isCloudApiConfigured()) {
+    return { success: false, error: 'WA_TOKEN / WA_PHONE_NUMBER_ID not configured' }
+  }
+  try {
+    const res = await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/deregister`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messaging_product: 'whatsapp' }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { success: false, error: data?.error?.message || `HTTP ${res.status}` }
+    }
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network error' }
+  }
+}
+
+/**
+ * Complete the migration by submitting the 6-digit code that Meta sent via SMS.
+ *
+ * After this succeeds, the number is fully migrated to Cloud API and the
+ * WhatsApp Business app on that number will stop working.
+ */
+export async function submitMigrationCode(code: string): Promise<{ success: boolean; error?: string }> {
+  if (!isCloudApiConfigured()) {
+    return { success: false, error: 'WA_TOKEN / WA_PHONE_NUMBER_ID not configured' }
+  }
+  if (!/^\d{6}$/.test(String(code || ''))) {
+    return { success: false, error: 'Code must be 6 digits' }
+  }
+  try {
+    const res = await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/register`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        code: String(code),
+      }),
+      signal: AbortSignal.timeout(15000),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      return { success: false, error: data?.error?.message || `HTTP ${res.status}` }
+    }
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Network error' }
+  }
+}
+
+/**
  * Mark a message as "read". Optional — prevents the message from showing as unread
  * in your WhatsApp Business app if you also use the app.
  */

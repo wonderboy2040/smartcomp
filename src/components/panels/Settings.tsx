@@ -51,8 +51,9 @@ export function SettingsPanel() {
         <TabsContent value="shop" className="mt-4">
           <ShopSettings />
         </TabsContent>
-        <TabsContent value="whatsapp" className="mt-4">
+        <TabsContent value="whatsapp" className="mt-4 space-y-4">
           <WhatsAppSettings />
+          <MigrationHelper />
         </TabsContent>
         <TabsContent value="sync" className="mt-4">
           <SyncStatus />
@@ -479,6 +480,146 @@ function WhatsAppSettings() {
           <code className="block bg-white px-2 py-1 rounded mt-1 break-all">https://your-render-domain.com/api/whatsapp/webhook</code>
           <p className="mt-1">Verify token: the value you set as <code className="bg-white px-1 rounded">WA_VERIFY_TOKEN</code> env var.</p>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MigrationHelper() {
+  const { toast } = useToast()
+  const { data: status } = useFetch<any>('/api/whatsapp/status', undefined)
+  const [step, setStep] = useState<'idle' | 'code-sent' | 'done'>('idle')
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const configured = !!status?.configured
+
+  const handleRequest = async () => {
+    setBusy(true)
+    try {
+      const r = await apiPost('/api/whatsapp/migrate', { action: 'request' })
+      if (r.success) {
+        setStep('code-sent')
+        toast({ title: 'Code sent', description: 'Check your SMS for the 6-digit code' })
+      } else {
+        toast({ title: 'Failed', description: r.error || r.message, variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!/^\d{6}$/.test(code)) {
+      toast({ title: 'Enter 6-digit code', variant: 'destructive' })
+      return
+    }
+    setBusy(true)
+    try {
+      const r = await apiPost('/api/whatsapp/migrate', { action: 'submit', code })
+      if (r.success) {
+        setStep('done')
+        toast({ title: 'Migration complete!', description: 'Your number is now on Cloud API' })
+      } else {
+        toast({ title: 'Migration failed', description: r.error || r.message, variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!configured) {
+    return null
+  }
+
+  return (
+    <Card className="border-amber-200">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+          <Zap className="w-5 h-5 text-amber-600" /> Migrate WhatsApp Business Number
+        </CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
+          Move your existing WhatsApp Business app number to Cloud API. Suppliers will keep receiving messages from the same number.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+          <p className="font-medium flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> Important:</p>
+          <p>• After migration, the WhatsApp Business app on this number will STOP working.</p>
+          <p>• All sending/receiving will go through Cloud API (via this panel).</p>
+          <p>• Suppliers will see messages from the same number — no disruption for them.</p>
+          <p>• Make sure you have SMS access to this number (Meta sends a 6-digit code via SMS).</p>
+        </div>
+
+        {step === 'idle' && (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-600">Step 1: Request migration code. Meta will SMS a 6-digit code to your business number.</p>
+            <Button onClick={handleRequest} disabled={busy} className="bg-amber-600 hover:bg-amber-700">
+              {busy ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Sending...</> : <><Send className="w-3.5 h-3.5 mr-1" /> Request Migration Code</>}
+            </Button>
+          </div>
+        )}
+
+        {step === 'code-sent' && (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-600">Step 2: Enter the 6-digit code you received via SMS.</p>
+            <Input
+              placeholder="6-digit code"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className="text-center text-2xl tracking-[0.5em] font-mono max-w-xs"
+              inputMode="numeric"
+            />
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={handleSubmit} disabled={busy || code.length !== 6} className="bg-emerald-600 hover:bg-emerald-700">
+                {busy ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Migrating...</> : <><ShieldCheck className="w-4 h-4 mr-1" /> Complete Migration</>}
+              </Button>
+              <Button variant="outline" onClick={handleRequest} disabled={busy}>Resend code</Button>
+            </div>
+          </div>
+        )}
+
+        {step === 'done' && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-800 flex items-start gap-2">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Migration successful!</p>
+              <p className="text-xs mt-1">Your number is now on Cloud API. You can close WhatsApp Business app on your phone. Use the WhatsApp panel to send enquiries — they'll auto-send from this number.</p>
+            </div>
+          </div>
+        )}
+
+        <details className="text-xs text-slate-500 pt-2 border-t border-slate-200">
+          <summary className="cursor-pointer font-medium text-slate-700">Advanced: Deregister / Re-migrate</summary>
+          <div className="mt-2 space-y-1">
+            <p>If migration got stuck or you need to reset, click below to deregister the number from Cloud API. After this, you'll need to re-run the migration flow.</p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-red-600 border-red-200 hover:bg-red-50"
+              onClick={async () => {
+                if (!confirm('Deregister this number from Cloud API? You will need to re-migrate to use it again.')) return
+                setBusy(true)
+                try {
+                  const r = await apiPost('/api/whatsapp/deregister', {})
+                  toast({ title: r.success ? 'Deregistered' : 'Failed', description: r.error || r.message, variant: r.success ? 'default' : 'destructive' })
+                  if (r.success) setStep('idle')
+                } catch (e: any) {
+                  toast({ title: 'Error', description: e.message, variant: 'destructive' })
+                } finally {
+                  setBusy(false)
+                }
+              }}
+              disabled={busy}
+            >
+              Deregister Number
+            </Button>
+          </div>
+        </details>
       </CardContent>
     </Card>
   )

@@ -13,10 +13,12 @@
 
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL
 
-// Server-side in-memory cache (5 minute TTL)
+// Server-side in-memory cache (30 second TTL for fresh data).
 // On Render free tier the server may sleep, so this mainly helps within an active session.
+// Kept short (30s) so that data changes (add/edit/delete) are reflected quickly
+// across multiple devices using the same Apps Script backend.
 const cache = new Map<string, { data: any; expires: number }>()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const CACHE_TTL = 30 * 1000 // 30 seconds — fresh data without too many Apps Script calls
 
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key)
@@ -32,16 +34,10 @@ function setCached(key: string, data: any) {
 }
 
 function invalidateCache(sheet?: string) {
-  if (sheet) {
-    // Invalidate specific sheet caches + dashboard (dashboard aggregates all sheets)
-    for (const key of cache.keys()) {
-      if (key.includes(`:${sheet}:`) || key.includes(`:dashboard:`) || key.includes(`:shop:`)) {
-        cache.delete(key)
-      }
-    }
-  } else {
-    cache.clear()
-  }
+  // Always clear everything on any mutation — we have 9 sheets and the dashboard
+  // aggregates all of them. Selective invalidation was leaving stale data.
+  // The 30s TTL is short enough that clearing everything is cheap.
+  cache.clear()
 }
 
 export function isConfigured(): boolean {

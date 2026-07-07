@@ -50,6 +50,11 @@ const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/auth/status',
+  // WhatsApp Cloud API webhook — Meta calls this server-to-server, has no PIN cookie.
+  // Secured by WA_VERIFY_TOKEN instead.
+  '/api/whatsapp/webhook',
+  // Cron endpoint — secured by CRON_SECRET header, not PIN cookie.
+  '/api/cron/auto-enquiry',
 ]
 
 function isPublic(pathname: string): boolean {

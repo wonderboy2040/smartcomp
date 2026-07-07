@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import {
   MessageSquare, Send, Search, Users, Package, RefreshCw,
-  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot
+  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload
 } from 'lucide-react'
 
 export function WhatsAppPanel() {
@@ -31,6 +31,10 @@ export function WhatsAppPanel() {
   const [responseDialog, setResponseDialog] = useState<any | null>(null)
   const [responseText, setResponseText] = useState('')
   const [parsedRates, setParsedRates] = useState<any[]>([])
+  const [importOpen, setImportOpen] = useState(false)
+  const [importContent, setImportContent] = useState('')
+  const [importPreview, setImportPreview] = useState<any | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const { data: enquiries, loading, refetch } = useFetch<any[]>('/api/enquiries?limit=100', undefined)
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
@@ -140,6 +144,51 @@ export function WhatsAppPanel() {
     }
   }
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const text = String(ev.target?.result || '')
+      setImportContent(text)
+      // Show a small preview of what was loaded
+      setImportPreview({
+        fileName: file.name,
+        size: file.size,
+        lineCount: text.split('\n').length,
+        preview: text.slice(0, 300),
+      })
+    }
+    reader.readAsText(file)
+  }
+
+  const handleImportSubmit = async () => {
+    if (!importContent.trim()) {
+      toast({ title: 'Select a chat export file first', variant: 'destructive' })
+      return
+    }
+    setImporting(true)
+    try {
+      const res = await apiPost('/api/whatsapp/import-chat', { content: importContent })
+      if (res.success) {
+        toast({
+          title: res.action === 'created' ? 'New enquiry created from chat' : 'Enquiry updated',
+          description: `${res.parsed.parsedRates.length} rates detected · ${res.parsed.messageCount} messages imported${res.matchedEnquiry ? ` · matched: ${res.matchedEnquiry.supplierName}` : ''}`,
+        })
+        setImportOpen(false)
+        setImportContent('')
+        setImportPreview(null)
+        refetch()
+      } else {
+        toast({ title: 'Import failed', description: res.error, variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const sentCount = (enquiries || []).filter((e) => e.status === 'sent').length
   const respondedCount = (enquiries || []).filter((e) => e.status === 'responded').length
   const updatedCount = (enquiries || []).filter((e) => e.status === 'rate_updated').length
@@ -156,9 +205,14 @@ export function WhatsAppPanel() {
             Send bulk enquiries to suppliers and capture rate responses
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="bg-green-600 hover:bg-green-700 h-11 flex-shrink-0">
-          <Send className="w-4 h-4 mr-1.5" /> <span className="hidden sm:inline">New Enquiry</span><span className="sm:hidden">New</span>
-        </Button>
+        <div className="flex gap-2 flex-shrink-0">
+          <Button onClick={() => setImportOpen(true)} variant="outline" className="h-11 border-green-200 text-green-700 hover:bg-green-50">
+            <Upload className="w-4 h-4 mr-1.5" /> <span className="hidden sm:inline">Import Chat</span><span className="sm:hidden">Import</span>
+          </Button>
+          <Button onClick={() => setDialogOpen(true)} className="bg-green-600 hover:bg-green-700 h-11">
+            <Send className="w-4 h-4 mr-1.5" /> <span className="hidden sm:inline">New Enquiry</span><span className="sm:hidden">New</span>
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -458,6 +512,62 @@ export function WhatsAppPanel() {
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setResponseDialog(null)} className="w-full sm:w-auto">Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Chat Dialog */}
+      <Dialog open={importOpen} onOpenChange={(v) => !v && (setImportOpen(false), setImportContent(''), setImportPreview(null))}>
+        <DialogContent className="sm:max-w-2xl max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Upload className="w-5 h-5 text-green-600" /> Import WhatsApp Chat
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 space-y-1.5">
+              <p className="font-medium">How to get the chat export:</p>
+              <ol className="list-decimal list-inside space-y-1 ml-1">
+                <li>Open WhatsApp Business app on your phone</li>
+                <li>Open the supplier's chat</li>
+                <li>Tap the 3-dot menu (Android) or contact name (iOS) → <strong>More</strong> → <strong>Export Chat</strong></li>
+                <li>Choose <strong>"Without Media"</strong> (faster, smaller file)</li>
+                <li>Save / share the .txt file to yourself (email, drive, etc.)</li>
+                <li>Download it on this device and upload below</li>
+              </ol>
+              <p className="mt-1">The system will auto-detect the supplier, parse their replies, and extract rates.</p>
+            </div>
+
+            <div>
+              <input
+                type="file"
+                accept=".txt,text/plain"
+                onChange={handleFileSelect}
+                className="block w-full text-sm text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100 cursor-pointer"
+              />
+            </div>
+
+            {importPreview && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1">
+                <p className="font-medium text-slate-700">File loaded:</p>
+                <p>Name: {importPreview.fileName} · Size: {(importPreview.size / 1024).toFixed(1)} KB · Lines: {importPreview.lineCount}</p>
+                <p className="text-slate-500 mt-1 font-mono whitespace-pre-wrap truncate">{importPreview.preview}...</p>
+              </div>
+            )}
+
+            {importContent && (
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { setImportContent(''); setImportPreview(null) }}>
+                  Clear
+                </Button>
+                <Button onClick={handleImportSubmit} disabled={importing} className="bg-green-600 hover:bg-green-700">
+                  {importing ? <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Parsing...</> : <><Check className="w-4 h-4 mr-1" /> Parse & Import</>}
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => { setImportOpen(false); setImportContent(''); setImportPreview(null) }} className="w-full sm:w-auto">Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

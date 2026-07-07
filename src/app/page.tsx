@@ -37,6 +37,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
+  // Track which panels have been activated at least once — they stay mounted
+  // afterwards so switching back is instant, but we don't load all 9 on first paint.
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(new Set(['dashboard']))
 
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
@@ -85,6 +88,13 @@ export default function Home() {
   const handleNavigate = (tab: string) => {
     setActive(tab)
     setSidebarOpen(false)
+    // Lazily mount the panel — it stays mounted afterwards so future switches are instant
+    setMountedPanels((prev) => {
+      if (prev.has(tab)) return prev
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
@@ -192,17 +202,36 @@ export default function Home() {
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">
-          {/* Keep all panels mounted; just hide inactive ones with CSS so switching
-              is instant and we don't refetch from Apps Script on every tab switch. */}
-          <div className={active === 'dashboard' ? 'block' : 'hidden'}><DashboardView onNavigate={handleNavigate} /></div>
-          <div className={active === 'stock' ? 'block' : 'hidden'}><StockPanel /></div>
-          <div className={active === 'invoices' ? 'block' : 'hidden'}><InvoicesPanel /></div>
-          <div className={active === 'quotations' ? 'block' : 'hidden'}><QuotationsPanel /></div>
-          <div className={active === 'payments' ? 'block' : 'hidden'}><PaymentsPanel /></div>
-          <div className={active === 'customers' ? 'block' : 'hidden'}><CustomersPanel /></div>
-          <div className={active === 'suppliers' ? 'block' : 'hidden'}><SuppliersPanel /></div>
-          <div className={active === 'whatsapp' ? 'block' : 'hidden'}><WhatsAppPanel /></div>
-          <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>
+          {/* Lazy-mount panels: only mount a panel once it's been activated,
+              but keep it mounted afterwards so switching back is instant.
+              This avoids firing 9 parallel Apps Script calls on first load. */}
+          {mountedPanels.has('dashboard') && (
+            <div className={active === 'dashboard' ? 'block' : 'hidden'}><DashboardView onNavigate={handleNavigate} /></div>
+          )}
+          {mountedPanels.has('stock') && (
+            <div className={active === 'stock' ? 'block' : 'hidden'}><StockPanel /></div>
+          )}
+          {mountedPanels.has('invoices') && (
+            <div className={active === 'invoices' ? 'block' : 'hidden'}><InvoicesPanel /></div>
+          )}
+          {mountedPanels.has('quotations') && (
+            <div className={active === 'quotations' ? 'block' : 'hidden'}><QuotationsPanel /></div>
+          )}
+          {mountedPanels.has('payments') && (
+            <div className={active === 'payments' ? 'block' : 'hidden'}><PaymentsPanel /></div>
+          )}
+          {mountedPanels.has('customers') && (
+            <div className={active === 'customers' ? 'block' : 'hidden'}><CustomersPanel /></div>
+          )}
+          {mountedPanels.has('suppliers') && (
+            <div className={active === 'suppliers' ? 'block' : 'hidden'}><SuppliersPanel /></div>
+          )}
+          {mountedPanels.has('whatsapp') && (
+            <div className={active === 'whatsapp' ? 'block' : 'hidden'}><WhatsAppPanel /></div>
+          )}
+          {mountedPanels.has('settings') && (
+            <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>
+          )}
         </div>
       </main>
     </div>
