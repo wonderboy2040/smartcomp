@@ -1,0 +1,30 @@
+# Render deployment config
+# Docs: https://render.com/docs/blueprint-spec
+# No database needed! Data is stored in your Google Sheet via Apps Script.
+
+services:
+  - type: web
+    name: smart-computers-panel
+    runtime: node
+    plan: free  # free tier works since no database needed
+    region: singapore  # closest to India
+    branch: main
+    rootDir: .
+    buildCommand: bun install
+    startCommand: bun run start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      # REQUIRED: Set this to your Apps Script Web App URL
+      # Get it from Google Sheet → Extensions → Apps Script → Deploy → Web app
+      - key: APPS_SCRIPT_URL
+        sync: false  # you'll set this in Render dashboard
+      # Optional: for auto-enquiry cron security
+      # - key: CRON_SECRET
+      #   sync: false
+
+# Note: No database service needed!
+# All data is stored in your Google Sheet.
+# Free tier works perfectly because there's no local file storage requirement.
