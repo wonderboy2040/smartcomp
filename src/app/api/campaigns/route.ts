@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listRows, createRow } from '@/lib/sheets-client'
+import { listRows, createRow, updateRow } from '@/lib/sheets-client'
 import { sendCustomerNotification } from '@/lib/notifications'
 
 /**
@@ -128,7 +128,6 @@ export async function POST(req: NextRequest) {
       }
 
       // Update campaign
-      const { updateRow } = await import('@/lib/sheets-client')
       await updateRow('Campaigns', campaignId, {
         status: sentViaWaMe > 0 && sentViaCloud === 0 ? 'sent-manual' : 'sent',
         totalRecipients: recipients.length,

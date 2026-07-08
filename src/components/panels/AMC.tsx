@@ -67,12 +67,23 @@ export function AMCPanel() {
   const handleEdit = (c: any) => { setEditing(c); setDialogOpen(true) }
   const handleAdd = () => { setEditing(null); setDialogOpen(true) }
 
+  const monthlyFee = (c: any) => {
+    const fee = Number(c.fee) || 0
+    switch (c.frequency) {
+      case 'monthly': return fee
+      case 'quarterly': return fee / 3
+      case 'half-yearly': return fee / 6
+      case 'yearly': return fee / 12
+      default: return fee
+    }
+  }
+
   const stats = {
     total: (contracts || []).length,
     active: (contracts || []).filter((c) => c.dynamicStatus === 'active').length,
     expiring: (contracts || []).filter((c) => c.dynamicStatus === 'expiring').length,
     expired: (contracts || []).filter((c) => c.dynamicStatus === 'expired').length,
-    totalFee: (contracts || []).filter((c) => c.dynamicStatus === 'active').reduce((s, c) => s + (Number(c.fee) || 0), 0),
+    totalFee: (contracts || []).filter((c) => c.dynamicStatus === 'active').reduce((s, c) => s + monthlyFee(c), 0),
   }
 
   return (

@@ -26,8 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 // PUT /api/invoices/[id] — Edit an existing invoice
-// Restores stock from old items, deducts stock for new items, recomputes totals,
-// adjusts customer credit balance based on the difference in amountDue.
+// Restores stock from old items, deducts stock for new items (net-delta per item),
+// recomputes totals, adjusts customer credit balance, updates paymentStatus.
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -36,7 +36,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const existing = await getRow<any>('Invoices', id)
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    // Parse old items to restore their stock
+    // Parse old items to compute stock delta
     const oldItems = safeJsonParse<any[]>(existing.itemsJson, [])
 
     // Build new items from body
@@ -53,40 +53,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       costPrice: Number(i.costPrice) || 0,
     }))
 
-    // Recompute totals
+    // Recompute totals (computed.items includes amount, gstAmount, total, costTotal, profit)
     const computed = computeInvoice(newItems, {
       courierCharges: Number(body.courierCharges) || 0,
       otherCharges: Number(body.otherCharges) || 0,
       discount: Number(body.discount) || 0,
     })
 
-    // Restore stock for OLD items
+    // TRANSACTIONAL stock update: compute net delta per itemId, then single update per item
+    const delta = new Map<string, number>()
     for (const item of oldItems) {
-      if (item.itemId) {
-        const dbItem = await getRow<any>('Items', String(item.itemId))
-        if (dbItem) {
-          await updateRow('Items', String(item.itemId), {
-            quantity: (Number(dbItem.quantity) || 0) + (Number(item.quantity) || 0),
-          })
-        }
-      }
+      if (item.itemId) delta.set(String(item.itemId), (delta.get(String(item.itemId)) || 0) + (Number(item.quantity) || 0))
     }
-
-    // Deduct stock for NEW items
     for (const item of newItems) {
-      if (item.itemId) {
-        const dbItem = await getRow<any>('Items', String(item.itemId))
-        if (dbItem) {
-          const currentQty = Number(dbItem.quantity) || 0
-          const newQty = currentQty - item.quantity
-          if (newQty < 0) {
-            // Rollback: restore old stock since we already deducted above
-            // (best-effort — not fully transactional but prevents negative stock)
-          }
-          await updateRow('Items', String(item.itemId), {
-            quantity: Math.max(0, newQty),
-          })
-        }
+      if (item.itemId) delta.set(String(item.itemId), (delta.get(String(item.itemId)) || 0) - (Number(item.quantity) || 0))
+    }
+    for (const [itemId, d] of delta) {
+      if (d === 0) continue
+      const dbItem = await getRow<any>('Items', itemId)
+      if (dbItem) {
+        await updateRow('Items', itemId, {
+          quantity: Math.max(0, (Number(dbItem.quantity) || 0) + d),
+        })
       }
     }
 
@@ -104,14 +92,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    // Update invoice
+    // Recompute paymentStatus
+    const newPaid = Number(existing.amountPaid) || 0
+    const newStatus = newDue <= 0 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid'
+
+    // Update invoice — save computed items (not raw newItems) for consistency with POST
     const updated = await updateRow('Invoices', id, {
       customerId: String(body.customerId || existing.customerId || ''),
       customerName: String(body.customerName || existing.customerName || ''),
       customerPhone: String(body.customerPhone || existing.customerPhone || ''),
       customerGstin: String(body.customerGstin || existing.customerGstin || ''),
       date: body.date || existing.date,
-      itemsJson: JSON.stringify(newItems),
+      itemsJson: JSON.stringify(computed.items),
       subtotal: computed.subtotal,
       gstAmount: computed.gstAmount,
       courierCharges: computed.courierCharges,
@@ -121,8 +113,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       totalCost: computed.totalCost,
       profit: computed.profit,
       paymentType: body.paymentType || existing.paymentType,
-      notes: String(body.notes || existing.notes || ''),
+      paymentStatus: newStatus,
       amountDue: Math.max(0, newDue),
+      notes: String(body.notes || existing.notes || ''),
     })
 
     return NextResponse.json(updated)

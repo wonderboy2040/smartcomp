@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useParams } from 'next/navigation'
 import {
   Wrench, Clock, CheckCircle2, Package, Phone, MapPin, Mail,
   Laptop, Printer, Monitor, Battery, ScanLine, Smartphone,
@@ -27,18 +27,28 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any; labe
 
 export default function TrackPage() {
   return (
-    <Suspense>
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-800">
+        <Loader2 className="w-10 h-10 animate-spin text-white" />
+      </div>
+    }>
       <TrackInner />
     </Suspense>
   )
 }
 
-import { Suspense } from 'react'
-
 function TrackInner() {
-  const params = useSearchParams()
-  const jobId = params.get('job')
-  const token = params.get('token')
+  // The URL format is /track/SC20260708001-abc12345
+  // Next.js dynamic route param "jobId" = "SC20260708001-abc12345"
+  const params = useParams()
+  const rawJobId = String(params?.jobId || '')
+
+  // Split on the LAST dash to separate jobId from token
+  // jobId format: SC20260708001 (no dashes), token format: abc12345 (no dashes)
+  const lastDash = rawJobId.lastIndexOf('-')
+  const jobId = lastDash > 0 ? rawJobId.slice(0, lastDash) : ''
+  const token = lastDash > 0 ? rawJobId.slice(lastDash + 1) : ''
+
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')

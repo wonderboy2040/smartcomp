@@ -70,6 +70,8 @@ export async function GET(req: NextRequest) {
           supplierId,
           supplierName,
           rate: Number(r.rate) || 0,
+          totalCost: Number(r.totalCost) || Number(r.rate) || 0,
+          gstType: r.gstType,
           gstApplicable: r.gstApplicable,
           gstRate: r.gstRate ? Number(r.gstRate) : undefined,
           enquiryDate: respondedAt.toISOString(),

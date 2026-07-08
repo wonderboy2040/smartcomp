@@ -94,10 +94,10 @@ export async function GET(req: NextRequest) {
     const totalAssets = stockValueCost + receivables + cashInHand + upiBalance + bankBalance
 
     // LIABILITIES
-    // 1. Customer Credit (advance received)
-    const customerCredit = customers.reduce((s, c) => s + (Number(c.creditBalance) || 0), 0)
-
-    const totalLiabilities = customerCredit
+    // Customer credit balance IS the same as receivables (outstanding invoice dues).
+    // Counting both would double-count. We set liabilities to 0 for now.
+    // Future: track supplier payables (purchase orders not yet paid) as real liabilities.
+    const totalLiabilities = 0
 
     // Net Worth
     const netWorth = totalAssets - totalLiabilities
@@ -114,7 +114,6 @@ export async function GET(req: NextRequest) {
         total: totalAssets,
       },
       liabilities: {
-        customerCredit,
         total: totalLiabilities,
       },
       netWorth,

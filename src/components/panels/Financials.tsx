@@ -238,7 +238,7 @@ export function FinancialsPanel() {
                 <Card className="border-red-200">
                   <CardHeader><CardTitle className="text-base flex items-center gap-2"><ArrowDownRight className="w-5 h-5 text-red-600" /> Liabilities</CardTitle></CardHeader>
                   <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-slate-600">Customer Credit (Advance)</span><span className="font-medium">{formatCurrency(balanceData.liabilities.customerCredit)}</span></div>
+                    <div className="text-xs text-slate-400 text-center py-4">No liabilities tracked. (Receivables are already counted as assets above.)</div>
                     <div className="flex justify-between font-bold border-t border-slate-200 pt-1"><span>Total Liabilities</span><span className="text-red-700">{formatCurrency(balanceData.liabilities.total)}</span></div>
                     <div className="pt-3 text-center">
                       <p className="text-[10px] text-slate-400">Net Worth</p>

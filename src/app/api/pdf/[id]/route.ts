@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const pdfBuffer = await generateInvoicePdf({
         number: String(invoice.number || ''),
-        date: new Date(invoice.date),
+        date: new Date(invoice.date || invoice.createdAt || Date.now()),
         shop: {
           name: String(shop.name || 'Smart Computers'),
           owner: String(shop.owner || ''),
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
       const pdfBuffer = await generateInvoicePdf({
         number: String(q.number || ''),
-        date: new Date(q.date),
+        date: new Date(q.date || q.createdAt || Date.now()),
         validTill: q.validTill ? new Date(q.validTill) : undefined,
         shop: {
           name: String(shop.name || 'Smart Computers'),

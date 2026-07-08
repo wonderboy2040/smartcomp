@@ -55,6 +55,14 @@ export async function POST(req: NextRequest) {
         const invoices = await listRows<any>('Invoices')
         const invoice = invoices.find((inv) => String(inv.id) === invoiceId)
         if (invoice) {
+          // IDEMPOTENCY: check if this payment was already recorded (Razorpay retries)
+          const existingPayments = await listRows<any>('Payments')
+          const alreadyRecorded = existingPayments.find((p) => String(p.reference || '') === String(payload.id || ''))
+          if (alreadyRecorded) {
+            console.log(`[Razorpay Webhook] Payment ${payload.id} already recorded — skipping`)
+            return NextResponse.json({ success: true, duplicate: true })
+          }
+
           // Create payment record
           await createRow('Payments', {
             invoiceId: String(invoice.id),

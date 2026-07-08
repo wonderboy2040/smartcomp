@@ -86,7 +86,7 @@ function HomeInner() {
       '/api/items',
       '/api/customers',
       '/api/invoices?limit=200',
-      '/api/suppliers?active=true',
+      '/api/suppliers',
       '/api/jobs',
       '/api/expenses',
     ]
