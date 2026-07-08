@@ -22,10 +22,13 @@ import { ReportsPanel } from '@/components/panels/Reports'
 import { SerialsPanel } from '@/components/panels/Serials'
 import { PersonalExpenditurePanel } from '@/components/panels/PersonalExpenditure'
 import { FinancialsPanel } from '@/components/panels/Financials'
+import { CampaignsPanel } from '@/components/panels/Campaigns'
+import { CreditControlPanel } from '@/components/panels/CreditControl'
+import { AMCPanel } from '@/components/panels/AMC'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -40,8 +43,11 @@ const NAV_ITEMS = [
   { id: 'jobs', label: 'Service Jobs', icon: Wrench, color: 'text-blue-600' },
   { id: 'servicepayments', label: 'Service Payments', icon: Wallet, color: 'text-purple-600' },
   { id: 'serials', label: 'Serials & Warranty', icon: Boxes, color: 'text-indigo-600' },
+  { id: 'amc', label: 'AMC Contracts', icon: FileSignature, color: 'text-blue-600' },
   { id: 'expenses', label: 'Shop Expenses', icon: Receipt, color: 'text-red-600' },
   { id: 'personal', label: 'Personal Expenditure', icon: PiggyBank, color: 'text-pink-600' },
+  { id: 'campaigns', label: 'Campaigns', icon: Megaphone, color: 'text-green-600' },
+  { id: 'credit', label: 'Credit Control', icon: ShieldAlert, color: 'text-red-600' },
   { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
@@ -305,11 +311,20 @@ function HomeInner() {
           {mountedPanels.has('serials') && (
             <div className={active === 'serials' ? 'block' : 'hidden'}><SerialsPanel /></div>
           )}
+          {mountedPanels.has('amc') && (
+            <div className={active === 'amc' ? 'block' : 'hidden'}><AMCPanel /></div>
+          )}
           {mountedPanels.has('expenses') && (
             <div className={active === 'expenses' ? 'block' : 'hidden'}><ExpensesPanel /></div>
           )}
           {mountedPanels.has('personal') && (
             <div className={active === 'personal' ? 'block' : 'hidden'}><PersonalExpenditurePanel /></div>
+          )}
+          {mountedPanels.has('campaigns') && (
+            <div className={active === 'campaigns' ? 'block' : 'hidden'}><CampaignsPanel /></div>
+          )}
+          {mountedPanels.has('credit') && (
+            <div className={active === 'credit' ? 'block' : 'hidden'}><CreditControlPanel /></div>
           )}
           {mountedPanels.has('financials') && (
             <div className={active === 'financials' ? 'block' : 'hidden'}><FinancialsPanel /></div>
