@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { useFetch } from '@/lib/api'
+import { useFetch, prefetch, invalidate } from '@/lib/api'
 import { SetupWizard } from '@/components/SetupWizard'
 import { DashboardView } from '@/components/panels/Dashboard'
 import { StockPanel } from '@/components/panels/Stock'
@@ -43,6 +43,42 @@ export default function Home() {
 
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
+
+  // PERFORMANCE: Prefetch all panel data in the background as soon as the
+  // dashboard mounts. This means when the user clicks Stock / Invoices / etc,
+  // the data is already in the cache and the panel renders instantly instead
+  // of waiting 2-5 seconds for Apps Script to wake up.
+  useEffect(() => {
+    if (!isConfigured) return
+    // Stagger the prefetches slightly so we don't hammer Apps Script all at once
+    const urls = [
+      '/api/items',
+      '/api/suppliers?active=true',
+      '/api/customers',
+      '/api/invoices?limit=200',
+      '/api/quotations?limit=200',
+      '/api/payments?limit=200',
+      '/api/enquiries?limit=100',
+    ]
+    urls.forEach((url, i) => {
+      setTimeout(() => prefetch(url), i * 200)
+    })
+  }, [isConfigured])
+
+  // PERFORMANCE: Background refresh — invalidate all caches every 60 seconds
+  // so the dashboard auto-updates with fresh data from Google Sheets without
+  // the user needing to manually reload. This also picks up changes made from
+  // other devices.
+  useEffect(() => {
+    if (!isConfigured) return
+    const id = setInterval(() => {
+      // Mark everything stale — components will silently refetch in background
+      ['dashboard', 'shop', 'sheets/sync', 'items', 'invoices', 'quotations', 'payments', 'enquiries', 'customers', 'suppliers'].forEach((p) => {
+        invalidate('/api/' + p)
+      })
+    }, 60000) // every 60 seconds
+    return () => clearInterval(id)
+  }, [isConfigured])
 
   // Check if APPS_SCRIPT_URL is configured
   useEffect(() => {

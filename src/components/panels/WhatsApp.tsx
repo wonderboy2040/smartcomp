@@ -21,12 +21,12 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import {
   MessageSquare, Send, Search, Users, Package, RefreshCw,
-  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload
+  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight
 } from 'lucide-react'
 
 export function WhatsAppPanel() {
   const { toast } = useToast()
-  const [tab, setTab] = useState<'enquiries' | 'send'>('enquiries')
+  const [tab, setTab] = useState<'enquiries' | 'comparison' | 'recommend' | 'send'>('enquiries')
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [responseDialog, setResponseDialog] = useState<any | null>(null)
@@ -38,6 +38,14 @@ export function WhatsAppPanel() {
   const [importing, setImporting] = useState(false)
 
   const { data: enquiries, loading, refetch } = useFetch<any[]>('/api/enquiries?limit=100', undefined)
+  const { data: rateComparison, loading: comparisonLoading } = useFetch<any>(
+    tab === 'comparison' ? '/api/whatsapp/rates?days=90' : null,
+    undefined
+  )
+  const { data: recommendations, loading: recLoading } = useFetch<any>(
+    tab === 'recommend' ? '/api/whatsapp/recommend?strategy=cheapest' : null,
+    undefined
+  )
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
   const { data: items } = useFetch<any[]>('/api/items', undefined)
   const { data: waStatus } = useFetch<any>('/api/whatsapp/status', undefined)
@@ -216,6 +224,30 @@ export function WhatsAppPanel() {
         </div>
       </div>
 
+      {/* Advanced Tabs */}
+      <div className="flex gap-1 border-b border-slate-200 overflow-x-auto scrollbar-thin">
+        {[
+          { id: 'enquiries', label: 'Enquiries', icon: MessageSquare },
+          { id: 'comparison', label: 'Rate Comparison', icon: Users },
+          { id: 'recommend', label: 'Best Suppliers', icon: TrendingUp },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id as any)}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              tab === t.id
+                ? 'border-green-600 text-green-700'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <t.icon className="w-4 h-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ===== ENQUIRIES TAB ===== */}
+      {tab === 'enquiries' && (
+        <>
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
         <Card className="border-slate-200">
@@ -416,6 +448,18 @@ export function WhatsAppPanel() {
           </div>
         </CardContent>
       </Card>
+        </>
+      )}
+
+      {/* ===== RATE COMPARISON TAB ===== */}
+      {tab === 'comparison' && (
+        <RateComparisonView data={rateComparison} loading={comparisonLoading} />
+      )}
+
+      {/* ===== BEST SUPPLIERS TAB ===== */}
+      {tab === 'recommend' && (
+        <BestSuppliersView data={recommendations} loading={recLoading} />
+      )}
 
       {/* Send enquiry dialog - stable key to prevent remount/flicker */}
       <SendEnquiryDialog
@@ -739,5 +783,223 @@ function SendEnquiryDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ===== ADVANCED: Rate Comparison View =====
+function RateComparisonView({ data, loading }: { data: any; loading: boolean }) {
+  if (loading) {
+    return (
+      <Card><CardContent className="text-center py-12 text-slate-500">
+        <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin text-slate-300" />
+        Loading rate comparisons...
+      </CardContent></Card>
+    )
+  }
+  if (!data || !data.comparisons || data.comparisons.length === 0) {
+    return (
+      <Card><CardContent className="text-center py-12 text-slate-500">
+        <Users className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+        No rate data yet. Send enquiries and capture supplier responses to see comparisons.
+      </CardContent></Card>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 flex-shrink-0" />
+        <span>
+          <strong>{data.totalItems}</strong> items with rates from <strong>{data.totalSuppliers}</strong> suppliers.
+          Click an item to expand and see all supplier rates side-by-side.
+        </span>
+      </div>
+      {data.comparisons.map((c: any) => (
+        <Card key={c.itemId} className="border-slate-200 overflow-hidden">
+          <CardContent className="p-0">
+            <details>
+              <summary className="cursor-pointer p-3 sm:p-4 hover:bg-slate-50 flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-slate-900 text-sm sm:text-base truncate">{c.itemName}</p>
+                  <p className="text-[10px] sm:text-xs text-slate-500">{c.sku} · {c.rateCount} supplier{c.rateCount !== 1 ? 's' : ''} quoted</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs text-slate-500">Best: <span className="font-bold text-emerald-600">Rs.{c.bestRate.rate}</span></p>
+                  <p className="text-[10px] text-slate-400">Avg: Rs.{c.averageRate} · Save: Rs.{c.potentialSavings}</p>
+                </div>
+              </summary>
+              <div className="border-t border-slate-100">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50">
+                      <TableHead className="text-xs">Supplier</TableHead>
+                      <TableHead className="text-right text-xs">Rate</TableHead>
+                      <TableHead className="text-center text-xs">GST</TableHead>
+                      <TableHead className="text-right text-xs">Quote Date</TableHead>
+                      <TableHead className="text-center text-xs">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {c.rates.map((r: any, i: number) => (
+                      <TableRow key={i} className={i === 0 ? 'bg-emerald-50' : ''}>
+                        <TableCell className="text-sm font-medium">
+                          {r.supplierName}
+                          {i === 0 && <Badge className="ml-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">BEST</Badge>}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-sm">Rs.{r.rate}</TableCell>
+                        <TableCell className="text-center text-xs">
+                          {r.gstApplicable === true || r.gstApplicable === 'true' ? (
+                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[9px]">Yes {r.gstRate ? `${r.gstRate}%` : ''}</Badge>
+                          ) : r.gstApplicable === false || r.gstApplicable === 'false' ? (
+                            <Badge variant="outline" className="text-[9px]">No</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[9px]">?</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-slate-500">
+                          {new Date(r.enquiryDate).toLocaleDateString('en-IN')}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {i === 0 ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]"><Award className="w-3 h-3 mr-0.5 inline" />Cheapest</Badge>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">+Rs.{r.rate - c.bestRate.rate}</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </details>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+// ===== ADVANCED: Best Suppliers View =====
+function BestSuppliersView({ data, loading }: { data: any; loading: boolean }) {
+  const [strategy, setStrategy] = useState<'cheapest' | 'freshest' | 'reliable'>('cheapest')
+
+  if (loading) {
+    return (
+      <Card><CardContent className="text-center py-12 text-slate-500">
+        <RefreshCw className="w-8 h-8 mx-auto mb-2 animate-spin text-slate-300" />
+        Loading recommendations...
+      </CardContent></Card>
+    )
+  }
+  if (!data || !data.recommendations || data.recommendations.length === 0) {
+    return (
+      <Card><CardContent className="text-center py-12 text-slate-500">
+        <Award className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+        No recommendations yet. Send enquiries and capture responses first.
+      </CardContent></Card>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {/* Strategy selector */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { id: 'cheapest', label: '💰 Cheapest', desc: 'Lowest rate' },
+          { id: 'freshest', label: '🕐 Most Recent', desc: 'Latest quote' },
+          { id: 'reliable', label: '⭐ Most Reliable', desc: 'Most responses' },
+        ].map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setStrategy(s.id as any)}
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+              strategy === s.id
+                ? 'bg-green-600 text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+            title={s.desc}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800 flex items-center gap-2">
+        <Award className="w-4 h-4 flex-shrink-0" />
+        <span>
+          <strong>{data.totalItems}</strong> items analyzed · Potential total saving: <strong>Rs.{data.totalPotentialSaving}</strong> by switching to recommended suppliers
+        </span>
+      </div>
+
+      {/* Recommendations */}
+      {data.recommendations.map((r: any) => (
+        <Card key={r.itemId} className="border-slate-200">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-slate-900 text-sm sm:text-base truncate">{r.itemName}</p>
+                <p className="text-[10px] sm:text-xs text-slate-500">{r.sku} · {r.totalSuppliersQuoted} supplier{r.totalSuppliersQuoted !== 1 ? 's' : ''} quoted</p>
+              </div>
+              {r.potentialSaving > 0 && (
+                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px] flex-shrink-0">
+                  <ArrowDownRight className="w-3 h-3 mr-0.5" /> Save Rs.{r.potentialSaving}
+                </Badge>
+              )}
+            </div>
+
+            {/* Recommended supplier */}
+            <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200 rounded-lg p-3 mb-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <Award className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 text-sm truncate">{r.recommendedSupplier.supplierName}</p>
+                    <p className="text-[10px] text-slate-500">{r.reason} · {r.recommendedSupplier.age}</p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-bold text-emerald-700 text-lg">Rs.{r.recommendedSupplier.rate}</p>
+                  {r.recommendedSupplier.gstApplicable === true || r.recommendedSupplier.gstApplicable === 'true' ? (
+                    <p className="text-[10px] text-slate-500">+{r.recommendedSupplier.gstRate || 0}% GST</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Current vs recommended */}
+            {r.currentCostPrice > 0 && (
+              <div className="flex items-center justify-between text-xs text-slate-600 px-1">
+                <span>Current cost: <strong>Rs.{r.currentCostPrice}</strong></span>
+                {r.potentialSaving > 0 ? (
+                  <span className="text-emerald-600 font-medium">↓ Rs.{r.potentialSaving} cheaper</span>
+                ) : r.potentialSaving < 0 ? (
+                  <span className="text-red-600 font-medium">↑ Rs.{Math.abs(r.potentialSaving)} more expensive</span>
+                ) : (
+                  <span className="text-slate-400">Same price</span>
+                )}
+              </div>
+            )}
+
+            {/* Alternatives */}
+            {r.alternatives && r.alternatives.length > 0 && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-slate-500 hover:text-slate-700">
+                  {r.alternatives.length} alternative supplier{r.alternatives.length !== 1 ? 's' : ''} →
+                </summary>
+                <div className="mt-2 space-y-1.5">
+                  {r.alternatives.map((a: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-xs bg-slate-50 rounded px-2 py-1.5">
+                      <span className="font-medium text-slate-700">{a.supplierName}</span>
+                      <span className="text-slate-600">Rs.{a.rate} · {new Date(a.enquiryDate).toLocaleDateString('en-IN')}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   )
 }
