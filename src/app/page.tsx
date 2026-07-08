@@ -48,41 +48,29 @@ export default function Home() {
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
 
-  // PERFORMANCE: Prefetch all panel data in the background as soon as the
-  // dashboard mounts. This means when the user clicks Stock / Invoices / etc,
-  // the data is already in the cache and the panel renders instantly instead
-  // of waiting 2-5 seconds for Apps Script to wake up.
+  // PERFORMANCE: Prefetch the most commonly used panel data in the background.
+  // Only prefetch the top 4 panels - others load on demand when clicked.
+  // Stagger by 500ms so we don't hammer Apps Script all at once.
   useEffect(() => {
     if (!isConfigured) return
-    // Stagger the prefetches slightly so we don't hammer Apps Script all at once
     const urls = [
       '/api/items',
-      '/api/suppliers?active=true',
       '/api/customers',
       '/api/invoices?limit=200',
-      '/api/quotations?limit=200',
-      '/api/payments?limit=200',
-      '/api/enquiries?limit=100',
-      '/api/jobs',
-      '/api/service-payments',
+      '/api/suppliers?active=true',
     ]
     urls.forEach((url, i) => {
-      setTimeout(() => prefetch(url), i * 200)
+      setTimeout(() => prefetch(url), 500 + i * 500)
     })
   }, [isConfigured])
 
-  // PERFORMANCE: Background refresh — invalidate all caches every 60 seconds
-  // so the dashboard auto-updates with fresh data from Google Sheets without
-  // the user needing to manually reload. This also picks up changes made from
-  // other devices.
+  // PERFORMANCE: Background refresh every 2 minutes (matches server cache TTL).
+  // Only refreshes dashboard stats - individual panels refresh when user visits them.
   useEffect(() => {
     if (!isConfigured) return
     const id = setInterval(() => {
-      // Mark everything stale — components will silently refetch in background
-      ['dashboard', 'shop', 'sheets/sync', 'items', 'invoices', 'quotations', 'payments', 'enquiries', 'customers', 'suppliers'].forEach((p) => {
-        invalidate('/api/' + p)
-      })
-    }, 60000) // every 60 seconds
+      invalidate('/api/dashboard')
+    }, 120000) // every 2 minutes
     return () => clearInterval(id)
   }, [isConfigured])
 

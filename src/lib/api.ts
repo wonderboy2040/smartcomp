@@ -24,10 +24,10 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 15 * 1000 // data is considered fresh for 15s; older data triggers background refetch.
-// This is the key knob for "ultra-fast sync feel": any tab switch older than
-// 15s will silently refetch in the background, while still serving cached data
-// instantly for the user.
+const STALE_MS = 60 * 1000 // data is considered fresh for 60s; older data triggers background refetch.
+// This works with the server-side 2-minute cache: the client won't even ask for
+// new data for 60s, and the server caches for 2 minutes. Combined, this means
+// Apps Script is only hit every ~2 minutes instead of every 15 seconds.
 
 function notify(key: string) {
   const subs = subscribers.get(key)
@@ -195,7 +195,6 @@ export async function apiPost(url: string, body: any) {
   }
   // Also invalidate dashboard so it refreshes in background
   invalidate('/api/dashboard')
-  invalidate('/api/sheets/sync')
   return data
 }
 
@@ -221,7 +220,6 @@ export async function apiPut(url: string, body: any) {
     }
   }
   invalidate('/api/dashboard')
-  invalidate('/api/sheets/sync')
   return data
 }
 
@@ -249,7 +247,6 @@ export async function apiDelete(url: string) {
     const data = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(data.error || 'Failed')
     invalidate('/api/dashboard')
-    invalidate('/api/sheets/sync')
     return data
   } catch (e) {
     // Rollback: restore the snapshots

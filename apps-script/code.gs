@@ -130,62 +130,66 @@ function doPost(e) {
 }
 
 // ===== SHEET MANAGEMENT (DATA-SAFE) =====
+// PERFORMANCE: Track whether ensureAllSheets has run in this execution.
+// Apps Script runs a fresh V8 isolate per request, so this flag resets naturally.
+// This prevents ensureAllSheets from running 7+ times in getDashboardStats().
+var _sheetsEnsured = false;
+
 /**
  * Data-safe sheet initialization.
  * - Creates missing sheets.
  * - Appends missing columns to existing sheets WITHOUT clearing data.
  * - Only writes headers on brand-new empty sheets.
  * - NEVER calls sheet.clear() on sheets that have data.
+ * - PERFORMANCE: Only runs ONCE per script execution (cached via _sheetsEnsured flag).
  */
 function ensureAllSheets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  for (const name of SHEET_NAMES) {
-    let sheet = ss.getSheetByName(name);
+  if (_sheetsEnsured) return;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  for (var n = 0; n < SHEET_NAMES.length; n++) {
+    var name = SHEET_NAMES[n];
+    var sheet = ss.getSheetByName(name);
     if (!sheet) {
       sheet = ss.insertSheet(name);
     }
-    const headers = SCHEMAS[name];
-    const lastCol = sheet.getLastColumn();
-    const lastRow = sheet.getLastRow();
+    var headers = SCHEMAS[name];
+    var lastCol = sheet.getLastColumn();
+    var lastRow = sheet.getLastRow();
 
     if (lastCol === 0) {
-      // Brand new sheet — write headers fresh
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
       sheet.setFrozenRows(1);
     } else {
-      // Existing sheet — read current headers and append any missing columns
-      const existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-      const missing = [];
-      for (const h of headers) {
-        if (existingHeaders.indexOf(h) === -1) {
-          missing.push(h);
+      var existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+      var missing = [];
+      for (var h = 0; h < headers.length; h++) {
+        if (existingHeaders.indexOf(headers[h]) === -1) {
+          missing.push(headers[h]);
         }
       }
       if (missing.length > 0) {
-        // Append missing columns at the end (data-safe, no clearing)
-        const startCol = lastCol + 1;
+        var startCol = lastCol + 1;
         sheet.getRange(1, startCol, 1, missing.length).setValues([missing]);
         sheet.getRange(1, startCol, 1, missing.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
       }
-      // Also backfill deleted=false for any existing rows that don't have the column
-      const deletedIdx = headers.indexOf('deleted');
+      var deletedIdx = headers.indexOf('deleted');
       if (deletedIdx !== -1 && deletedIdx >= lastCol) {
-        // deleted column is newly added — backfill existing rows with 'false'
         if (lastRow > 1) {
-          const fillRange = sheet.getRange(2, deletedIdx + 1, lastRow - 1, 1);
-          const fillValues = [];
-          for (let i = 0; i < lastRow - 1; i++) fillValues.push([false]);
+          var fillRange = sheet.getRange(2, deletedIdx + 1, lastRow - 1, 1);
+          var fillValues = [];
+          for (var i = 0; i < lastRow - 1; i++) fillValues.push([false]);
           fillRange.setValues(fillValues);
         }
       }
     }
   }
+  _sheetsEnsured = true;
 }
 
 function getSheet(name) {
   ensureAllSheets();
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
   if (!sheet) throw new Error('Sheet not found: ' + name);
   return sheet;
 }

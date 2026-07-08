@@ -5,14 +5,18 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
     const activeOnly = url.searchParams.get('active') === 'true'
-    let suppliers = await listRows<any>('Suppliers')
     
+    // PERFORMANCE: Load all 3 in parallel instead of sequential
+    const [allSuppliers, items, enquiries] = await Promise.all([
+      listRows<any>('Suppliers'),
+      listRows<any>('Items', { useCache: true }),
+      listRows<any>('Enquiries', { useCache: true }),
+    ])
+    
+    let suppliers = allSuppliers
     if (activeOnly) {
       suppliers = suppliers.filter((s) => s.active === true || s.active === 'true')
     }
-    
-    const items = await listRows<any>('Items', { useCache: true })
-    const enquiries = await listRows<any>('Enquiries', { useCache: true })
     
     const result = suppliers.map((s) => ({
       ...s,

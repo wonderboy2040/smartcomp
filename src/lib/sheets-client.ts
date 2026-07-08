@@ -13,12 +13,12 @@
 
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL
 
-// Server-side in-memory cache (30 second TTL for fresh data).
+// Server-side in-memory cache (2 minute TTL).
 // On Render free tier the server may sleep, so this mainly helps within an active session.
-// Kept short (30s) so that data changes (add/edit/delete) are reflected quickly
-// across multiple devices using the same Apps Script backend.
+// 2 minutes is a good balance: avoids hammering Apps Script while still picking up
+// changes reasonably quickly. Mutations always invalidate the cache immediately.
 const cache = new Map<string, { data: any; expires: number }>()
-const CACHE_TTL = 30 * 1000 // 30 seconds — fresh data without too many Apps Script calls
+const CACHE_TTL = 120 * 1000 // 2 minutes — dramatically reduces Apps Script calls
 
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key)
@@ -65,7 +65,7 @@ async function callAppsScript(payload: any): Promise<any> {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload),
         redirect: 'follow',
-        signal: AbortSignal.timeout(45000), // 45s — Apps Script can be slow
+        signal: AbortSignal.timeout(25000), // 25s — fail faster, retry faster
       })
       if (res.status === 404) {
         // Apps Script deployment issue — retry after backoff
@@ -111,7 +111,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
       const res = await fetch(url.toString(), {
         method: 'GET',
         redirect: 'follow',
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(25000),
       })
       if (res.status === 404) {
         throw new Error(`Apps Script HTTP 404 (attempt ${attempt}/3). Web App may need redeployment.`)

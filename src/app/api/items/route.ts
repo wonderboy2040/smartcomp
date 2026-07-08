@@ -9,8 +9,13 @@ export async function GET(req: NextRequest) {
     const category = url.searchParams.get('category')
     const lowStock = url.searchParams.get('lowStock') === 'true'
 
-    let items = await listRows<any>('Items', { search })
-
+    // PERFORMANCE: Load items and suppliers in parallel
+    const [allItems, suppliers] = await Promise.all([
+      listRows<any>('Items', { search }),
+      listRows<any>('Suppliers', { useCache: true }),
+    ])
+    
+    let items = allItems
     if (category && category !== 'all') {
       items = items.filter((i) => i.category === category)
     }
@@ -18,8 +23,6 @@ export async function GET(req: NextRequest) {
       items = items.filter((i) => Number(i.quantity) <= Number(i.minQuantity || 0))
     }
 
-    // Get suppliers for join
-    const suppliers = await listRows<any>('Suppliers', { useCache: true })
     const supplierMap = new Map(suppliers.map((s) => [s.id, s]))
     
     const result = items.map((i) => ({

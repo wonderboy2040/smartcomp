@@ -5,10 +5,13 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
     const search = url.searchParams.get('search') || undefined
-    const customers = await listRows<any>('Customers', { search })
     
-    const invoices = await listRows<any>('Invoices', { useCache: true })
-    const quotations = await listRows<any>('Quotations', { useCache: true })
+    // PERFORMANCE: Load all 3 in parallel instead of sequential
+    const [customers, invoices, quotations] = await Promise.all([
+      listRows<any>('Customers', { search }),
+      listRows<any>('Invoices', { useCache: true }),
+      listRows<any>('Quotations', { useCache: true }),
+    ])
     
     const result = customers.map((c) => ({
       ...c,

@@ -9,14 +9,19 @@ export async function GET(req: NextRequest) {
     const supplierId = url.searchParams.get('supplierId')
     const status = url.searchParams.get('status')
 
-    let enquiries = await listRows<any>('Enquiries')
+    // PERFORMANCE: Load enquiries and suppliers in parallel
+    const [allEnquiries, suppliers] = await Promise.all([
+      listRows<any>('Enquiries'),
+      listRows<any>('Suppliers', { useCache: true }),
+    ])
+    
+    let enquiries = allEnquiries
     if (supplierId) enquiries = enquiries.filter((e) => e.supplierId === supplierId)
     if (status) enquiries = enquiries.filter((e) => e.status === status)
 
     enquiries.sort((a, b) => new Date(b.sentAt || b.createdAt).getTime() - new Date(a.sentAt || a.createdAt).getTime())
     enquiries = enquiries.slice(0, 200)
 
-    const suppliers = await listRows<any>('Suppliers', { useCache: true })
     const supplierMap = new Map(suppliers.map((s) => [s.id, s]))
 
     const result = enquiries.map((e) => ({

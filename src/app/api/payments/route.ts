@@ -8,15 +8,19 @@ export async function GET(req: NextRequest) {
     const type = url.searchParams.get('type')
     const limit = parseInt(url.searchParams.get('limit') || '200')
 
-    let payments = await listRows<any>('Payments')
+    // PERFORMANCE: Load payments and invoices in parallel
+    const [allPayments, invoices] = await Promise.all([
+      listRows<any>('Payments'),
+      listRows<any>('Invoices', { useCache: true }),
+    ])
+    
+    let payments = allPayments
     if (invoiceId) payments = payments.filter((p) => p.invoiceId === invoiceId)
     if (type) payments = payments.filter((p) => p.type === type)
 
     payments.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime())
     payments = payments.slice(0, limit)
 
-    const invoices = await listRows<any>('Invoices', { useCache: true })
-    
     const result = payments.map((p) => {
       const invoice = invoices.find((i) => i.id === p.invoiceId)
       return {
