@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
 import { safeJsonParse } from '@/lib/utils'
+import { buildEnquiryMessage, generateWhatsAppLink } from '@/lib/whatsapp'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +37,8 @@ export function WhatsAppPanel() {
   const [importContent, setImportContent] = useState('')
   const [importPreview, setImportPreview] = useState<any | null>(null)
   const [importing, setImporting] = useState(false)
+  const [linksDialog, setLinksDialog] = useState<{ suppliers: any[]; message: string } | null>(null)
+  const [sentTracker, setSentTracker] = useState<Set<string>>(new Set())
 
   const { data: enquiries, loading, refetch } = useFetch<any[]>('/api/enquiries?limit=100', undefined)
   const { data: rateComparison, loading: comparisonLoading } = useFetch<any>(
@@ -48,6 +51,7 @@ export function WhatsAppPanel() {
   )
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
   const { data: items } = useFetch<any[]>('/api/items', undefined)
+  const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: waStatus } = useFetch<any>('/api/whatsapp/status', undefined)
   const cloudApiOn = !!waStatus?.configured
 
@@ -76,14 +80,39 @@ export function WhatsAppPanel() {
     allItems: boolean
   }) => {
     try {
-      const res = await apiPost('/api/enquiries', {
-        supplierIds: payload.supplierIds,
-        itemIds: payload.itemIds,
-        allItems: payload.allItems,
-      })
+      const allSuppliers = suppliers || []
+      const allItems = items || []
+      const shopName = String(shop?.name || 'Smart Computers')
 
-      if (cloudApiOn && res.results?.[0]?.autoSent) {
-        // Cloud API: messages were sent automatically from the server.
+      // Determine selected items
+      let selectedItems: any[] = []
+      if (payload.allItems) {
+        selectedItems = allItems
+      } else {
+        selectedItems = allItems.filter((i) => payload.itemIds.includes(i.id))
+      }
+      if (selectedItems.length === 0) {
+        toast({ title: 'No items selected', variant: 'destructive' })
+        return
+      }
+
+      // Determine selected suppliers
+      const selectedSuppliers = allSuppliers.filter((s) => payload.supplierIds.includes(s.id))
+      if (selectedSuppliers.length === 0) {
+        toast({ title: 'No suppliers selected', variant: 'destructive' })
+        return
+      }
+
+      // Build the message ONCE (same for all suppliers)
+      const message = buildEnquiryMessage(shopName, selectedItems.map((i) => ({ name: String(i?.name || ''), sku: String(i?.sku || '') })))
+
+      if (cloudApiOn) {
+        // Cloud API mode: server sends automatically. Wait for response.
+        const res = await apiPost('/api/enquiries', {
+          supplierIds: payload.supplierIds,
+          itemIds: payload.itemIds,
+          allItems: payload.allItems,
+        })
         const sent = res.results.filter((r: any) => r.sendStatus === 'sent').length
         const failed = res.results.filter((r: any) => r.sendStatus === 'failed').length
         toast({
@@ -91,18 +120,41 @@ export function WhatsAppPanel() {
           description: failed > 0 ? `${failed} failed — check supplier phone numbers` : 'Replies will appear here automatically',
           variant: failed > 0 ? 'destructive' : 'default',
         })
+        setDialogOpen(false)
+        refetch()
       } else {
-        // Fallback wa.me mode — open tabs for manual send
-        for (const r of res.results) {
-          if (r.whatsappLink) window.open(r.whatsappLink, '_blank')
-        }
-        toast({
-          title: `${res.results.length} enquiry message(s) generated`,
-          description: 'WhatsApp opened - please send each message manually',
+        // wa.me mode: generate links CLIENT-SIDE instantly and show a dialog
+        // with all supplier links as buttons. This fixes:
+        //   1. Popup blocking (browser blocks multiple window.open in a loop)
+        //   2. Slow loading (no need to wait for Apps Script POST before opening links)
+        //   3. "Only 1 supplier gets message" bug
+        const linksForSuppliers = selectedSuppliers.map((s) => {
+          const phone = String(s.whatsappNumber || s.phone || '')
+          const link = generateWhatsAppLink(phone, message)
+          return {
+            id: String(s.id || ''),
+            name: String(s.name || 'Unknown'),
+            phone,
+            link,
+          }
+        })
+
+        setSentTracker(new Set())
+        setLinksDialog({ suppliers: linksForSuppliers, message })
+        setDialogOpen(false)
+
+        // Fire-and-forget: create enquiry records in the background
+        // so the Enquiries tab shows them. We don't wait for this.
+        apiPost('/api/enquiries', {
+          supplierIds: payload.supplierIds,
+          itemIds: payload.itemIds,
+          allItems: payload.allItems,
+        }).then(() => {
+          refetch()
+        }).catch(() => {
+          // non-fatal — links still work even if records fail to save
         })
       }
-      setDialogOpen(false)
-      refetch()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
     }
@@ -514,28 +566,32 @@ export function WhatsAppPanel() {
                     <TableRow>
                       <TableHead>Item Name</TableHead>
                       <TableHead className="text-right">Rate (Rs.)</TableHead>
-                      <TableHead className="text-center">GST</TableHead>
-                      <TableHead className="text-center">GST Rate</TableHead>
+                      <TableHead className="text-center">GST Type</TableHead>
+                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-center">Raw</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {parsedRates.map((r, i) => (
                       <TableRow key={i}>
-                        <TableCell className="text-sm">{r.itemName}</TableCell>
-                        <TableCell className="text-right font-semibold text-emerald-600">
+                        <TableCell className="text-sm font-medium">{r.itemName}</TableCell>
+                        <TableCell className="text-right font-semibold text-slate-700">
                           {formatCurrency(r.rate)}
                         </TableCell>
                         <TableCell className="text-center">
-                          {r.gstApplicable === null ? (
-                            <Badge variant="outline" className="text-[10px]">Unknown</Badge>
-                          ) : r.gstApplicable ? (
-                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[10px]">Yes</Badge>
+                          {r.gstType === 'extra' ? (
+                            <Badge className="bg-orange-50 text-orange-700 hover:bg-orange-50 text-[10px]">+ GST {r.gstRate || 18}%</Badge>
+                          ) : r.gstType === 'inclusive' ? (
+                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[10px]">Nett (incl)</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-[10px]">No</Badge>
+                            <Badge variant="outline" className="text-[10px]">?</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-center text-xs">
-                          {r.gstRate ? `${r.gstRate}%` : '-'}
+                        <TableCell className="text-right font-bold text-emerald-600">
+                          {formatCurrency(r.totalCost)}
+                        </TableCell>
+                        <TableCell className="text-center text-[10px] text-slate-400 font-mono max-w-[120px] truncate" title={r.raw}>
+                          {r.raw}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -613,6 +669,113 @@ export function WhatsAppPanel() {
           </div>
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => { setImportOpen(false); setImportContent(''); setImportPreview(null) }} className="w-full sm:w-auto">Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Links Dialog — instant wa.me links for all selected suppliers ===== */}
+      <Dialog open={!!linksDialog} onOpenChange={(v) => !v && setLinksDialog(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Send className="w-5 h-5 text-green-600" />
+              {linksDialog?.suppliers.length || 0} Messages Ready to Send
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
+              <p className="font-medium mb-1">✅ Click each supplier below to open WhatsApp with the message pre-filled.</p>
+              <p>Then tap "Send" in WhatsApp, come back here, and click the next supplier. Mark each as "Sent" after sending to track progress.</p>
+            </div>
+
+            {/* Message preview */}
+            <details className="bg-slate-50 border border-slate-200 rounded-lg">
+              <summary className="cursor-pointer p-2.5 text-xs font-medium text-slate-700">📋 Preview message</summary>
+              <pre className="px-3 pb-3 text-xs font-mono whitespace-pre-wrap text-slate-600">{linksDialog?.message}</pre>
+            </details>
+
+            {/* Progress bar */}
+            {linksDialog && linksDialog.suppliers.length > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-500">Progress:</span>
+                <div className="flex-1 bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full transition-all"
+                    style={{ width: `${(sentTracker.size / linksDialog.suppliers.length) * 100}%` }}
+                  />
+                </div>
+                <span className="font-medium text-slate-700">{sentTracker.size}/{linksDialog.suppliers.length}</span>
+              </div>
+            )}
+
+            {/* Supplier links list */}
+            <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+              {linksDialog?.suppliers.map((s, i) => {
+                const isSent = sentTracker.has(s.id)
+                return (
+                  <div
+                    key={s.id}
+                    className={`flex items-center gap-2 p-2.5 rounded-lg border transition-colors ${
+                      isSent ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-200 hover:border-green-300'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                      isSent ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {isSent ? <Check className="w-4 h-4" /> : i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{s.name}</p>
+                      <p className="text-[10px] text-slate-500">{s.phone || 'No phone'}</p>
+                    </div>
+                    <a
+                      href={s.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => {
+                        // Mark as sent after user clicks (they'll send in WhatsApp)
+                        setTimeout(() => {
+                          setSentTracker((prev) => {
+                            const next = new Set(prev)
+                            next.add(s.id)
+                            return next
+                          })
+                        }, 500)
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
+                        isSent
+                          ? 'bg-slate-100 text-slate-500'
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      {isSent ? (
+                        <><Check className="w-3.5 h-3.5" /> Sent</>
+                      ) : (
+                        <><Send className="w-3.5 h-3.5" /> Open WhatsApp</>
+                      )}
+                    </a>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* All done message */}
+            {linksDialog && sentTracker.size === linksDialog.suppliers.length && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center text-sm text-emerald-800">
+                <Check className="w-5 h-5 mx-auto mb-1 text-emerald-600" />
+                <p className="font-medium">All messages sent! 🎉</p>
+                <p className="text-xs mt-0.5">Wait for supplier replies, then use "Import Chat" to capture responses.</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setLinksDialog(null)}
+              className="w-full sm:w-auto"
+            >
+              {linksDialog && sentTracker.size === linksDialog.suppliers.length ? 'Done' : 'Close'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -823,8 +986,11 @@ function RateComparisonView({ data, loading }: { data: any; loading: boolean }) 
                   <p className="text-[10px] sm:text-xs text-slate-500">{c.sku} · {c.rateCount} supplier{c.rateCount !== 1 ? 's' : ''} quoted</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-xs text-slate-500">Best: <span className="font-bold text-emerald-600">Rs.{c.bestRate.rate}</span></p>
-                  <p className="text-[10px] text-slate-400">Avg: Rs.{c.averageRate} · Save: Rs.{c.potentialSavings}</p>
+                  <p className="text-xs text-slate-500">Best: <span className="font-bold text-emerald-600">Rs.{c.bestRate.totalCost ?? c.bestRate.rate}</span></p>
+                  <p className="text-[10px] text-slate-400">
+                    {c.bestRate.gstType === 'extra' ? `(+${c.bestRate.gstRate || 18}% GST)` : c.bestRate.gstType === 'inclusive' ? '(nett)' : ''}
+                    {' · '}Avg: Rs.{c.averageRate} · Save: Rs.{c.potentialSavings}
+                  </p>
                 </div>
               </summary>
               <div className="border-t border-slate-100">
@@ -833,9 +999,10 @@ function RateComparisonView({ data, loading }: { data: any; loading: boolean }) 
                     <TableRow className="bg-slate-50">
                       <TableHead className="text-xs">Supplier</TableHead>
                       <TableHead className="text-right text-xs">Rate</TableHead>
+                      <TableHead className="text-right text-xs">Total Cost</TableHead>
                       <TableHead className="text-center text-xs">GST</TableHead>
                       <TableHead className="text-right text-xs">Quote Date</TableHead>
-                      <TableHead className="text-center text-xs">Status</TableHead>
+                      <TableHead className="text-center text-xs">vs Best</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -845,12 +1012,13 @@ function RateComparisonView({ data, loading }: { data: any; loading: boolean }) 
                           {r.supplierName}
                           {i === 0 && <Badge className="ml-2 bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]">BEST</Badge>}
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-sm">Rs.{r.rate}</TableCell>
+                        <TableCell className="text-right text-sm text-slate-600">Rs.{r.rate}</TableCell>
+                        <TableCell className="text-right font-semibold text-sm">Rs.{r.totalCost ?? r.rate}</TableCell>
                         <TableCell className="text-center text-xs">
-                          {r.gstApplicable === true || r.gstApplicable === 'true' ? (
-                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[9px]">Yes {r.gstRate ? `${r.gstRate}%` : ''}</Badge>
-                          ) : r.gstApplicable === false || r.gstApplicable === 'false' ? (
-                            <Badge variant="outline" className="text-[9px]">No</Badge>
+                          {r.gstType === 'extra' ? (
+                            <Badge className="bg-orange-50 text-orange-700 hover:bg-orange-50 text-[9px]">+{r.gstRate || 18}%</Badge>
+                          ) : r.gstType === 'inclusive' ? (
+                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[9px]">Nett</Badge>
                           ) : (
                             <Badge variant="outline" className="text-[9px]">?</Badge>
                           )}
@@ -862,7 +1030,7 @@ function RateComparisonView({ data, loading }: { data: any; loading: boolean }) 
                           {i === 0 ? (
                             <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[9px]"><Award className="w-3 h-3 mr-0.5 inline" />Cheapest</Badge>
                           ) : (
-                            <span className="text-[10px] text-slate-400">+Rs.{r.rate - c.bestRate.rate}</span>
+                            <span className="text-[10px] text-slate-400">+Rs.{(r.totalCost ?? r.rate) - (c.bestRate.totalCost ?? c.bestRate.rate)}</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -959,9 +1127,11 @@ function BestSuppliersView({ data, loading }: { data: any; loading: boolean }) {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="font-bold text-emerald-700 text-lg">Rs.{r.recommendedSupplier.rate}</p>
-                  {r.recommendedSupplier.gstApplicable === true || r.recommendedSupplier.gstApplicable === 'true' ? (
-                    <p className="text-[10px] text-slate-500">+{r.recommendedSupplier.gstRate || 0}% GST</p>
+                  <p className="font-bold text-emerald-700 text-lg">Rs.{r.recommendedSupplier.totalCost ?? r.recommendedSupplier.rate}</p>
+                  {r.recommendedSupplier.gstType === 'extra' ? (
+                    <p className="text-[10px] text-orange-600">+{r.recommendedSupplier.gstRate || 18}% GST</p>
+                  ) : r.recommendedSupplier.gstType === 'inclusive' ? (
+                    <p className="text-[10px] text-blue-600">Nett (incl GST)</p>
                   ) : null}
                 </div>
               </div>

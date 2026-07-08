@@ -107,12 +107,14 @@ export async function GET(req: NextRequest) {
     for (const [itemId, rates] of rateMap.entries()) {
       if (rates.length === 0) continue
 
-      // Sort by rate ascending (cheapest first)
-      rates.sort((a, b) => a.rate - b.rate)
+      // Sort by totalCost ascending (cheapest actual cost first).
+      // totalCost accounts for GST: 3450+ (→4071 with 18% GST) vs 3450 nett (→3450).
+      // Falls back to rate if totalCost not present (old data).
+      rates.sort((a, b) => (a.totalCost ?? a.rate) - (b.totalCost ?? b.rate))
 
       const best = rates[0]
       const worst = rates[rates.length - 1]
-      const average = rates.reduce((s, r) => s + r.rate, 0) / rates.length
+      const average = rates.reduce((s, r) => s + (r.totalCost ?? r.rate), 0) / rates.length
 
       const item = itemMap.get(itemId)
       const itemName = item ? String(item.name) : rates[0] ? String(rates[0].itemName || '') : itemId
@@ -132,15 +134,17 @@ export async function GET(req: NextRequest) {
           supplierId: best.supplierId,
           supplierName: best.supplierName,
           rate: best.rate,
+          totalCost: best.totalCost ?? best.rate,
+          gstType: best.gstType,
           gstApplicable: best.gstApplicable,
           gstRate: best.gstRate,
           enquiryDate: best.enquiryDate,
           age,
         },
-        worstRate: { supplierName: worst.supplierName, rate: worst.rate },
+        worstRate: { supplierName: worst.supplierName, rate: worst.rate, totalCost: worst.totalCost ?? worst.rate },
         averageRate: Math.round(average * 100) / 100,
         rateCount: rates.length,
-        potentialSavings: worst.rate - best.rate,
+        potentialSavings: (worst.totalCost ?? worst.rate) - (best.totalCost ?? best.rate),
       })
     }
 

@@ -17,28 +17,20 @@ export function generateWhatsAppLink(phone: string, message: string): string {
 }
 
 // Build rate enquiry message for supplier
+// SIMPLE FORMAT — just shop name, item list, and "prices?"
+// Suppliers in the computer hardware trade prefer short messages.
 export function buildEnquiryMessage(
   shopName: string,
   items: { name: string; sku?: string }[],
   enquiryNumber?: string
 ): string {
-  const today = new Date().toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  const sn = String(shopName || 'Smart Computers')
+  let msg = `*${sn}*\n\n`
+  items.forEach((item) => {
+    const name = String(item?.name || '').trim()
+    if (name) msg += `${name}\n`
   })
-  let msg = `*${String(shopName || 'Smart Computers')}*\n`
-  msg += `*Rate Enquiry* - ${today}\n`
-  if (enquiryNumber) msg += `Ref: ${enquiryNumber}\n`
-  msg += `\nHello Sir/Madam,\n\nPlease provide latest rates for the following items:\n\n`
-  items.forEach((item, i) => {
-    const name = String(item?.name || '')
-    const sku = String(item?.sku || '')
-    msg += `${i + 1}. ${name}${sku ? ` (SKU: ${sku})` : ''}\n`
-  })
-  msg += `\nPlease reply in this format so I can update my records:\n`
-  msg += `\`\`\`\n1. Item Name: Rs.XXXX (GST: Yes/No)\n2. ...\n\`\`\`\n`
-  msg += `\nThank you!`
+  msg += `\nprices?`
   return msg
 }
 
@@ -92,11 +84,30 @@ export function buildPaymentReminderMessage(
 }
 
 // Parse rate response from supplier (natural language to structured rates)
+//
+// Handles common Indian computer hardware trade reply formats:
+//   "3450+"            → rate=3450, gstType='extra'  (GST is ADDITIONAL, 18% on top)
+//   "3450 nett"        → rate=3450, gstType='inclusive' (GST is INCLUDED in price)
+//   "3450"             → rate=3450, gstType='unknown'
+//   "3450 + GST"       → rate=3450, gstType='extra'
+//   "3450 + 18%"       → rate=3450, gstType='extra', gstRate=18
+//   "3450 incl GST"    → rate=3450, gstType='inclusive'
+//   "3450 (GST extra)" → rate=3450, gstType='extra'
+//   "3450 (GST incl)"  → rate=3450, gstType='inclusive'
+//   "GST: 3450+"       → same as above
+//
+// totalCost = what you actually pay:
+//   - extra:     rate + (rate * gstRate/100), e.g. 3450 + 18% = 4071
+//   - inclusive: rate (already includes GST)
+//   - unknown:   rate (treated as inclusive for safety)
 export interface ParsedRate {
   itemName: string
-  rate: number
+  rate: number          // the base rate as quoted
   gstApplicable: boolean | null
+  gstType: 'extra' | 'inclusive' | 'unknown' | null
   gstRate?: number
+  totalCost: number     // effective cost including GST if extra
+  raw: string           // original line text
 }
 
 export function parseRateResponse(
@@ -110,52 +121,127 @@ export function parseRateResponse(
     const trimmed = line.trim()
     if (!trimmed) continue
 
-    // Match patterns like "1. Item Name: Rs.1000" or "Item Name - Rs.1000 GST Yes"
-    // Try to find item name and rate
+    // Skip lines that are clearly not rate lines (greetings, thank you, etc.)
+    const lowerTrim = trimmed.toLowerCase()
+    if (/^(thank|hello|hi|ok|yes|no|sure|please|dear|regards|best)\b/.test(lowerTrim) && !/\d{2,}/.test(trimmed)) {
+      continue
+    }
+
+    // Patterns to extract item name + rate. Order matters — try most specific first.
     const patterns = [
-      // "1. Item: Rs.1000"
+      // "1. Item Name: Rs.3450+" or "1. Item Name: 3450 nett"
       /^\d+\.?\s*(.+?):?\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
-      // "1. Item - Rs.1000"
-      /^\d+\.?\s*(.+?)\s*[-:]\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
-      // "Item: 1000"
+      // "Item Name: Rs.3450+"
+      /^(.+?):?\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
+      // "1. Item Name - 3450+"
+      /^\d+\.?\s*(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)/,
+      // "Item Name: 3450+"
       /^(.+?):\s*(\d+(?:[.,]\d+)?)/,
+      // "3450+" (rate only, no item name — match by line number to original items)
+      /^(\d+(?:[.,]\d+)?)\s*([+\-].*)?$/,
     ]
 
     let matched: RegExpMatchArray | null = null
+    let itemNameRaw = ''
+    let rateStr = ''
+
     for (const p of patterns) {
       matched = trimmed.match(p)
-      if (matched) break
+      if (matched) {
+        if (p.source.startsWith('^(\\d+')) {
+          // Rate-only pattern (last one) — no item name in the line
+          rateStr = String(matched[1] || '')
+          itemNameRaw = ''
+        } else {
+          itemNameRaw = String(matched[1] || '').trim()
+          rateStr = String(matched[2] || '')
+        }
+        break
+      }
     }
 
-    if (matched && matched[1] && matched[2]) {
-      const itemNameRaw = String(matched[1] || '').trim()
-      const rateStr = String(matched[2] || '')
-      const rate = parseFloat(rateStr.replace(/[.,]/g, m => m === ',' ? '' : '.'))
-      
-      // Find matching original item
-      const matchedItem = originalItems.find(
-        (i) => itemNameRaw.toLowerCase().includes(i.name.toLowerCase()) ||
-               (i.sku && itemNameRaw.toLowerCase().includes(i.sku.toLowerCase())) ||
-               i.name.toLowerCase().includes(itemNameRaw.toLowerCase())
+    if (!matched || !rateStr) continue
+
+    const rate = parseFloat(rateStr.replace(/[.,]/g, m => m === ',' ? '' : '.'))
+    if (isNaN(rate)) continue
+
+    // Match item name to original items (or assign by line order if no name)
+    let itemName = itemNameRaw
+    let matchedItem: { name: string; sku?: string } | undefined
+    if (itemNameRaw) {
+      matchedItem = originalItems.find(
+        (i) => {
+          const iName = String(i?.name || '').toLowerCase()
+          const raw = itemNameRaw.toLowerCase()
+          return iName.includes(raw) || raw.includes(iName) ||
+                 (i.sku && raw.includes(String(i.sku).toLowerCase()))
+        }
       )
-      const itemName = matchedItem?.name || itemNameRaw
-
-      // Check for GST mention
-      const lowerLine = trimmed.toLowerCase()
-      const gstApplicable = lowerLine.includes('gst yes') || lowerLine.includes('gst: yes') || lowerLine.includes('with gst')
-      const noGst = lowerLine.includes('gst no') || lowerLine.includes('gst: no') || lowerLine.includes('without gst') || lowerLine.includes('no gst')
-      
-      // Try to extract GST rate
-      const gstRateMatch = trimmed.match(/gst\s*(\d+)%?/i)
-      const gstRate = gstRateMatch ? parseFloat(gstRateMatch[1]) : undefined
-
-      results.push({
-        itemName,
-        rate,
-        gstApplicable: gstApplicable ? true : (noGst ? false : null),
-        gstRate,
-      })
+      if (matchedItem) itemName = matchedItem.name
+    } else {
+      // Rate-only line: assign to the next unmatched original item by order
+      const usedNames = new Set(results.map(r => r.itemName))
+      matchedItem = originalItems.find(i => !usedNames.has(i.name))
+      if (matchedItem) itemName = matchedItem.name
     }
+
+    // Detect GST type from the line text
+    const fullLine = trimmed.toLowerCase()
+    let gstType: 'extra' | 'inclusive' | 'unknown' | null = null
+    let gstRate: number | undefined
+    let gstApplicable: boolean | null = null
+
+    // Extract GST rate if mentioned (e.g. "18%", "18 %", "GST 18")
+    const gstRateMatch = fullLine.match(/(\d+)\s*%/) || fullLine.match(/gst\s*(\d+)/)
+    if (gstRateMatch) gstRate = parseFloat(gstRateMatch[1])
+
+    // "3450+" → GST extra (the + suffix is trade shorthand for "plus GST")
+    // "3450 + GST", "3450 (GST extra)", "3450 GST extra", "3450 + 18%"
+    if (/\d\s*\+/i.test(trimmed) || /\+\s*(gst|18%|18\s*%)/i.test(trimmed) || /gst\s*extra/i.test(fullLine) || /extra\s*gst/i.test(fullLine)) {
+      gstType = 'extra'
+      gstApplicable = true
+      if (!gstRate) gstRate = 18 // default to 18% for computer hardware
+    }
+    // "3450 nett" → GST inclusive ("nett" means final/all-inclusive price in trade)
+    // "3450 incl GST", "3450 including GST", "3450 (GST incl)"
+    else if (/\bnett\b/i.test(trimmed) || /incl/i.test(fullLine) || /including\s*gst/i.test(fullLine) || /gst\s*incl/i.test(fullLine)) {
+      gstType = 'inclusive'
+      gstApplicable = true
+      if (!gstRate) gstRate = 18
+    }
+    // "3450 without GST", "3450 no GST"
+    else if (/without\s*gst/i.test(fullLine) || /no\s*gst/i.test(fullLine) || /gst\s*no/i.test(fullLine)) {
+      gstType = 'extra'
+      gstApplicable = false
+    }
+    // "3450 with GST"
+    else if (/with\s*gst/i.test(fullLine) || /gst\s*yes/i.test(fullLine)) {
+      gstType = 'inclusive'
+      gstApplicable = true
+      if (!gstRate) gstRate = 18
+    }
+    // Bare number with no GST context
+    else {
+      gstType = 'unknown'
+      gstApplicable = null
+    }
+
+    // Calculate totalCost (what the buyer actually pays)
+    let totalCost = rate
+    if (gstType === 'extra' && gstRate) {
+      totalCost = rate + (rate * gstRate / 100)
+    }
+    // inclusive or unknown → totalCost = rate
+
+    results.push({
+      itemName,
+      rate,
+      gstApplicable,
+      gstType,
+      gstRate,
+      totalCost: Math.round(totalCost * 100) / 100,
+      raw: trimmed,
+    })
   }
 
   return results

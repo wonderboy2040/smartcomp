@@ -105,12 +105,12 @@ export async function GET(req: NextRequest) {
         recommended = supplierRates[0]
         reason = `Most reliable supplier (${supplierCounts.get(reliableSupplierId)} responses received)`
       } else {
-        // cheapest (default)
-        rates.sort((a, b) => a.rate - b.rate)
+        // cheapest (default) — sort by totalCost (accounts for GST)
+        rates.sort((a, b) => (a.totalCost ?? a.rate) - (b.totalCost ?? b.rate))
         recommended = rates[0]
-        const avg = rates.reduce((s, r) => s + r.rate, 0) / rates.length
-        const pctBelow = avg > 0 ? Math.round(((avg - recommended.rate) / avg) * 100) : 0
-        reason = `Cheapest rate (Rs.${recommended.rate}${pctBelow > 0 ? `, ${pctBelow}% below avg` : ''})`
+        const avg = rates.reduce((s, r) => s + (r.totalCost ?? r.rate), 0) / rates.length
+        const pctBelow = avg > 0 ? Math.round(((avg - (recommended.totalCost ?? recommended.rate)) / avg) * 100) : 0
+        reason = `Cheapest total cost (Rs.${recommended.totalCost ?? recommended.rate}${pctBelow > 0 ? `, ${pctBelow}% below avg` : ''})`
       }
 
       const ageMs = Date.now() - new Date(recommended.enquiryDate).getTime()
@@ -118,7 +118,8 @@ export async function GET(req: NextRequest) {
       const age = ageDays === 0 ? 'Today' : ageDays === 1 ? 'Yesterday' : `${ageDays} days ago`
 
       const currentCostPrice = Number(item.costPrice) || 0
-      const potentialSaving = currentCostPrice > 0 ? currentCostPrice - recommended.rate : 0
+      const recommendedTotalCost = recommended.totalCost ?? recommended.rate
+      const potentialSaving = currentCostPrice > 0 ? currentCostPrice - recommendedTotalCost : 0
 
       // Alternatives: next 2 best rates from different suppliers
       const alternatives = rates
