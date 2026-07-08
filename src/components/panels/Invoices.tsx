@@ -13,7 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import { DocForm } from './DocForm'
-import { Plus, Search, FileText, Eye, Trash2, Share2, IndianRupee, Edit3 } from 'lucide-react'
+import { Plus, Search, FileText, Eye, Trash2, Share2, IndianRupee, Edit3, CreditCard } from 'lucide-react'
 
 export function InvoicesPanel() {
   const { toast } = useToast()
@@ -61,6 +61,27 @@ export function InvoicesPanel() {
       })
       window.open(res.link, '_blank')
       toast({ title: 'WhatsApp opened with invoice details' })
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handlePaymentLink = async (invoice: any) => {
+    try {
+      const res = await apiPost('/api/razorpay/create-link', { invoiceId: invoice.id })
+      if (res.success) {
+        if (res.method === 'upi') {
+          // UPI link — open in new tab (will prompt UPI app)
+          window.open(res.shortUrl, '_blank')
+          toast({ title: 'UPI payment link opened', description: `Amount: Rs.${res.amount}` })
+        } else {
+          // Razorpay link — open in new tab
+          window.open(res.shortUrl, '_blank')
+          toast({ title: 'Payment link sent', description: `Customer can pay Rs.${res.amount} online` })
+        }
+      } else {
+        toast({ title: 'Error', description: res.error, variant: 'destructive' })
+      }
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
     }
@@ -154,6 +175,11 @@ export function InvoicesPanel() {
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(inv)}>
                       <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                     </Button>
+                    {Number(inv.amountDue) > 0 && (
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handlePaymentLink(inv)} title="Send Payment Link">
+                        <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleShareWhatsApp(inv)}>
                       <Share2 className="w-3.5 h-3.5 text-green-600" />
                     </Button>
@@ -287,6 +313,16 @@ export function InvoicesPanel() {
                           >
                             <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                           </Button>
+                          {Number(inv.amountDue) > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handlePaymentLink(inv)}
+                              title="Send Payment Link"
+                            >
+                              <CreditCard className="w-3.5 h-3.5 text-purple-600" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"

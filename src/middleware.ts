@@ -62,6 +62,9 @@ const PUBLIC_PATHS = [
   // Secured by unguessable trackToken in the URL.
   '/track',
   '/api/track',
+  // Razorpay webhook — Razorpay calls this server-to-server.
+  // Secured by RAZORPAY_WEBHOOK_SECRET signature verification.
+  '/api/razorpay/webhook',
 ]
 
 function isPublic(pathname: string): boolean {

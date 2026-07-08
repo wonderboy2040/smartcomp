@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
 import { formatCurrency, numberToWords, type InvoiceCalc } from './calc'
 
 export interface ShopInfo {
@@ -11,6 +12,7 @@ export interface ShopInfo {
   gstNumber?: string
   state?: string
   logoUrl?: string
+  upiId?: string
 }
 
 export interface CustomerInfo {
@@ -39,7 +41,7 @@ export interface PdfDocData {
 }
 
 // Generate PDF as Buffer (server-side)
-export function generateInvoicePdf(data: PdfDocData): Buffer {
+export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const pageWidth = 210
   const pageHeight = 297
@@ -289,6 +291,39 @@ export function generateInvoicePdf(data: PdfDocData): Buffer {
     const termsLines = doc.splitTextToSize(data.terms, pageWidth - 2 * margin)
     doc.text(termsLines, margin, y + 4)
     y += 4 + termsLines.length * 4 + 3
+  }
+
+  // === UPI QR CODE (for invoices with UPI ID configured) ===
+  const amountDue = Number(data.amountDue) || 0
+  if (isInvoice && data.shop.upiId && amountDue > 0) {
+    // Build UPI deep link: upi://pay?pa=UPI_ID&pn=NAME&am=AMOUNT&cu=INR&tn=INVOICE
+    const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Smart Computers')}&am=${amountDue.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.number || '')}`
+    try {
+      const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 200, margin: 1, errorCorrectionLevel: 'M' })
+      const qrSize = 30
+      const qrX = margin
+      const qrY = Math.min(y + 5, pageHeight - 60)
+      doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
+      // Label next to QR
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(9)
+      doc.setTextColor(15, 23, 42)
+      doc.text('Scan to Pay', qrX + qrSize + 4, qrY + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(60, 60, 60)
+      doc.text(`Amount: Rs. ${amountDue.toFixed(2)}`, qrX + qrSize + 4, qrY + 12)
+      doc.text(`UPI: ${data.shop.upiId}`, qrX + qrSize + 4, qrY + 17)
+      doc.text(`Ref: ${data.number}`, qrX + qrSize + 4, qrY + 22)
+      doc.setFontSize(7)
+      doc.setTextColor(120, 120, 120)
+      doc.text('Scan with any UPI app', qrX + qrSize + 4, qrY + 27)
+      doc.text('(GPay, PhonePe, Paytm, etc.)', qrX + qrSize + 4, qrY + 31)
+      // Adjust signature position to not overlap
+      y = qrY + qrSize + 5
+    } catch (e) {
+      // QR generation failed — skip silently
+    }
   }
 
   // === SIGNATURE ===

@@ -20,10 +20,12 @@ import { ServicePaymentsPanel } from '@/components/panels/ServicePayments'
 import { ExpensesPanel } from '@/components/panels/Expenses'
 import { ReportsPanel } from '@/components/panels/Reports'
 import { SerialsPanel } from '@/components/panels/Serials'
+import { PersonalExpenditurePanel } from '@/components/panels/PersonalExpenditure'
+import { FinancialsPanel } from '@/components/panels/Financials'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -38,7 +40,9 @@ const NAV_ITEMS = [
   { id: 'jobs', label: 'Service Jobs', icon: Wrench, color: 'text-blue-600' },
   { id: 'servicepayments', label: 'Service Payments', icon: Wallet, color: 'text-purple-600' },
   { id: 'serials', label: 'Serials & Warranty', icon: Boxes, color: 'text-indigo-600' },
-  { id: 'expenses', label: 'Expenses', icon: Receipt, color: 'text-red-600' },
+  { id: 'expenses', label: 'Shop Expenses', icon: Receipt, color: 'text-red-600' },
+  { id: 'personal', label: 'Personal Expenditure', icon: PiggyBank, color: 'text-pink-600' },
+  { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ]
@@ -303,6 +307,12 @@ function HomeInner() {
           )}
           {mountedPanels.has('expenses') && (
             <div className={active === 'expenses' ? 'block' : 'hidden'}><ExpensesPanel /></div>
+          )}
+          {mountedPanels.has('personal') && (
+            <div className={active === 'personal' ? 'block' : 'hidden'}><PersonalExpenditurePanel /></div>
+          )}
+          {mountedPanels.has('financials') && (
+            <div className={active === 'financials' ? 'block' : 'hidden'}><FinancialsPanel /></div>
           )}
           {mountedPanels.has('reports') && (
             <div className={active === 'reports' ? 'block' : 'hidden'}><ReportsPanel /></div>
