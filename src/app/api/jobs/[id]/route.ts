@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRow, updateRow, deleteRow, listRows, createRow } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
+import { sendJobStatusNotification } from '@/lib/notifications'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,6 +11,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({
       ...job,
       partsUsed: safeJsonParse<any[]>(job.partsUsedJson, []),
+      statusHistory: safeJsonParse<any[]>(job.statusHistoryJson, []),
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
@@ -22,22 +24,60 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json()
     const { action } = body
 
+    // Helper: append to status history + send notification
+    async function appendStatusAndNotify(jobId: string, job: any, newStatus: string, note: string, updatedJob: any) {
+      try {
+        const history = safeJsonParse<any[]>(job?.statusHistoryJson, [])
+        history.push({ status: newStatus, timestamp: new Date().toISOString(), note })
+        await updateRow('Jobs', jobId, { statusHistoryJson: JSON.stringify(history) }).catch(() => {})
+
+        // Send WhatsApp notification (fire-and-forget, never blocks)
+        const shopRows = await listRows<any>('Shop', { useCache: true })
+        const shopName = String(shopRows[0]?.name || 'Smart Computers')
+        const trackUrl = job?.trackToken ? `${process.env.NEXT_PUBLIC_BASE_URL || ''}/track/${job.jobId}-${job.trackToken}` : undefined
+        const notif = await sendJobStatusNotification(
+          { ...job, ...updatedJob },
+          newStatus,
+          shopName,
+          trackUrl
+        )
+        return notif
+      } catch {
+        return null
+      }
+    }
+
     if (action === 'updateStatus') {
+      const existing = await getRow<any>('Jobs', id)
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+      const newStatus = String(body?.status || 'Pending')
       const updated = await updateRow('Jobs', id, {
-        status: String(body?.status || 'Pending'),
+        status: newStatus,
         notes: String(body?.notes || ''),
         assignedEngineer: String(body?.assignedEngineer || ''),
       })
-      return NextResponse.json({ success: true, job: updated })
+
+      // Send notification if status actually changed
+      let notifResult: any = null
+      if (String(existing.status) !== newStatus) {
+        notifResult = await appendStatusAndNotify(id, existing, newStatus, `Status changed to ${newStatus}`, updated)
+      }
+
+      return NextResponse.json({ success: true, job: updated, notification: notifResult })
     }
 
     if (action === 'complete') {
+      const existing = await getRow<any>('Jobs', id)
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
       // Mark job as completed with final amount, parts used, profit calc
       const partsUsed = body?.partsUsed || []
       const finalAmount = Number(body?.finalAmount) || 0
       const paymentMode = String(body?.paymentMode || 'Cash')
       const paymentType = String(body?.paymentType || 'Final')
-      const engineerSharePct = Number(body?.engineerSharePct) || 50 // default 50%
+      const engineerSharePct = Number(body?.engineerSharePct) || 50
+      const warrantyDays = Number(body?.warrantyDays) || Number(existing?.warrantyDays) || 30
       const partsProfit = partsUsed.reduce((s: number, p: any) => {
         return s + ((Number(p?.sellPrice) || 0) - (Number(p?.costPrice) || 0)) * (Number(p?.qty) || 1)
       }, 0)
@@ -45,10 +85,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return s + (Number(p?.costPrice) || 0) * (Number(p?.qty) || 1)
       }, 0))
 
-      // Engineer gets: serviceProfit share + partsProfit share
-      // Admin gets: rest
       const engineerShare = Math.round((serviceProfit * engineerSharePct / 100) + (partsProfit * engineerSharePct / 100))
       const adminShare = (serviceProfit + partsProfit) - engineerShare
+
+      // Compute warranty expiry
+      const warrantyExpiry = new Date(Date.now() + warrantyDays * 24 * 60 * 60 * 1000).toISOString()
 
       const updated = await updateRow('Jobs', id, {
         status: 'Completed',
@@ -60,12 +101,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         adminShare,
         partsProfit,
         serviceProfit,
+        warrantyDays,
+        warrantyExpiry,
+        diagnosisNotes: String(body?.diagnosisNotes || ''),
         notes: String(body?.notes || ''),
       })
 
       // Record final payment
       if (finalAmount > 0) {
-        // Get advance amount already paid
         const job = await getRow<any>('Jobs', id)
         const advance = Number(job?.advanceAmount) || 0
         const balanceDue = Math.max(0, finalAmount - advance)
@@ -84,15 +127,34 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       }
 
-      return NextResponse.json({ success: true, job: updated, engineerShare, adminShare, partsProfit, serviceProfit })
+      // Send "Completed" notification
+      const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', updated)
+
+      return NextResponse.json({
+        success: true,
+        job: updated,
+        engineerShare,
+        adminShare,
+        partsProfit,
+        serviceProfit,
+        warrantyExpiry,
+        notification: notifResult,
+      })
     }
 
     if (action === 'deliver') {
+      const existing = await getRow<any>('Jobs', id)
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
       const updated = await updateRow('Jobs', id, {
         status: 'Delivered',
         deliveredAt: new Date().toISOString(),
       })
-      return NextResponse.json({ success: true, job: updated })
+
+      // Send "Delivered" notification
+      const notifResult = await appendStatusAndNotify(id, existing, 'Delivered', 'Job delivered to customer', updated)
+
+      return NextResponse.json({ success: true, job: updated, notification: notifResult })
     }
 
     if (action === 'addPart') {
@@ -107,7 +169,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (action === 'update') {
       // Generic update
       const data: any = {}
-      const fields = ['customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'status']
+      const fields = ['customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes', 'warrantyDays', 'status']
       for (const f of fields) {
         if (body[f] !== undefined) data[f] = body[f]
       }

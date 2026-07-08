@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
@@ -16,10 +17,13 @@ import { WhatsAppPanel } from '@/components/panels/WhatsApp'
 import { SettingsPanel } from '@/components/panels/Settings'
 import { JobsPanel } from '@/components/panels/Jobs'
 import { ServicePaymentsPanel } from '@/components/panels/ServicePayments'
+import { ExpensesPanel } from '@/components/panels/Expenses'
+import { ReportsPanel } from '@/components/panels/Reports'
+import { SerialsPanel } from '@/components/panels/Serials'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -33,17 +37,30 @@ const NAV_ITEMS = [
   { id: 'whatsapp', label: 'WhatsApp Enquiry', icon: MessageSquare, color: 'text-green-600' },
   { id: 'jobs', label: 'Service Jobs', icon: Wrench, color: 'text-blue-600' },
   { id: 'servicepayments', label: 'Service Payments', icon: Wallet, color: 'text-purple-600' },
+  { id: 'serials', label: 'Serials & Warranty', icon: Boxes, color: 'text-indigo-600' },
+  { id: 'expenses', label: 'Expenses', icon: Receipt, color: 'text-red-600' },
+  { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ]
 
 export default function Home() {
-  const [active, setActive] = useState('dashboard')
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>}>
+      <HomeInner />
+    </Suspense>
+  )
+}
+
+function HomeInner() {
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get('tab') || 'dashboard'
+  const [active, setActive] = useState(initialTab)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
   // Track which panels have been activated at least once — they stay mounted
   // afterwards so switching back is instant, but we don't load all 9 on first paint.
-  const [mountedPanels, setMountedPanels] = useState<Set<string>>(new Set(['dashboard']))
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(new Set([initialTab]))
 
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
@@ -58,6 +75,8 @@ export default function Home() {
       '/api/customers',
       '/api/invoices?limit=200',
       '/api/suppliers?active=true',
+      '/api/jobs',
+      '/api/expenses',
     ]
     urls.forEach((url, i) => {
       setTimeout(() => prefetch(url), 500 + i * 500)
@@ -190,13 +209,27 @@ export default function Home() {
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-700/50 flex-shrink-0 safe-bottom">
+        <div className="p-3 border-t border-slate-700/50 flex-shrink-0 safe-bottom space-y-2">
           <div className="bg-slate-800/50 rounded-lg p-2.5">
             <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
               <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-              <span>v1.0 · Ready for GitHub Render</span>
+              <span>v2.0 · Sales + Service + WhatsApp</span>
             </p>
           </div>
+          <button
+            onClick={async () => {
+              if (confirm('Logout? You will need to enter PIN again to access the panel.')) {
+                try {
+                  await fetch('/api/auth/logout', { method: 'POST' })
+                } catch {}
+                window.location.href = '/login'
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:bg-red-900/30 hover:text-red-300 transition-colors border border-slate-700/50"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Logout
+          </button>
         </div>
       </aside>
 
@@ -264,6 +297,15 @@ export default function Home() {
           )}
           {mountedPanels.has('servicepayments') && (
             <div className={active === 'servicepayments' ? 'block' : 'hidden'}><ServicePaymentsPanel /></div>
+          )}
+          {mountedPanels.has('serials') && (
+            <div className={active === 'serials' ? 'block' : 'hidden'}><SerialsPanel /></div>
+          )}
+          {mountedPanels.has('expenses') && (
+            <div className={active === 'expenses' ? 'block' : 'hidden'}><ExpensesPanel /></div>
+          )}
+          {mountedPanels.has('reports') && (
+            <div className={active === 'reports' ? 'block' : 'hidden'}><ReportsPanel /></div>
           )}
           {mountedPanels.has('settings') && (
             <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>

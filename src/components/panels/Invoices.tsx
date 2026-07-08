@@ -13,7 +13,7 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import { DocForm } from './DocForm'
-import { Plus, Search, FileText, Eye, Trash2, Share2, IndianRupee } from 'lucide-react'
+import { Plus, Search, FileText, Eye, Trash2, Share2, IndianRupee, Edit3 } from 'lucide-react'
 
 export function InvoicesPanel() {
   const { toast } = useToast()
@@ -45,6 +45,11 @@ export function InvoicesPanel() {
 
   const handleCreate = () => {
     setEditing(null)
+    setDialogOpen(true)
+  }
+
+  const handleEdit = (invoice: any) => {
+    setEditing(invoice)
     setDialogOpen(true)
   }
 
@@ -145,6 +150,9 @@ export function InvoicesPanel() {
                   <div className="flex gap-1 flex-shrink-0">
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setPreviewId(inv.id)}>
                       <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(inv)}>
+                      <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                     </Button>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleShareWhatsApp(inv)}>
                       <Share2 className="w-3.5 h-3.5 text-green-600" />
@@ -270,6 +278,14 @@ export function InvoicesPanel() {
                             title="View PDF"
                           >
                             <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(inv)}
+                            title="Edit Invoice"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                           </Button>
                           <Button
                             variant="ghost"

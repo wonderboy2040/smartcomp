@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import { DocForm } from './DocForm'
 import { PdfPreview } from './Invoices'
-import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2 } from 'lucide-react'
+import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2, Edit3 } from 'lucide-react'
 
 export function QuotationsPanel() {
   const { toast } = useToast()
@@ -44,6 +44,11 @@ export function QuotationsPanel() {
 
   const handleCreate = () => {
     setEditing(null)
+    setDialogOpen(true)
+  }
+
+  const handleEdit = (q: any) => {
+    setEditing(q)
     setDialogOpen(true)
   }
 
@@ -170,6 +175,9 @@ export function QuotationsPanel() {
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setPreviewId(q.id)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(q)} title="Edit Quotation">
+                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleShareWhatsApp(q)}>
                         <Share2 className="w-3.5 h-3.5 text-green-600" />
                       </Button>
@@ -268,6 +276,14 @@ export function QuotationsPanel() {
                               title="View PDF"
                             >
                               <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(q)}
+                              title="Edit Quotation"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
                             </Button>
                             <Button
                               variant="ghost"

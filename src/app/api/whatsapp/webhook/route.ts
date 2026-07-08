@@ -6,16 +6,54 @@ import { parseRateResponse } from '@/lib/whatsapp'
 /**
  * WhatsApp Cloud API Webhook endpoint.
  *
+ * SECURITY: Verifies the X-Hub-Signature-256 HMAC header that Meta sends with
+ * every webhook POST. This prevents attackers from POSTing fake messages even
+ * if they know the webhook URL — they'd also need the App Secret from Meta dashboard.
+ *
+ * Set WA_APP_SECRET env var (from Meta App dashboard → App Settings → App Secret)
+ * to enable HMAC verification. If WA_APP_SECRET is not set, verification is skipped
+ * (with a console warning) so the app still works for testing.
+ *
  * Two responsibilities:
- *   1. GET  — Meta webhook verification (when you set up the webhook in Meta dashboard)
- *   2. POST — Incoming messages from suppliers. We auto-match to an existing enquiry,
- *             parse rates, and save the response. No manual paste needed.
+ *   1. GET  — Meta webhook verification (challenge response)
+ *   2. POST — Incoming messages from suppliers, auto-matched to enquiries
  *
  * Webhook URL to register in Meta:  https://your-domain.com/api/whatsapp/webhook
  * Verify token (set WA_VERIFY_TOKEN env): any random string, e.g. "smartcomp_wh_2026"
- *
- * DATA PROTECTION: this endpoint only reads + creates + updates (soft). It never deletes.
  */
+
+// Verify Meta webhook HMAC signature (sha256 of body using App Secret)
+async function verifyMetaSignature(req: NextRequest, rawBody: string): Promise<boolean> {
+  const APP_SECRET = process.env.WA_APP_SECRET
+  if (!APP_SECRET) {
+    // No app secret configured — skip verification (testing mode)
+    console.warn('[Webhook] WA_APP_SECRET not set — skipping HMAC verification')
+    return true
+  }
+  const signature = req.headers.get('x-hub-signature-256')
+  if (!signature) return false
+  // signature format: "sha256=abc123..."
+  if (!signature.startsWith('sha256=')) return false
+  const expected = signature.slice(7)
+  // Compute HMAC-SHA256
+  const enc = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(APP_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(rawBody))
+  const computed = Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  // Constant-time compare
+  if (computed.length !== expected.length) return false
+  let diff = 0
+  for (let i = 0; i < computed.length; i++) diff |= computed.charCodeAt(i) ^ expected.charCodeAt(i)
+  return diff === 0
+}
 
 // ===== GET: Webhook verification =====
 export async function GET(req: NextRequest) {
@@ -38,7 +76,19 @@ export async function GET(req: NextRequest) {
 // ===== POST: Incoming message handler =====
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    // SECURITY: Verify Meta HMAC signature before processing
+    const rawBody = await req.text()
+    const sigOk = await verifyMetaSignature(req, rawBody)
+    if (!sigOk) {
+      console.warn('[Webhook] Invalid HMAC signature — rejected')
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 403 })
+    }
+    let body
+    try {
+      body = JSON.parse(rawBody)
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    }
     const messages = parseIncomingWebhook(body)
 
     if (messages.length === 0) {

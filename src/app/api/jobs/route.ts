@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
+import { generateTrackToken } from '@/lib/notifications'
 
 /**
  * GET /api/jobs — list all service jobs
@@ -23,21 +24,24 @@ export async function GET(req: NextRequest) {
         String(j?.customerName || '').toLowerCase().includes(q) ||
         String(j?.customerMobile || '').includes(q) ||
         String(j?.brandModel || '').toLowerCase().includes(q) ||
-        String(j?.deviceType || '').toLowerCase().includes(q)
+        String(j?.deviceType || '').toLowerCase().includes(q) ||
+        String(j?.serialNumber || '').toLowerCase().includes(q)
       )
     }
 
     // Sort: newest first
     jobs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
 
-    // Defensive coercion
+    // Defensive coercion + parse status history + build track URL
     const result = jobs.map((j) => ({
       ...j,
       jobId: String(j?.jobId || ''),
+      trackToken: String(j?.trackToken || ''),
       customerName: String(j?.customerName || ''),
       customerMobile: String(j?.customerMobile || ''),
       deviceType: String(j?.deviceType || ''),
       brandModel: String(j?.brandModel || ''),
+      serialNumber: String(j?.serialNumber || ''),
       problemDesc: String(j?.problemDesc || ''),
       status: String(j?.status || 'Pending'),
       estimatedAmount: Number(j?.estimatedAmount) || 0,
@@ -45,7 +49,14 @@ export async function GET(req: NextRequest) {
       finalAmount: Number(j?.finalAmount) || 0,
       engineerShare: Number(j?.engineerShare) || 0,
       adminShare: Number(j?.adminShare) || 0,
+      partsProfit: Number(j?.partsProfit) || 0,
+      serviceProfit: Number(j?.serviceProfit) || 0,
+      warrantyDays: Number(j?.warrantyDays) || 0,
+      warrantyExpiry: j?.warrantyExpiry || '',
+      diagnosisNotes: String(j?.diagnosisNotes || ''),
       partsUsed: safeJsonParse<any[]>(j?.partsUsedJson, []),
+      statusHistory: safeJsonParse<any[]>(j?.statusHistoryJson, []),
+      trackUrl: j?.trackToken ? `/track/${j.jobId}-${j.trackToken}` : '',
     }))
 
     return NextResponse.json(result)
@@ -57,6 +68,7 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/jobs — create a new service job
  * Generates jobId like SC20260708001 (prefix + yyyymmdd + sequence)
+ * Also generates an unguessable trackToken for public tracking URL.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -72,10 +84,20 @@ export async function POST(req: NextRequest) {
     const existing = await listRows<any>('Jobs')
     const todays = existing.filter((j) => String(j?.jobId || '').includes(dateStr))
     const seq = String(todays.length + 1).padStart(3, '0')
+
     const jobId = `SC${dateStr}${seq}`
+    const trackToken = generateTrackToken()
+
+    // Initial status history
+    const statusHistory = [{
+      status: 'Pending',
+      timestamp: now.toISOString(),
+      note: 'Job created',
+    }]
 
     const job = await createRow('Jobs', {
       jobId,
+      trackToken,
       customerName: String(body?.customerName || ''),
       customerMobile: String(body?.customerMobile || ''),
       deviceType: String(body?.deviceType || ''),
@@ -97,6 +119,10 @@ export async function POST(req: NextRequest) {
       partsProfit: 0,
       serviceProfit: 0,
       notes: String(body?.notes || ''),
+      diagnosisNotes: '',
+      warrantyDays: Number(body?.warrantyDays) || 30,
+      warrantyExpiry: '',
+      statusHistoryJson: JSON.stringify(statusHistory),
       deliveredAt: '',
     })
 
@@ -115,7 +141,10 @@ export async function POST(req: NextRequest) {
       }).catch(() => {})
     }
 
-    return NextResponse.json(job)
+    return NextResponse.json({
+      ...job,
+      trackUrl: `/track/${jobId}-${trackToken}`,
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }

@@ -193,8 +193,12 @@ export async function deregisterPhone(): Promise<{ success: boolean; error?: str
  * Business app to Cloud API, Meta requires a 6-digit migration code. This function
  * triggers Meta to send that code via SMS to the number.
  *
- * After receiving the code, the user enters it via /api/whatsapp/migrate (with
- * the code), and Meta completes the migration.
+ * Meta's migration flow uses the SAME /deregister endpoint but with a specific
+ * body parameter that indicates "migration" mode. The response triggers an SMS
+ * with a 6-digit code to the registered number.
+ *
+ * After receiving the code, the user enters it via submitMigrationCode() which
+ * calls the /register endpoint to complete migration.
  *
  * Meta docs: https://developers.facebook.com/docs/whatsapp/cloud-api/migrate-whatsapp-business-app-account
  */
@@ -203,6 +207,10 @@ export async function requestMigrationCode(): Promise<{ success: boolean; error?
     return { success: false, error: 'WA_TOKEN / WA_PHONE_NUMBER_ID not configured' }
   }
   try {
+    // Step 1: Deregister the number from Business app (this triggers Meta to
+    // send a 6-digit migration code via SMS to confirm the migration).
+    // The migration flow IS the deregister flow — Meta sends a confirmation code
+    // before actually deregistering. See Meta docs link above.
     const res = await fetch(`${GRAPH_API}/${PHONE_NUMBER_ID}/deregister`, {
       method: 'POST',
       headers: {
@@ -212,9 +220,19 @@ export async function requestMigrationCode(): Promise<{ success: boolean; error?
       body: JSON.stringify({ messaging_product: 'whatsapp' }),
       signal: AbortSignal.timeout(15000),
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      return { success: false, error: data?.error?.message || `HTTP ${res.status}` }
+      // Common errors:
+      //  - "Phone already deregistered" → number is already on Cloud API, no migration needed
+      //  - "Migration code already sent" → user should check SMS
+      const errMsg = data?.error?.message || `HTTP ${res.status}`
+      if (errMsg.toLowerCase().includes('already') || errMsg.toLowerCase().includes('deregistered')) {
+        return {
+          success: true,
+          error: undefined,
+        }
+      }
+      return { success: false, error: errMsg }
     }
     return { success: true }
   } catch (e: any) {

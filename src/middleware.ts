@@ -51,16 +51,23 @@ const PUBLIC_PATHS = [
   '/api/auth/logout',
   '/api/auth/status',
   // WhatsApp Cloud API webhook — Meta calls this server-to-server, has no PIN cookie.
-  // Secured by WA_VERIFY_TOKEN instead.
+  // Secured by WA_VERIFY_TOKEN + HMAC signature instead.
   '/api/whatsapp/webhook',
   // Cron endpoint — secured by CRON_SECRET header, not PIN cookie.
   '/api/cron/auto-enquiry',
-  // Error logger — must work even before login so we can debug crash-on-load
+  // Error logger POST — must work even before login so we can debug crash-on-load.
+  // (GET is PIN-protected to prevent stack trace leaks)
   '/api/log-error',
+  // Public job tracking page + API — customers access without PIN.
+  // Secured by unguessable trackToken in the URL.
+  '/track',
+  '/api/track',
 ]
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true
+  // Public tracking page (e.g., /track/SC20260708001-abc12345)
+  if (pathname.startsWith('/track')) return true
   // Next.js internals + static assets
   if (pathname.startsWith('/_next/')) return true
   if (pathname.startsWith('/favicon')) return true

@@ -30,16 +30,20 @@
 // NOTE: 'deleted' column is appended to every sheet for soft-delete support.
 const SCHEMAS = {
   Shop: ['id', 'name', 'owner', 'phone', 'email', 'address', 'gstNumber', 'state', 'invoicePrefix', 'quotationPrefix', 'termsInvoice', 'termsQuotation', 'createdAt', 'updatedAt', 'deleted'],
-  Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'createdAt', 'updatedAt', 'deleted'],
-  Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'createdAt', 'updatedAt', 'deleted'],
+  Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'warrantyDays', 'createdAt', 'updatedAt', 'deleted'],
+  Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'birthday', 'createdAt', 'updatedAt', 'deleted'],
   Suppliers: ['id', 'name', 'phone', 'whatsappNumber', 'email', 'company', 'address', 'suppliedItems', 'active', 'includeInAutoEnquiry', 'createdAt', 'updatedAt', 'deleted'],
-  Invoices: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'totalCost', 'profit', 'paymentType', 'paymentStatus', 'amountPaid', 'amountDue', 'notes', 'createdAt', 'deleted'],
+  Invoices: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'itemsJson', 'serialsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'totalCost', 'profit', 'paymentType', 'paymentStatus', 'amountPaid', 'amountDue', 'notes', 'createdAt', 'deleted'],
   Quotations: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'validTill', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'notes', 'status', 'convertedToInvoiceId', 'createdAt', 'deleted'],
   Payments: ['id', 'invoiceId', 'invoiceNumber', 'customerName', 'amount', 'type', 'date', 'notes', 'reference', 'createdAt', 'deleted'],
   Enquiries: ['id', 'supplierId', 'supplierName', 'supplierPhone', 'itemsJson', 'message', 'status', 'sentAt', 'respondedAt', 'response', 'ratesJson', 'appliedToItems', 'isAuto', 'createdAt', 'deleted'],
   // ===== Service Center Job Management =====
-  Jobs: ['id', 'jobId', 'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'status', 'assignedEngineer', 'partsUsedJson', 'finalAmount', 'paymentMode', 'paymentType', 'engineerShare', 'adminShare', 'partsProfit', 'serviceProfit', 'notes', 'createdAt', 'updatedAt', 'deliveredAt', 'deleted'],
+  Jobs: ['id', 'jobId', 'trackToken', 'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'status', 'assignedEngineer', 'partsUsedJson', 'finalAmount', 'paymentMode', 'paymentType', 'engineerShare', 'adminShare', 'partsProfit', 'serviceProfit', 'notes', 'diagnosisNotes', 'warrantyDays', 'warrantyExpiry', 'statusHistoryJson', 'createdAt', 'updatedAt', 'deliveredAt', 'deleted'],
   ServicePayments: ['id', 'jobId', 'customerName', 'amount', 'mode', 'type', 'date', 'engineerShare', 'adminShare', 'notes', 'createdAt', 'deleted'],
+  // ===== Expense Tracking =====
+  Expenses: ['id', 'category', 'description', 'amount', 'mode', 'date', 'vendor', 'reference', 'notes', 'createdAt', 'deleted'],
+  // ===== Serial Number + Warranty Tracking =====
+  ItemSerials: ['id', 'itemId', 'itemName', 'serialNumber', 'status', 'invoiceId', 'invoiceNumber', 'customerName', 'purchaseDate', 'warrantyDays', 'warrantyExpiry', 'costPrice', 'notes', 'createdAt', 'updatedAt', 'deleted'],
   Settings: ['id', 'value', 'deleted']
 };
 

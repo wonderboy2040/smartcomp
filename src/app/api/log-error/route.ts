@@ -35,7 +35,26 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
-  // Return recent errors for debugging (only works without PIN if public)
+export async function GET(req: NextRequest) {
+  // SECURITY: GET is admin-only (returns error stacks which leak implementation details).
+  // POST remains public so client crashes can log before login.
+  // We verify the PIN cookie directly here since middleware whitelists this path for POST.
+  const APP_PIN = process.env.APP_PIN
+  if (APP_PIN) {
+    const cookie = req.cookies.get('smartcomp_auth')?.value
+    const enc = new TextEncoder()
+    const data = enc.encode(APP_PIN + '_smartcomp_v1')
+    const digest = await crypto.subtle.digest('SHA-256', data)
+    const expected = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+    if (!cookie || cookie.length !== expected.length) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    let diff = 0
+    for (let i = 0; i < expected.length; i++) diff |= cookie.charCodeAt(i) ^ expected.charCodeAt(i)
+    if (diff !== 0) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  // Return recent errors for debugging (admin only)
   return NextResponse.json({ errors: errorBuffer.slice(-20) })
 }

@@ -15,13 +15,14 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Users, Phone, Mail } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Users, Phone, Mail, Eye } from 'lucide-react'
 
 export function CustomersPanel() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
+  const [ledgerCustomer, setLedgerCustomer] = useState<any | null>(null)
 
   const { data: customers, loading, refetch } = useFetch<any[]>(
     `/api/customers?search=${encodeURIComponent(search)}`,
@@ -36,6 +37,17 @@ export function CustomersPanel() {
   const handleEdit = (c: any) => {
     setEditing(c)
     setDialogOpen(true)
+  }
+
+  const handleViewLedger = async (c: any) => {
+    setLedgerCustomer({ ...c, _loading: true })
+    try {
+      const res = await fetch(`/api/customers/${c.id}`)
+      const data = await res.json()
+      setLedgerCustomer({ ...c, ...data, _loading: false })
+    } catch (e: any) {
+      setLedgerCustomer({ ...c, _loading: false, _error: e.message })
+    }
   }
 
   const handleDelete = async (id: string) => {
@@ -94,6 +106,9 @@ export function CustomersPanel() {
                     {c.address && <p className="text-[10px] text-slate-500 truncate">{c.address}</p>}
                   </div>
                   <div className="flex gap-1 flex-shrink-0">
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleViewLedger(c)} title="View Ledger">
+                      <Eye className="w-3.5 h-3.5 text-blue-600" />
+                    </Button>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(c)}>
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
@@ -172,6 +187,9 @@ export function CustomersPanel() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleViewLedger(c)} title="View Ledger">
+                            <Eye className="w-3.5 h-3.5 text-blue-600" />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(c)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
@@ -198,6 +216,106 @@ export function CustomersPanel() {
           refetch()
         }}
       />
+
+      {/* Customer Ledger Dialog */}
+      <Dialog open={!!ledgerCustomer} onOpenChange={(v) => !v && setLedgerCustomer(null)}>
+        <DialogContent className="sm:max-w-3xl max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-blue-600" />
+              {ledgerCustomer?.name || 'Customer'} — Ledger
+            </DialogTitle>
+          </DialogHeader>
+          {ledgerCustomer?._loading ? (
+            <p className="text-center py-8 text-slate-500">Loading ledger...</p>
+          ) : ledgerCustomer?._error ? (
+            <p className="text-center py-8 text-red-500">Error: {ledgerCustomer._error}</p>
+          ) : (
+            <div className="space-y-3">
+              {/* Customer info + balance */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-slate-50 p-3 rounded-lg text-sm">
+                  <p className="text-xs text-slate-500 mb-1">Contact</p>
+                  <p className="font-medium">{ledgerCustomer?.phone || '-'}</p>
+                  {ledgerCustomer?.email && <p className="text-xs text-slate-600">{ledgerCustomer.email}</p>}
+                  {ledgerCustomer?.gstNumber && <p className="text-xs text-slate-600">GSTIN: {ledgerCustomer.gstNumber}</p>}
+                </div>
+                <div className={`p-3 rounded-lg text-sm ${Number(ledgerCustomer?.creditBalance) > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}>
+                  <p className="text-xs text-slate-500 mb-1">Outstanding Balance</p>
+                  <p className={`font-bold text-lg ${Number(ledgerCustomer?.creditBalance) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    {formatCurrency(Number(ledgerCustomer?.creditBalance) || 0)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Invoices */}
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-1">Invoices ({ledgerCustomer?.invoices?.length || 0})</p>
+                <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-lg">
+                  <Table>
+                    <TableHeader><TableRow className="bg-slate-50">
+                      <TableHead className="text-xs">Number</TableHead>
+                      <TableHead className="text-xs">Date</TableHead>
+                      <TableHead className="text-xs text-right">Total</TableHead>
+                      <TableHead className="text-xs text-right">Due</TableHead>
+                      <TableHead className="text-xs text-center">Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {(ledgerCustomer?.invoices || []).length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="text-center py-3 text-xs text-slate-400">No invoices</TableCell></TableRow>
+                      ) : ledgerCustomer.invoices.map((inv: any) => (
+                        <TableRow key={inv.id}>
+                          <TableCell className="font-mono text-xs">{inv.number}</TableCell>
+                          <TableCell className="text-xs">{inv.date ? new Date(inv.date).toLocaleDateString('en-IN') : '-'}</TableCell>
+                          <TableCell className="text-right text-xs">{formatCurrency(Number(inv.grandTotal) || 0)}</TableCell>
+                          <TableCell className="text-right text-xs font-semibold text-red-600">{formatCurrency(Number(inv.amountDue) || 0)}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className={`text-[9px] ${inv.paymentStatus === 'paid' ? 'bg-emerald-50 text-emerald-700' : inv.paymentStatus === 'partial' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>
+                              {inv.paymentStatus}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+
+              {/* Quotations */}
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-1">Quotations ({ledgerCustomer?.quotations?.length || 0})</p>
+                <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg">
+                  <Table>
+                    <TableHeader><TableRow className="bg-slate-50">
+                      <TableHead className="text-xs">Number</TableHead>
+                      <TableHead className="text-xs">Date</TableHead>
+                      <TableHead className="text-xs text-right">Total</TableHead>
+                      <TableHead className="text-xs text-center">Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {(ledgerCustomer?.quotations || []).length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="text-center py-3 text-xs text-slate-400">No quotations</TableCell></TableRow>
+                      ) : ledgerCustomer.quotations.map((q: any) => (
+                        <TableRow key={q.id}>
+                          <TableCell className="font-mono text-xs">{q.number}</TableCell>
+                          <TableCell className="text-xs">{q.date ? new Date(q.date).toLocaleDateString('en-IN') : '-'}</TableCell>
+                          <TableCell className="text-right text-xs">{formatCurrency(Number(q.grandTotal) || 0)}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="text-[9px]">{q.status}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLedgerCustomer(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

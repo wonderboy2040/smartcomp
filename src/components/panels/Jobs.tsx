@@ -21,7 +21,8 @@ import { formatCurrency } from '@/lib/calc'
 import {
   Wrench, Plus, Search, Phone, Laptop, Printer, Monitor, Battery, ScanLine,
   Smartphone, ClipboardList, CheckCircle2, Clock, Package, IndianRupee,
-  User, Trash2, Edit3, RefreshCw, Send, Eye, ArrowRight, TrendingUp
+  User, Trash2, Edit3, RefreshCw, Send, Eye, ArrowRight, TrendingUp,
+  ExternalLink, Copy
 } from 'lucide-react'
 
 const DEVICE_ICONS: Record<string, any> = {
@@ -570,6 +571,41 @@ function JobDetailDialog({ job, onClose, onUpdated }: {
             <p className="text-sm text-slate-800">{job.problemDesc}</p>
             {job.accessories && <p className="text-xs text-slate-500 mt-1">Accessories: {job.accessories}</p>}
           </div>
+
+          {/* Tracking Link */}
+          {job.trackUrl && (
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+              <p className="text-xs font-medium text-blue-700 mb-1 flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> Customer Tracking Link
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-xs bg-white px-2 py-1.5 rounded border border-blue-200 truncate">
+                  {typeof window !== 'undefined' ? window.location.origin + job.trackUrl : job.trackUrl}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 px-2 flex-shrink-0"
+                  onClick={() => {
+                    const fullUrl = (typeof window !== 'undefined' ? window.location.origin : '') + job.trackUrl
+                    navigator.clipboard.writeText(fullUrl)
+                    toast({ title: 'Link copied!', description: 'Share with customer via WhatsApp/SMS' })
+                  }}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+                <a
+                  href={`https://wa.me/${String(job.customerMobile || '').replace(/\D/g, '').length === 10 ? '91' : ''}${String(job.customerMobile || '').replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${job.customerName}, track your repair here: ${(typeof window !== 'undefined' ? window.location.origin : '') + job.trackUrl}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 px-2 py-1.5 bg-green-600 text-white rounded text-xs font-medium flex-shrink-0"
+                >
+                  <Send className="w-3 h-3" /> Share
+                </a>
+              </div>
+              <p className="text-[10px] text-blue-600 mt-1">Send this link to customer — they can track repair status online</p>
+            </div>
+          )}
 
           {/* Status update */}
           <div className="flex flex-wrap items-end gap-2">
