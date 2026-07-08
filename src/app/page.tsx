@@ -25,10 +25,11 @@ import { FinancialsPanel } from '@/components/panels/Financials'
 import { CampaignsPanel } from '@/components/panels/Campaigns'
 import { CreditControlPanel } from '@/components/panels/CreditControl'
 import { AMCPanel } from '@/components/panels/AMC'
+import { PosterMakerPanel } from '@/components/panels/PosterMaker'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -50,6 +51,7 @@ const NAV_ITEMS = [
   { id: 'credit', label: 'Credit Control', icon: ShieldAlert, color: 'text-red-600' },
   { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
+  { id: 'poster', label: 'Poster Maker', icon: Palette, color: 'text-purple-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ]
 
@@ -331,6 +333,9 @@ function HomeInner() {
           )}
           {mountedPanels.has('reports') && (
             <div className={active === 'reports' ? 'block' : 'hidden'}><ReportsPanel /></div>
+          )}
+          {mountedPanels.has('poster') && (
+            <div className={active === 'poster' ? 'block' : 'hidden'}><PosterMakerPanel /></div>
           )}
           {mountedPanels.has('settings') && (
             <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>
