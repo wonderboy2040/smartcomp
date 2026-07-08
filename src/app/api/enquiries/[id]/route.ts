@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRow, updateRow, deleteRow } from '@/lib/sheets-client'
 import { parseRateResponse } from '@/lib/whatsapp'
+import { safeJsonParse } from '@/lib/utils'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -23,11 +24,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const enquiry = await getRow<any>('Enquiries', id)
       if (!enquiry) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      const items = JSON.parse(enquiry.itemsJson || '[]')
-      const parsedRates = parseRateResponse(response, items)
+      const items = safeJsonParse<any[]>(enquiry.itemsJson, [])
+      const parsedRates = parseRateResponse(String(response || ''), items)
 
       const updated = await updateRow('Enquiries', id, {
-        response,
+        response: String(response || ''),
         status: 'responded',
         respondedAt: new Date().toISOString(),
         ratesJson: JSON.stringify(parsedRates),
@@ -40,23 +41,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const enquiry = await getRow<any>('Enquiries', id)
       if (!enquiry) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      const rates = JSON.parse(enquiry.ratesJson || '[]') as any[]
-      const items = JSON.parse(enquiry.itemsJson || '[]') as any[]
+      const rates = safeJsonParse<any[]>(enquiry.ratesJson, [])
+      const items = safeJsonParse<any[]>(enquiry.itemsJson, [])
       let appliedCount = 0
 
       for (const rate of rates) {
         const matchedItem = items.find(
-          (i) => i.name === rate.itemName || i.name.toLowerCase().includes(rate.itemName.toLowerCase())
+          (i: any) => {
+            const iName = String(i?.name || '').toLowerCase()
+            const rName = String(rate?.itemName || '').toLowerCase()
+            return iName === rName || iName.includes(rName) || rName.includes(iName)
+          }
         )
         if (matchedItem?.id) {
-          const updateData: any = { costPrice: rate.rate }
+          // Use totalCost if available (accounts for GST), else fall back to rate
+          const effectiveCost = rate.totalCost ?? rate.rate
+          const updateData: any = { costPrice: effectiveCost }
           if (rate.gstApplicable !== null && rate.gstApplicable !== undefined) {
             updateData.gstApplicable = rate.gstApplicable
           }
           if (rate.gstRate !== undefined) {
             updateData.gstRate = rate.gstRate
           }
-          await updateRow('Items', matchedItem.id, updateData)
+          await updateRow('Items', String(matchedItem.id), updateData)
           appliedCount++
         }
       }

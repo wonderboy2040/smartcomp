@@ -14,10 +14,12 @@ import { SuppliersPanel } from '@/components/panels/Suppliers'
 import { PaymentsPanel } from '@/components/panels/Payments'
 import { WhatsAppPanel } from '@/components/panels/WhatsApp'
 import { SettingsPanel } from '@/components/panels/Settings'
+import { JobsPanel } from '@/components/panels/Jobs'
+import { ServicePaymentsPanel } from '@/components/panels/ServicePayments'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -29,6 +31,8 @@ const NAV_ITEMS = [
   { id: 'customers', label: 'Customers', icon: Users, color: 'text-pink-600' },
   { id: 'suppliers', label: 'Suppliers', icon: Building2, color: 'text-violet-600' },
   { id: 'whatsapp', label: 'WhatsApp Enquiry', icon: MessageSquare, color: 'text-green-600' },
+  { id: 'jobs', label: 'Service Jobs', icon: Wrench, color: 'text-blue-600' },
+  { id: 'servicepayments', label: 'Service Payments', icon: Wallet, color: 'text-purple-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ]
 
@@ -59,6 +63,8 @@ export default function Home() {
       '/api/quotations?limit=200',
       '/api/payments?limit=200',
       '/api/enquiries?limit=100',
+      '/api/jobs',
+      '/api/service-payments',
     ]
     urls.forEach((url, i) => {
       setTimeout(() => prefetch(url), i * 200)
@@ -264,6 +270,12 @@ export default function Home() {
           )}
           {mountedPanels.has('whatsapp') && (
             <div className={active === 'whatsapp' ? 'block' : 'hidden'}><WhatsAppPanel /></div>
+          )}
+          {mountedPanels.has('jobs') && (
+            <div className={active === 'jobs' ? 'block' : 'hidden'}><JobsPanel /></div>
+          )}
+          {mountedPanels.has('servicepayments') && (
+            <div className={active === 'servicepayments' ? 'block' : 'hidden'}><ServicePaymentsPanel /></div>
           )}
           {mountedPanels.has('settings') && (
             <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>

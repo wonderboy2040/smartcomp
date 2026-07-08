@@ -1,0 +1,122 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { listRows, createRow } from '@/lib/sheets-client'
+import { safeJsonParse } from '@/lib/utils'
+
+/**
+ * GET /api/jobs — list all service jobs
+ * Query: ?status=Pending ?engineer=xxx ?search=xxx
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const url = new URL(req.url)
+    const statusFilter = url.searchParams.get('status')
+    const engineerFilter = url.searchParams.get('engineer')
+    const search = url.searchParams.get('search')
+
+    let jobs = await listRows<any>('Jobs')
+    if (statusFilter) jobs = jobs.filter((j) => String(j.status) === statusFilter)
+    if (engineerFilter) jobs = jobs.filter((j) => String(j.assignedEngineer || '') === engineerFilter)
+    if (search) {
+      const q = search.toLowerCase()
+      jobs = jobs.filter((j) =>
+        String(j?.jobId || '').toLowerCase().includes(q) ||
+        String(j?.customerName || '').toLowerCase().includes(q) ||
+        String(j?.customerMobile || '').includes(q) ||
+        String(j?.brandModel || '').toLowerCase().includes(q) ||
+        String(j?.deviceType || '').toLowerCase().includes(q)
+      )
+    }
+
+    // Sort: newest first
+    jobs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+
+    // Defensive coercion
+    const result = jobs.map((j) => ({
+      ...j,
+      jobId: String(j?.jobId || ''),
+      customerName: String(j?.customerName || ''),
+      customerMobile: String(j?.customerMobile || ''),
+      deviceType: String(j?.deviceType || ''),
+      brandModel: String(j?.brandModel || ''),
+      problemDesc: String(j?.problemDesc || ''),
+      status: String(j?.status || 'Pending'),
+      estimatedAmount: Number(j?.estimatedAmount) || 0,
+      advanceAmount: Number(j?.advanceAmount) || 0,
+      finalAmount: Number(j?.finalAmount) || 0,
+      engineerShare: Number(j?.engineerShare) || 0,
+      adminShare: Number(j?.adminShare) || 0,
+      partsUsed: safeJsonParse<any[]>(j?.partsUsedJson, []),
+    }))
+
+    return NextResponse.json(result)
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/jobs — create a new service job
+ * Generates jobId like SC20260708001 (prefix + yyyymmdd + sequence)
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+
+    // Generate job ID
+    const now = new Date()
+    const y = now.getFullYear()
+    const m = String(now.getMonth() + 1).padStart(2, '0')
+    const d = String(now.getDate()).padStart(2, '0')
+    const dateStr = `${y}${m}${d}`
+
+    const existing = await listRows<any>('Jobs')
+    const todays = existing.filter((j) => String(j?.jobId || '').includes(dateStr))
+    const seq = String(todays.length + 1).padStart(3, '0')
+    const jobId = `SC${dateStr}${seq}`
+
+    const job = await createRow('Jobs', {
+      jobId,
+      customerName: String(body?.customerName || ''),
+      customerMobile: String(body?.customerMobile || ''),
+      deviceType: String(body?.deviceType || ''),
+      brandModel: String(body?.brandModel || ''),
+      serialNumber: String(body?.serialNumber || ''),
+      problemDesc: String(body?.problemDesc || ''),
+      accessories: String(body?.accessories || ''),
+      estimatedAmount: Number(body?.estimatedAmount) || 0,
+      advanceAmount: Number(body?.advanceAmount) || 0,
+      advanceMode: String(body?.advanceMode || ''),
+      status: 'Pending',
+      assignedEngineer: String(body?.assignedEngineer || ''),
+      partsUsedJson: '[]',
+      finalAmount: 0,
+      paymentMode: '',
+      paymentType: '',
+      engineerShare: 0,
+      adminShare: 0,
+      partsProfit: 0,
+      serviceProfit: 0,
+      notes: String(body?.notes || ''),
+      deliveredAt: '',
+    })
+
+    // If advance was paid, record a ServicePayment
+    if (Number(body?.advanceAmount) > 0) {
+      await createRow('ServicePayments', {
+        jobId,
+        customerName: String(body?.customerName || ''),
+        amount: Number(body?.advanceAmount),
+        mode: String(body?.advanceMode || 'Cash'),
+        type: 'Advance',
+        date: new Date().toISOString(),
+        engineerShare: 0,
+        adminShare: Number(body?.advanceAmount),
+        notes: 'Advance payment at job creation',
+      }).catch(() => {})
+    }
+
+    return NextResponse.json(job)
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message }, { status: 500 })
+  }
+}

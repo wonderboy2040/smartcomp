@@ -37,6 +37,9 @@ const SCHEMAS = {
   Quotations: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'validTill', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'notes', 'status', 'convertedToInvoiceId', 'createdAt', 'deleted'],
   Payments: ['id', 'invoiceId', 'invoiceNumber', 'customerName', 'amount', 'type', 'date', 'notes', 'reference', 'createdAt', 'deleted'],
   Enquiries: ['id', 'supplierId', 'supplierName', 'supplierPhone', 'itemsJson', 'message', 'status', 'sentAt', 'respondedAt', 'response', 'ratesJson', 'appliedToItems', 'isAuto', 'createdAt', 'deleted'],
+  // ===== Service Center Job Management =====
+  Jobs: ['id', 'jobId', 'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'status', 'assignedEngineer', 'partsUsedJson', 'finalAmount', 'paymentMode', 'paymentType', 'engineerShare', 'adminShare', 'partsProfit', 'serviceProfit', 'notes', 'createdAt', 'updatedAt', 'deliveredAt', 'deleted'],
+  ServicePayments: ['id', 'jobId', 'customerName', 'amount', 'mode', 'type', 'date', 'engineerShare', 'adminShare', 'notes', 'createdAt', 'deleted'],
   Settings: ['id', 'value', 'deleted']
 };
 

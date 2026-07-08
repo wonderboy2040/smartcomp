@@ -55,23 +55,45 @@ async function callAppsScript(payload: any): Promise<any> {
   if (!APPS_SCRIPT_URL) {
     throw new Error('APPS_SCRIPT_URL not configured')
   }
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload),
-    redirect: 'follow',
-    // Performance: add a reasonable timeout via AbortController
-    ...{ signal: AbortSignal.timeout(30000) },
-  })
-  if (!res.ok) {
-    throw new Error(`Apps Script HTTP ${res.status}`)
+  // Retry logic — Apps Script Web Apps sometimes 404 on cold start or
+  // return timeouts. Up to 3 attempts with exponential backoff.
+  let lastErr: any
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+        signal: AbortSignal.timeout(45000), // 45s — Apps Script can be slow
+      })
+      if (res.status === 404) {
+        // Apps Script deployment issue — retry after backoff
+        throw new Error(`Apps Script HTTP 404 (attempt ${attempt}/3). The Apps Script Web App may need redeployment.`)
+      }
+      if (!res.ok) {
+        throw new Error(`Apps Script HTTP ${res.status}`)
+      }
+      const text = await res.text()
+      try {
+        return JSON.parse(text)
+      } catch {
+        throw new Error('Invalid response from Apps Script: ' + text.slice(0, 200))
+      }
+    } catch (e: any) {
+      lastErr = e
+      // If it's a timeout or 404, retry with backoff. Otherwise throw immediately.
+      const isRetryable = e?.message?.includes('404') ||
+                          e?.message?.includes('timeout') ||
+                          e?.message?.includes('aborted') ||
+                          e?.name === 'TimeoutError' ||
+                          e?.name === 'AbortError'
+      if (!isRetryable || attempt === 3) throw e
+      // Exponential backoff: 1s, 2s, 4s
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
+    }
   }
-  const text = await res.text()
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error('Invalid response from Apps Script: ' + text.slice(0, 200))
-  }
+  throw lastErr || new Error('Apps Script call failed after retries')
 }
 
 async function getFromAppsScript(params: Record<string, string>): Promise<any> {
@@ -82,20 +104,39 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v)
   }
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    redirect: 'follow',
-    ...{ signal: AbortSignal.timeout(30000) },
-  })
-  if (!res.ok) {
-    throw new Error(`Apps Script HTTP ${res.status}`)
+  // Retry logic for GET as well
+  let lastErr: any
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url.toString(), {
+        method: 'GET',
+        redirect: 'follow',
+        signal: AbortSignal.timeout(45000),
+      })
+      if (res.status === 404) {
+        throw new Error(`Apps Script HTTP 404 (attempt ${attempt}/3). Web App may need redeployment.`)
+      }
+      if (!res.ok) {
+        throw new Error(`Apps Script HTTP ${res.status}`)
+      }
+      const text = await res.text()
+      try {
+        return JSON.parse(text)
+      } catch {
+        throw new Error('Invalid response from Apps Script: ' + text.slice(0, 200))
+      }
+    } catch (e: any) {
+      lastErr = e
+      const isRetryable = e?.message?.includes('404') ||
+                          e?.message?.includes('timeout') ||
+                          e?.message?.includes('aborted') ||
+                          e?.name === 'TimeoutError' ||
+                          e?.name === 'AbortError'
+      if (!isRetryable || attempt === 3) throw e
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
+    }
   }
-  const text = await res.text()
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new Error('Invalid response from Apps Script: ' + text.slice(0, 200))
-  }
+  throw lastErr || new Error('Apps Script GET failed after retries')
 }
 
 // ===== LIST =====
