@@ -113,8 +113,11 @@
   --border: rgba(255,255,255,0.08);
   --input: rgba(255,255,255,0.1);
   --ring: #818cf8;
-  --clay-bg: #1a1b2e;
-  --clay-surface: #252640;
+  --clay-bg: #16172a;
+  --clay-surface: #1e1f35;
+  --clay-shadow-light: rgba(255, 255, 255, 0.03);
+  --clay-shadow-dark: rgba(0, 0, 0, 0.5);
+  --clay-shadow-dark-strong: rgba(0, 0, 0, 0.4);
 }
 
 @layer base {
@@ -311,6 +314,42 @@ html, body {
     6px 6px 14px var(--clay-shadow-dark),
     -6px -6px 14px var(--clay-shadow-light) !important;
   border: none !important;
+}
+
+/* Dark mode text color overrides — panels use hardcoded text-slate-900/700/600 */
+.dark .text-slate-900 { color: #f1f5f9 !important; }
+.dark .text-slate-800 { color: #e2e8f0 !important; }
+.dark .text-slate-700 { color: #cbd5e1 !important; }
+.dark .text-slate-600 { color: #94a3b8 !important; }
+.dark .text-slate-500 { color: #64748b !important; }
+
+/* Dark mode background overrides for common panel patterns */
+.dark .bg-slate-50 { background-color: var(--clay-surface) !important; }
+.dark .bg-slate-100 { background-color: rgba(255,255,255,0.04) !important; }
+.dark .bg-white\/95 { background-color: var(--clay-surface) !important; }
+.dark .bg-white { background-color: var(--clay-surface) !important; }
+
+/* Dark mode border overrides */
+.dark .border-slate-200 { border-color: rgba(255,255,255,0.06) !important; }
+.dark .border-slate-100 { border-color: rgba(255,255,255,0.04) !important; }
+
+/* Dark mode input override */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.dark textarea,
+.dark select {
+  background-color: var(--clay-surface) !important;
+  color: #f1f5f9 !important;
+}
+
+/* Dark mode table header */
+.dark [data-slot="table-header"] {
+  background-color: rgba(255,255,255,0.03) !important;
+}
+
+/* Dark mode placeholder */
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #475569 !important;
 }
 
 /* Override shadcn Input */

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/lib/theme-context";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -35,7 +36,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: "#0f172a",
+  themeColor: "#eef0f6",
   viewportFit: "cover",
   appleWebApp: {
     capable: true,
@@ -43,6 +44,18 @@ export const viewport: Viewport = {
     title: "SmartComp",
   },
 };
+
+// Inline script to prevent flash-of-wrong-theme (runs before React hydrates)
+const themeScript = `
+(function() {
+  try {
+    var stored = localStorage.getItem('smartcomp-theme');
+    if (stored === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  } catch(e) {}
+})();
+`;
 
 export default function RootLayout({
   children,
@@ -54,12 +67,16 @@ export default function RootLayout({
       <head>
         {/* PWA: register service worker */}
         <script src="/sw-register.js" defer />
+        {/* Theme: prevent flash of wrong theme */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body
-        className={`${geistSans.variable} antialiased bg-slate-50 text-slate-900 min-h-screen`}
+        className={`${geistSans.variable} antialiased min-h-screen`}
       >
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

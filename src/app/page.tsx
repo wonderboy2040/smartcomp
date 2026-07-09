@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
+import { useTheme } from '@/lib/theme-context'
 import { SetupWizard } from '@/components/SetupWizard'
 import { DashboardView } from '@/components/panels/Dashboard'
 import { StockPanel } from '@/components/panels/Stock'
@@ -29,7 +30,7 @@ import { PosterMakerPanel } from '@/components/panels/PosterMaker'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -70,6 +71,7 @@ function HomeInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
+  const { theme, toggleTheme } = useTheme()
   // Track which panels have been activated at least once — they stay mounted
   // afterwards so switching back is instant, but we don't load all 9 on first paint.
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(new Set([initialTab]))
@@ -225,6 +227,29 @@ function HomeInner() {
 
         {/* Footer */}
         <div className="p-3 flex-shrink-0 safe-bottom space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {/* Theme toggle */}
+          <button
+            onClick={toggleTheme}
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-300 transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)' }}
+          >
+            <span className="flex items-center gap-2">
+              {theme === 'light' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
+              {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+            </span>
+            <span
+              className="relative w-10 h-5 rounded-full transition-all flex-shrink-0"
+              style={{ background: theme === 'dark' ? '#6366f1' : 'rgba(255,255,255,0.1)' }}
+            >
+              <span
+                className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
+                style={{
+                  left: theme === 'dark' ? '22px' : '2px',
+                  background: theme === 'dark' ? '#fff' : '#94a3b8',
+                }}
+              />
+            </span>
+          </button>
           <div className="rounded-xl p-2.5 flex items-center gap-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <Sparkles className="w-3 h-3 text-indigo-400 flex-shrink-0" />
             <span className="text-[10px] text-slate-400">v2.0 · Claymorphism Edition</span>
@@ -258,14 +283,14 @@ function HomeInner() {
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col w-full">
         {/* Top bar - mobile only */}
-        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top" style={{ background: 'var(--clay-surface)', boxShadow: '0 4px 12px rgba(163,177,198,0.3)' }}>
+        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top" style={{ background: 'var(--clay-surface)', boxShadow: '0 4px 12px var(--clay-shadow-dark)' }}>
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 h-11 w-11 rounded-xl flex items-center justify-center"
             style={{ background: 'var(--clay-surface)', boxShadow: '3px 3px 8px var(--clay-shadow-dark), -3px -3px 8px var(--clay-shadow-light)' }}
             aria-label="Open menu"
           >
-            <Menu className="w-5 h-5 text-slate-600" />
+            <Menu className="w-5 h-5" style={{ color: 'var(--foreground)' }} />
           </button>
           <div className="flex items-center gap-2 min-w-0">
             <div
@@ -274,9 +299,17 @@ function HomeInner() {
             >
               <Store className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-sm truncate text-slate-700">{shop?.name || 'Smart Computers'}</span>
+            <span className="font-semibold text-sm truncate" style={{ color: 'var(--foreground)' }}>{shop?.name || 'Smart Computers'}</span>
           </div>
-          <div className="w-11 flex-shrink-0" />
+          {/* Theme toggle on mobile */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center"
+            style={{ background: 'var(--clay-surface)', boxShadow: '3px 3px 8px var(--clay-shadow-dark), -3px -3px 8px var(--clay-shadow-light)' }}
+            aria-label="Toggle theme"
+          >
+            {theme === 'light' ? <Moon className="w-5 h-5" style={{ color: 'var(--foreground)' }} /> : <Sun className="w-5 h-5 text-amber-400" />}
+          </button>
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">
