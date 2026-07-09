@@ -43,73 +43,78 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ===== CLAYMORPHISM DESIGN SYSTEM ===== */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 1rem;
+  /* Claymorphism base palette — soft pastels */
+  --clay-bg: #eef0f6;
+  --clay-surface: #f5f7fa;
+  --clay-surface-dark: #2a2d3e;
+  --clay-shadow-light: rgba(255, 255, 255, 0.8);
+  --clay-shadow-dark: rgba(163, 177, 198, 0.6);
+  --clay-shadow-dark-strong: rgba(163, 177, 198, 0.5);
+  /* Brand colors */
+  --clay-primary: #6366f1;
+  --clay-primary-light: #818cf8;
+  --clay-accent: #10b981;
+  --clay-accent-light: #34d399;
+  --clay-warm: #f59e0b;
+  --clay-rose: #ec4899;
+  /* Background */
+  --background: #eef0f6;
+  --foreground: #1e293b;
+  --card: #f5f7fa;
+  --card-foreground: #1e293b;
+  --popover: #f5f7fa;
+  --popover-foreground: #1e293b;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #1e293b;
+  --muted: #e2e8f0;
+  --muted-foreground: #64748b;
+  --accent: #e2e8f0;
+  --accent-foreground: #1e293b;
+  --destructive: #ef4444;
+  --border: transparent;
+  --input: #e2e8f0;
+  --ring: #6366f1;
+  --chart-1: #6366f1;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #ec4899;
+  --chart-5: #06b6d4;
+  --sidebar: #2a2d3e;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #3a3d52;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: rgba(255,255,255,0.08);
+  --sidebar-ring: #6366f1;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #1a1b2e;
+  --foreground: #f1f5f9;
+  --card: #252640;
+  --card-foreground: #f1f5f9;
+  --popover: #252640;
+  --popover-foreground: #f1f5f9;
+  --primary: #818cf8;
+  --primary-foreground: #1e293b;
+  --secondary: #312f4a;
+  --secondary-foreground: #f1f5f9;
+  --muted: #312f4a;
+  --muted-foreground: #94a3b8;
+  --accent: #312f4a;
+  --accent-foreground: #f1f5f9;
+  --destructive: #f87171;
+  --border: rgba(255,255,255,0.08);
+  --input: rgba(255,255,255,0.1);
+  --ring: #818cf8;
+  --clay-bg: #1a1b2e;
+  --clay-surface: #252640;
 }
 
 @layer base {
@@ -121,73 +126,149 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     text-size-adjust: 100%;
+    background-color: var(--clay-bg);
   }
-
-  /* Safe area insets - applied to root containers, not body */
-  .safe-top {
-    padding-top: env(safe-area-inset-top);
-  }
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 }
 
+/* ===== CLAYMORPHISM UTILITY CLASSES ===== */
 @layer utilities {
-  /* Custom scrollbar */
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  /* Clay card — soft, raised, tactile */
+  .clay-card {
+    background: var(--clay-surface);
+    border-radius: 1.5rem;
+    box-shadow:
+      8px 8px 16px var(--clay-shadow-dark),
+      -8px -8px 16px var(--clay-shadow-light);
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
+  .clay-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      12px 12px 24px var(--clay-shadow-dark),
+      -12px -12px 24px var(--clay-shadow-light);
   }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.5);
-    border-radius: 3px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.8);
+  .clay-card-inset {
+    background: var(--clay-surface);
+    border-radius: 1.25rem;
+    box-shadow:
+      inset 4px 4px 8px var(--clay-shadow-dark),
+      inset -4px -4px 8px var(--clay-shadow-light);
+    border: none;
   }
 
-  /* Hide scrollbar but keep scrollable */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  /* Clay button — raised, tactile, pressable */
+  .clay-btn {
+    border-radius: 1rem;
+    box-shadow:
+      4px 4px 10px var(--clay-shadow-dark),
+      -4px -4px 10px var(--clay-shadow-light);
+    border: none;
+    transition: all 0.2s ease;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  .clay-btn:active {
+    box-shadow:
+      inset 3px 3px 6px var(--clay-shadow-dark),
+      inset -3px -3px 6px var(--clay-shadow-light);
+    transform: translateY(1px);
+  }
+  .clay-btn:hover {
+    box-shadow:
+      6px 6px 12px var(--clay-shadow-dark),
+      -6px -6px 12px var(--clay-shadow-light);
   }
 
-  /* Touch target minimum size for mobile */
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
+  /* Clay input — inset, pressed-in feel */
+  .clay-input {
+    background: var(--clay-surface);
+    border-radius: 0.875rem;
+    box-shadow:
+      inset 3px 3px 6px var(--clay-shadow-dark),
+      inset -3px -3px 6px var(--clay-shadow-light);
+    border: none;
+    transition: all 0.2s ease;
+  }
+  .clay-input:focus {
+    box-shadow:
+      inset 3px 3px 6px var(--clay-shadow-dark),
+      inset -3px -3px 6px var(--clay-shadow-light),
+      0 0 0 2px var(--clay-primary);
+  }
+
+  /* Clay badge — small raised pill */
+  .clay-badge {
+    border-radius: 0.75rem;
+    box-shadow:
+      2px 2px 5px var(--clay-shadow-dark),
+      -2px -2px 5px var(--clay-shadow-light);
+    border: none;
+    padding: 0.25rem 0.75rem;
+  }
+
+  /* Clay sidebar — dark with soft inner shadow */
+  .clay-sidebar {
+    background: linear-gradient(180deg, #2a2d3e 0%, #232638 100%);
+    box-shadow:
+      4px 0 16px rgba(0, 0, 0, 0.15),
+      inset -1px 0 0 rgba(255, 255, 255, 0.05);
+  }
+
+  /* Clay nav item active */
+  .clay-nav-active {
+    background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+    box-shadow:
+      4px 4px 12px rgba(99, 102, 241, 0.4),
+      -2px -2px 8px rgba(255, 255, 255, 0.05);
+    color: white;
+  }
+
+  /* Clay nav item inactive */
+  .clay-nav-item {
+    transition: all 0.2s ease;
+    border-radius: 0.875rem;
+  }
+  .clay-nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 2px 2px 4px rgba(0,0,0,0.1);
+  }
+
+  /* Scrollbar */
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.7); }
+
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+  .touch-target { min-height: 44px; min-width: 44px; }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #6366f1, #818cf8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 }
 
-/* Prevent text selection on buttons for better mobile UX */
+/* Prevent text selection on buttons */
 button {
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* Ensure inputs don't zoom on iOS (font-size >= 16px) */
+/* iOS no-zoom inputs */
 @media (max-width: 640px) {
-  input[type="text"],
-  input[type="email"],
-  input[type="tel"],
-  input[type="number"],
-  input[type="date"],
-  input[type="search"],
-  input[type="password"],
-  textarea,
-  select {
-    font-size: 16px;
-  }
+  input[type="text"], input[type="email"], input[type="tel"],
+  input[type="number"], input[type="date"], input[type="search"],
+  input[type="password"], textarea, select { font-size: 16px; }
 }
 
-/* Dialog improvements for mobile */
+/* Mobile dialogs */
 @media (max-width: 640px) {
   [role="dialog"] {
     max-width: 100vw !important;
@@ -196,8 +277,6 @@ button {
     width: 100vw !important;
     border-radius: 0 !important;
   }
-
-  /* Make sure dialog content scrolls properly */
   [data-radix-dialog-content] {
     max-height: 100dvh !important;
     height: 100dvh !important;
@@ -209,20 +288,79 @@ button {
   }
 }
 
-/* Better focus visibility for keyboard users */
 *:focus-visible {
-  outline: 2px solid rgb(16, 185, 129);
+  outline: 2px solid #6366f1;
   outline-offset: 2px;
 }
 
-/* Smooth scrolling */
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
 }
 
-/* Prevent horizontal overflow on mobile */
 html, body {
   overflow-x: hidden;
   max-width: 100vw;
+}
+
+/* Override shadcn Card to be clay */
+[data-slot="card"] {
+  background: var(--clay-surface) !important;
+  border-radius: 1.5rem !important;
+  box-shadow:
+    6px 6px 14px var(--clay-shadow-dark),
+    -6px -6px 14px var(--clay-shadow-light) !important;
+  border: none !important;
+}
+
+/* Override shadcn Input */
+[data-slot="input"] {
+  background: var(--clay-surface) !important;
+  border-radius: 0.875rem !important;
+  box-shadow:
+    inset 2px 2px 5px var(--clay-shadow-dark),
+    inset -2px -2px 5px var(--clay-shadow-light) !important;
+  border: none !important;
+}
+
+/* Override shadcn Textarea */
+textarea {
+  background: var(--clay-surface) !important;
+  border-radius: 0.875rem !important;
+  box-shadow:
+    inset 2px 2px 5px var(--clay-shadow-dark),
+    inset -2px -2px 5px var(--clay-shadow-light) !important;
+  border: none !important;
+}
+
+/* Override shadcn Button */
+[data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"]) {
+  border-radius: 0.875rem !important;
+  box-shadow:
+    3px 3px 8px var(--clay-shadow-dark),
+    -3px -3px 8px var(--clay-shadow-light) !important;
+  border: none !important;
+}
+
+[data-slot="button"]:not([data-variant="ghost"]):not([data-variant="link"]):active {
+  box-shadow:
+    inset 2px 2px 5px var(--clay-shadow-dark),
+    inset -2px -2px 5px var(--clay-shadow-light) !important;
+  transform: translateY(1px);
+}
+
+/* Dialog content — clay style */
+[data-radix-dialog-content] {
+  background: var(--clay-surface) !important;
+  border-radius: 1.5rem !important;
+  box-shadow:
+    12px 12px 30px rgba(0, 0, 0, 0.15),
+    -12px -12px 30px rgba(255, 255, 255, 0.5) !important;
+  border: none !important;
+}
+
+@media (min-width: 641px) {
+  [data-radix-dialog-content] {
+    border-radius: 1.5rem !important;
+  }
 }

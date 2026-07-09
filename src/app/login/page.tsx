@@ -23,10 +23,7 @@ function LoginInner() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (pin.length < 4) {
-      setError('Enter a valid PIN')
-      return
-    }
+    if (pin.length < 4) { setError('Enter a valid PIN'); return }
     setLoading(true)
     setError('')
     try {
@@ -52,39 +49,51 @@ function LoginInner() {
     }
   }
 
-  // If PIN is not required, bounce to home
   useEffect(() => {
-    if (pinRequired === false) {
-      router.replace('/')
-    }
+    if (pinRequired === false) router.replace('/')
   }, [pinRequired, router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-      {/* Decorative glow */}
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #e0e3ed 0%, #eef0f6 50%, #e8eaf2 100%)' }}>
+      {/* Decorative blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
+        <div className="absolute top-10 left-10 w-72 h-72 rounded-full opacity-30" style={{ background: 'radial-gradient(circle, #818cf8, transparent 70%)' }} />
+        <div className="absolute bottom-10 right-10 w-80 h-80 rounded-full opacity-25" style={{ background: 'radial-gradient(circle, #34d399, transparent 70%)' }} />
       </div>
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-4">
-            <Store className="w-8 h-8 text-white" />
+        <div className="flex flex-col items-center mb-6">
+          <div
+            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-4"
+            style={{
+              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+              boxShadow: '6px 6px 16px rgba(99,102,241,0.4), -4px -4px 12px rgba(255,255,255,0.7)',
+            }}
+          >
+            <Store className="w-9 h-9 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-white">Smart Computers</h1>
-          <p className="text-xs text-slate-400 mt-1">Sales &amp; Service Panel</p>
+          <h1 className="text-xl font-bold text-slate-800">Smart Computers</h1>
+          <p className="text-xs text-slate-500 mt-1">Sales &amp; Service Panel</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-6 sm:p-8 border border-white/20">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
-              <Lock className="w-4 h-4 text-slate-600" />
+        {/* Clay Card */}
+        <div
+          className="rounded-3xl p-6 sm:p-8"
+          style={{
+            background: 'var(--clay-surface)',
+            boxShadow: '10px 10px 24px rgba(163,177,198,0.5), -10px -10px 24px rgba(255,255,255,0.8)',
+          }}
+        >
+          <div className="flex items-center gap-2.5 mb-5">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: 'var(--clay-surface)', boxShadow: 'inset 2px 2px 5px rgba(163,177,198,0.4), inset -2px -2px 5px rgba(255,255,255,0.7)' }}
+            >
+              <Lock className="w-4 h-4 text-indigo-500" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Enter PIN</h2>
+              <h2 className="text-sm font-semibold text-slate-800">Enter PIN</h2>
               <p className="text-[11px] text-slate-500">Access protected</p>
             </div>
           </div>
@@ -104,12 +113,17 @@ function LoginInner() {
                 if (error) setError('')
               }}
               placeholder="• • • •"
-              className="w-full text-center text-3xl tracking-[0.5em] font-mono py-4 px-4 bg-slate-50 border-2 border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-900 placeholder:text-slate-300"
+              className="w-full text-center text-3xl tracking-[0.5em] font-mono py-4 px-4 rounded-2xl focus:outline-none transition-all text-slate-900 placeholder:text-slate-300"
+              style={{
+                background: 'var(--clay-surface)',
+                boxShadow: 'inset 4px 4px 8px rgba(163,177,198,0.4), inset -4px -4px 8px rgba(255,255,255,0.7)',
+                border: 'none',
+              }}
               disabled={loading}
             />
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center">
+              <div className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 text-center" style={{ boxShadow: 'inset 2px 2px 4px rgba(239,68,68,0.15)' }}>
                 {error}
               </div>
             )}
@@ -117,16 +131,17 @@ function LoginInner() {
             <button
               type="submit"
               disabled={loading || pin.length < 4}
-              className="w-full h-12 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-slate-300 disabled:to-slate-300 text-white font-semibold rounded-xl transition-all shadow-lg shadow-emerald-500/20 disabled:shadow-none flex items-center justify-center gap-2"
+              className="w-full h-12 font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 text-white disabled:opacity-40"
+              style={{
+                background: loading || pin.length < 4 ? '#94a3b8' : 'linear-gradient(135deg, #6366f1, #818cf8)',
+                boxShadow: loading || pin.length < 4 ? 'none' : '4px 4px 12px rgba(99,102,241,0.4), -4px -4px 10px rgba(255,255,255,0.5)',
+                border: 'none',
+              }}
             >
               {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Verifying...
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
               ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4" /> Unlock
-                </>
+                <><ShieldCheck className="w-4 h-4" /> Unlock</>
               )}
             </button>
           </form>
@@ -144,8 +159,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-slate-900">
-          <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+        <div className="min-h-screen flex items-center justify-center" style={{ background: '#eef0f6' }}>
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
         </div>
       }
     >

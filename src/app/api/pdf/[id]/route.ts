@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRow, isConfigured } from '@/lib/sheets-client'
+import { getRow, listRows, isConfigured } from '@/lib/sheets-client'
 import { generateInvoicePdf } from '@/lib/pdf'
 import { computeInvoice, type LineItem } from '@/lib/calc'
+import { safeJsonParse } from '@/lib/utils'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,40 +14,47 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const url = new URL(req.url)
     const type = url.searchParams.get('type') || 'invoice'
 
-    const shop = await getRow<any>('Shop') || {
-      name: 'Smart Computers',
-      termsInvoice: '', termsQuotation: '',
-    }
+    const shopRows = await listRows<any>('Shop')
+    const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
       if (!invoice) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      const items = JSON.parse(invoice.itemsJson || '[]') as LineItem[]
+      const items = safeJsonParse<any[]>(invoice.itemsJson, []) as LineItem[]
       const calc = computeInvoice(items, {
         courierCharges: Number(invoice.courierCharges) || 0,
         otherCharges: Number(invoice.otherCharges) || 0,
         discount: Number(invoice.discount) || 0,
       })
 
-      const pdfBuffer = generateInvoicePdf({
-        number: invoice.number,
-        date: new Date(invoice.date),
+      const pdfBuffer = await generateInvoicePdf({
+        number: String(invoice.number || ''),
+        date: new Date(invoice.date || invoice.createdAt || Date.now()),
         shop: {
-          name: shop.name, owner: shop.owner, phone: shop.phone, email: shop.email,
-          address: shop.address, gstNumber: shop.gstNumber, state: shop.state, logoUrl: shop.logoUrl,
+          name: String(shop.name || 'Smart Computers'),
+          owner: String(shop.owner || ''),
+          phone: String(shop.phone || ''),
+          email: String(shop.email || ''),
+          address: String(shop.address || ''),
+          gstNumber: String(shop.gstNumber || ''),
+          state: String(shop.state || ''),
+          upiId: String(shop.upiId || ''),
         },
         customer: {
-          name: invoice.customerName, phone: invoice.customerPhone,
-          address: '', gstNumber: invoice.customerGstin, state: '',
+          name: String(invoice.customerName || ''),
+          phone: String(invoice.customerPhone || ''),
+          address: '',
+          gstNumber: String(invoice.customerGstin || ''),
+          state: '',
         },
         calc,
-        notes: invoice.notes,
-        terms: shop.termsInvoice,
+        notes: String(invoice.notes || ''),
+        terms: String(shop.termsInvoice || ''),
         amountPaid: Number(invoice.amountPaid) || 0,
         amountDue: Number(invoice.amountDue) || 0,
-        paymentType: invoice.paymentType,
-        paymentStatus: invoice.paymentStatus,
+        paymentType: String(invoice.paymentType || ''),
+        paymentStatus: String(invoice.paymentStatus || ''),
         docType: 'invoice',
       })
 
@@ -61,28 +69,37 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       const q = await getRow<any>('Quotations', id)
       if (!q) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      const items = JSON.parse(q.itemsJson || '[]') as LineItem[]
+      const items = safeJsonParse<any[]>(q.itemsJson, []) as LineItem[]
       const calc = computeInvoice(items, {
         courierCharges: Number(q.courierCharges) || 0,
         otherCharges: Number(q.otherCharges) || 0,
         discount: Number(q.discount) || 0,
       })
 
-      const pdfBuffer = generateInvoicePdf({
-        number: q.number,
-        date: new Date(q.date),
+      const pdfBuffer = await generateInvoicePdf({
+        number: String(q.number || ''),
+        date: new Date(q.date || q.createdAt || Date.now()),
         validTill: q.validTill ? new Date(q.validTill) : undefined,
         shop: {
-          name: shop.name, owner: shop.owner, phone: shop.phone, email: shop.email,
-          address: shop.address, gstNumber: shop.gstNumber, state: shop.state, logoUrl: shop.logoUrl,
+          name: String(shop.name || 'Smart Computers'),
+          owner: String(shop.owner || ''),
+          phone: String(shop.phone || ''),
+          email: String(shop.email || ''),
+          address: String(shop.address || ''),
+          gstNumber: String(shop.gstNumber || ''),
+          state: String(shop.state || ''),
+          upiId: String(shop.upiId || ''),
         },
         customer: {
-          name: q.customerName, phone: q.customerPhone,
-          address: '', gstNumber: q.customerGstin, state: '',
+          name: String(q.customerName || ''),
+          phone: String(q.customerPhone || ''),
+          address: '',
+          gstNumber: String(q.customerGstin || ''),
+          state: '',
         },
         calc,
-        notes: q.notes,
-        terms: shop.termsQuotation,
+        notes: String(q.notes || ''),
+        terms: String(shop.termsQuotation || ''),
         docType: 'quotation',
       })
 

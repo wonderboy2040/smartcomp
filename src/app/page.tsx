@@ -20,10 +20,16 @@ import { ServicePaymentsPanel } from '@/components/panels/ServicePayments'
 import { ExpensesPanel } from '@/components/panels/Expenses'
 import { ReportsPanel } from '@/components/panels/Reports'
 import { SerialsPanel } from '@/components/panels/Serials'
+import { PersonalExpenditurePanel } from '@/components/panels/PersonalExpenditure'
+import { FinancialsPanel } from '@/components/panels/Financials'
+import { CampaignsPanel } from '@/components/panels/Campaigns'
+import { CreditControlPanel } from '@/components/panels/CreditControl'
+import { AMCPanel } from '@/components/panels/AMC'
+import { PosterMakerPanel } from '@/components/panels/PosterMaker'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -38,8 +44,14 @@ const NAV_ITEMS = [
   { id: 'jobs', label: 'Service Jobs', icon: Wrench, color: 'text-blue-600' },
   { id: 'servicepayments', label: 'Service Payments', icon: Wallet, color: 'text-purple-600' },
   { id: 'serials', label: 'Serials & Warranty', icon: Boxes, color: 'text-indigo-600' },
-  { id: 'expenses', label: 'Expenses', icon: Receipt, color: 'text-red-600' },
+  { id: 'amc', label: 'AMC Contracts', icon: FileSignature, color: 'text-blue-600' },
+  { id: 'expenses', label: 'Shop Expenses', icon: Receipt, color: 'text-red-600' },
+  { id: 'personal', label: 'Personal Expenditure', icon: PiggyBank, color: 'text-pink-600' },
+  { id: 'campaigns', label: 'Campaigns', icon: Megaphone, color: 'text-green-600' },
+  { id: 'credit', label: 'Credit Control', icon: ShieldAlert, color: 'text-red-600' },
+  { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
+  { id: 'poster', label: 'Poster Maker', icon: Palette, color: 'text-purple-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ]
 
@@ -74,7 +86,7 @@ function HomeInner() {
       '/api/items',
       '/api/customers',
       '/api/invoices?limit=200',
-      '/api/suppliers?active=true',
+      '/api/suppliers',
       '/api/jobs',
       '/api/expenses',
     ]
@@ -150,36 +162,41 @@ function HomeInner() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex" style={{ background: 'var(--clay-bg)' }}>
       {/* Sidebar */}
       <aside
         className={`${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[280px] sm:w-64 h-[100dvh] safe-top bg-gradient-to-b from-slate-900 to-slate-800 text-white flex flex-col transition-transform duration-300 shadow-2xl`}
+        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[280px] sm:w-72 h-[100dvh] safe-top clay-sidebar text-white flex flex-col transition-transform duration-300`}
       >
         {/* Logo/Header */}
-        <div className="p-4 border-b border-slate-700/50 flex-shrink-0">
+        <div className="p-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-11 h-11 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20 flex-shrink-0">
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+              style={{
+                background: 'linear-gradient(135deg, #6366f1, #818cf8)',
+                boxShadow: '4px 4px 10px rgba(0,0,0,0.2), -2px -2px 6px rgba(255,255,255,0.1)',
+              }}
+            >
               <Store className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
               <h1 className="font-bold text-sm truncate">{shop?.name || 'Smart Computers'}</h1>
               <p className="text-[10px] text-slate-400">Sales & Service Panel</p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="lg:hidden text-white hover:bg-slate-700 h-9 w-9 p-0 flex-shrink-0"
+            <button
+              className="lg:hidden text-white h-9 w-9 p-0 flex-shrink-0 rounded-xl flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.05)' }}
               onClick={() => setSidebarOpen(false)}
             >
               <X className="w-5 h-5" />
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto p-2.5 space-y-1 scrollbar-thin overscroll-contain">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1.5 scrollbar-thin overscroll-contain">
           {NAV_ITEMS.map((item) => {
             const isActive = active === item.id
             const showBadge = (item.id === 'stock' && lowStockCount > 0) || (item.id === 'whatsapp' && pendingEnquiries > 0)
@@ -189,18 +206,16 @@ function HomeInner() {
               <button
                 key={item.id}
                 onClick={() => handleNavigate(item.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 lg:py-2.5 rounded-xl text-sm font-medium transition-all min-h-[44px] lg:min-h-0 ${
-                  isActive
-                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20'
-                    : 'text-slate-300 hover:bg-slate-700/50 hover:text-white active:bg-slate-700/70'
+                className={`w-full flex items-center gap-3 px-3.5 py-3 lg:py-3 rounded-2xl text-sm font-medium transition-all min-h-[48px] lg:min-h-[44px] ${
+                  isActive ? 'clay-nav-active' : 'clay-nav-item text-slate-300'
                 }`}
               >
-                <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : item.color}`} />
+                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-white' : item.color}`} />
                 <span className="flex-1 text-left">{item.label}</span>
                 {showBadge && (
-                  <Badge className="bg-red-500 text-white hover:bg-red-500 text-[10px] px-1.5 py-0 min-w-5 justify-center flex-shrink-0">
+                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-5 text-center flex-shrink-0" style={{ boxShadow: '2px 2px 4px rgba(0,0,0,0.2)' }}>
                     {badgeCount}
-                  </Badge>
+                  </span>
                 )}
                 {isActive && <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />}
               </button>
@@ -209,23 +224,20 @@ function HomeInner() {
         </nav>
 
         {/* Footer */}
-        <div className="p-3 border-t border-slate-700/50 flex-shrink-0 safe-bottom space-y-2">
-          <div className="bg-slate-800/50 rounded-lg p-2.5">
-            <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-              <span>v2.0 · Sales + Service + WhatsApp</span>
-            </p>
+        <div className="p-3 flex-shrink-0 safe-bottom space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="rounded-xl p-2.5 flex items-center gap-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            <Sparkles className="w-3 h-3 text-indigo-400 flex-shrink-0" />
+            <span className="text-[10px] text-slate-400">v2.0 · Claymorphism Edition</span>
           </div>
           <button
             onClick={async () => {
               if (confirm('Logout? You will need to enter PIN again to access the panel.')) {
-                try {
-                  await fetch('/api/auth/logout', { method: 'POST' })
-                } catch {}
+                try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
                 window.location.href = '/login'
               }
             }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 hover:bg-red-900/30 hover:text-red-300 transition-colors border border-slate-700/50"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-300 transition-all"
+            style={{ background: 'rgba(255,255,255,0.04)' }}
           >
             <LogOut className="w-3.5 h-3.5" />
             Logout
@@ -236,7 +248,8 @@ function HomeInner() {
       {/* Overlay for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 lg:hidden backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-40 lg:hidden backdrop-blur-sm transition-opacity"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -245,23 +258,25 @@ function HomeInner() {
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col w-full">
         {/* Top bar - mobile only */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 p-3 flex items-center justify-between safe-top">
-          <Button
-            variant="ghost"
-            size="sm"
+        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top" style={{ background: 'var(--clay-surface)', boxShadow: '0 4px 12px rgba(163,177,198,0.3)' }}>
+          <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 h-10 w-10"
+            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center"
+            style={{ background: 'var(--clay-surface)', boxShadow: '3px 3px 8px var(--clay-shadow-dark), -3px -3px 8px var(--clay-shadow-light)' }}
             aria-label="Open menu"
           >
-            <Menu className="w-5 h-5" />
-          </Button>
+            <Menu className="w-5 h-5 text-slate-600" />
+          </button>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Store className="w-3.5 h-3.5 text-white" />
+            <div
+              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)', boxShadow: '2px 2px 6px rgba(99,102,241,0.3)' }}
+            >
+              <Store className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-sm truncate">{shop?.name || 'Smart Computers'}</span>
+            <span className="font-semibold text-sm truncate text-slate-700">{shop?.name || 'Smart Computers'}</span>
           </div>
-          <div className="w-10 flex-shrink-0" />
+          <div className="w-11 flex-shrink-0" />
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">
@@ -301,11 +316,29 @@ function HomeInner() {
           {mountedPanels.has('serials') && (
             <div className={active === 'serials' ? 'block' : 'hidden'}><SerialsPanel /></div>
           )}
+          {mountedPanels.has('amc') && (
+            <div className={active === 'amc' ? 'block' : 'hidden'}><AMCPanel /></div>
+          )}
           {mountedPanels.has('expenses') && (
             <div className={active === 'expenses' ? 'block' : 'hidden'}><ExpensesPanel /></div>
           )}
+          {mountedPanels.has('personal') && (
+            <div className={active === 'personal' ? 'block' : 'hidden'}><PersonalExpenditurePanel /></div>
+          )}
+          {mountedPanels.has('campaigns') && (
+            <div className={active === 'campaigns' ? 'block' : 'hidden'}><CampaignsPanel /></div>
+          )}
+          {mountedPanels.has('credit') && (
+            <div className={active === 'credit' ? 'block' : 'hidden'}><CreditControlPanel /></div>
+          )}
+          {mountedPanels.has('financials') && (
+            <div className={active === 'financials' ? 'block' : 'hidden'}><FinancialsPanel /></div>
+          )}
           {mountedPanels.has('reports') && (
             <div className={active === 'reports' ? 'block' : 'hidden'}><ReportsPanel /></div>
+          )}
+          {mountedPanels.has('poster') && (
+            <div className={active === 'poster' ? 'block' : 'hidden'}><PosterMakerPanel /></div>
           )}
           {mountedPanels.has('settings') && (
             <div className={active === 'settings' ? 'block' : 'hidden'}><SettingsPanel /></div>

@@ -55,6 +55,7 @@ const PUBLIC_PATHS = [
   '/api/whatsapp/webhook',
   // Cron endpoint — secured by CRON_SECRET header, not PIN cookie.
   '/api/cron/auto-enquiry',
+  '/api/cron/amc',
   // Error logger POST — must work even before login so we can debug crash-on-load.
   // (GET is PIN-protected to prevent stack trace leaks)
   '/api/log-error',
@@ -62,6 +63,9 @@ const PUBLIC_PATHS = [
   // Secured by unguessable trackToken in the URL.
   '/track',
   '/api/track',
+  // Razorpay webhook — Razorpay calls this server-to-server.
+  // Secured by RAZORPAY_WEBHOOK_SECRET signature verification.
+  '/api/razorpay/webhook',
 ]
 
 function isPublic(pathname: string): boolean {

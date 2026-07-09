@@ -74,20 +74,21 @@ export default function GlobalError({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          color: '#fff',
+          background: 'linear-gradient(135deg, #e0e3ed 0%, #eef0f6 50%, #e8eaf2 100%)',
+          color: '#1e293b',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           padding: '24px',
         }}>
           <div style={{
-            background: 'rgba(255,255,255,0.05)',
+            background: 'var(--clay-surface, #f5f7fa)',
             backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '20px',
+            border: 'none',
+            borderRadius: '24px',
             padding: '32px',
             maxWidth: '480px',
             width: '100%',
             textAlign: 'center',
+            boxShadow: '10px 10px 24px rgba(163,177,198,0.5), -10px -10px 24px rgba(255,255,255,0.8)',
           }}>
             {/* Icon */}
             <div style={{

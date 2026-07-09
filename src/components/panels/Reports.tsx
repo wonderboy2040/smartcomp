@@ -241,17 +241,17 @@ export function ReportsPanel() {
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
             {[
-              { key: '0-30', label: '0-30 Days', color: 'emerald' },
-              { key: '31-60', label: '31-60 Days', color: 'blue' },
-              { key: '61-90', label: '61-90 Days', color: 'amber' },
-              { key: '90+', label: '90+ Days', color: 'red' },
+              { key: '0-30', label: '0-30 Days', color: 'text-emerald-600' },
+              { key: '31-60', label: '31-60 Days', color: 'text-blue-600' },
+              { key: '61-90', label: '61-90 Days', color: 'text-amber-600' },
+              { key: '90+', label: '90+ Days', color: 'text-red-600' },
             ].map((b) => {
               const data = agingData?.buckets?.[b.key] || { count: 0, amount: 0 }
               return (
                 <Card key={b.key} className="border-slate-200">
                   <CardContent className="p-3">
                     <p className="text-[10px] font-medium text-slate-600 uppercase">{b.label}</p>
-                    <p className={`text-lg sm:text-xl font-bold text-${b.color}-600`}>{formatCurrency(data.amount)}</p>
+                    <p className={`text-lg sm:text-xl font-bold ${b.color}`}>{formatCurrency(data.amount)}</p>
                     <p className="text-[10px] text-slate-400">{data.count} invoice{data.count !== 1 ? 's' : ''}</p>
                   </CardContent>
                 </Card>
