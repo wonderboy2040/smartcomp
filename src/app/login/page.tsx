@@ -54,7 +54,7 @@ function LoginInner() {
   }, [pinRequired, router])
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #e0e3ed 0%, #eef0f6 50%, #e8eaf2 100%)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--clay-bg)' }}>
       {/* Decorative blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-10 left-10 w-72 h-72 rounded-full opacity-30" style={{ background: 'radial-gradient(circle, #818cf8, transparent 70%)' }} />
@@ -68,13 +68,13 @@ function LoginInner() {
             className="w-20 h-20 rounded-3xl flex items-center justify-center mb-4"
             style={{
               background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              boxShadow: '6px 6px 16px rgba(99,102,241,0.4), -4px -4px 12px rgba(255,255,255,0.7)',
+              boxShadow: '6px 6px 16px var(--clay-shadow-dark), -4px -4px 12px var(--clay-shadow-light)',
             }}
           >
             <Store className="w-9 h-9 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-slate-800">Smart Computers</h1>
-          <p className="text-xs text-slate-500 mt-1">Sales &amp; Service Panel</p>
+          <h1 className="text-xl font-bold" style={{ color: 'var(--foreground)' }}>Smart Computers</h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--muted-foreground)' }}>Sales &amp; Service Panel</p>
         </div>
 
         {/* Clay Card */}
@@ -82,19 +82,19 @@ function LoginInner() {
           className="rounded-3xl p-6 sm:p-8"
           style={{
             background: 'var(--clay-surface)',
-            boxShadow: '10px 10px 24px rgba(163,177,198,0.5), -10px -10px 24px rgba(255,255,255,0.8)',
+            boxShadow: '10px 10px 24px var(--clay-shadow-dark), -10px -10px 24px var(--clay-shadow-light)',
           }}
         >
           <div className="flex items-center gap-2.5 mb-5">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: 'var(--clay-surface)', boxShadow: 'inset 2px 2px 5px rgba(163,177,198,0.4), inset -2px -2px 5px rgba(255,255,255,0.7)' }}
+              style={{ background: 'var(--clay-surface)', boxShadow: 'inset 2px 2px 5px var(--clay-shadow-dark), inset -2px -2px 5px var(--clay-shadow-light)' }}
             >
               <Lock className="w-4 h-4 text-indigo-500" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-800">Enter PIN</h2>
-              <p className="text-[11px] text-slate-500">Access protected</p>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--foreground)' }}>Enter PIN</h2>
+              <p className="text-[11px]" style={{ color: 'var(--muted-foreground)' }}>Access protected</p>
             </div>
           </div>
 
@@ -113,17 +113,18 @@ function LoginInner() {
                 if (error) setError('')
               }}
               placeholder="• • • •"
-              className="w-full text-center text-3xl tracking-[0.5em] font-mono py-4 px-4 rounded-2xl focus:outline-none transition-all text-slate-900 placeholder:text-slate-300"
+              className="w-full text-center text-3xl tracking-[0.5em] font-mono py-4 px-4 rounded-2xl focus:outline-none transition-all placeholder:text-slate-300"
               style={{
                 background: 'var(--clay-surface)',
-                boxShadow: 'inset 4px 4px 8px rgba(163,177,198,0.4), inset -4px -4px 8px rgba(255,255,255,0.7)',
+                color: 'var(--foreground)',
+                boxShadow: 'inset 4px 4px 8px var(--clay-shadow-dark), inset -4px -4px 8px var(--clay-shadow-light)',
                 border: 'none',
               }}
               disabled={loading}
             />
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2 text-center" style={{ boxShadow: 'inset 2px 2px 4px rgba(239,68,68,0.15)' }}>
+              <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/40 dark:text-red-300 rounded-xl px-3 py-2 text-center" style={{ boxShadow: 'inset 2px 2px 4px var(--clay-shadow-dark)' }}>
                 {error}
               </div>
             )}
@@ -134,7 +135,7 @@ function LoginInner() {
               className="w-full h-12 font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 text-white disabled:opacity-40"
               style={{
                 background: loading || pin.length < 4 ? '#94a3b8' : 'linear-gradient(135deg, #6366f1, #818cf8)',
-                boxShadow: loading || pin.length < 4 ? 'none' : '4px 4px 12px rgba(99,102,241,0.4), -4px -4px 10px rgba(255,255,255,0.5)',
+                boxShadow: loading || pin.length < 4 ? 'none' : '4px 4px 12px var(--clay-shadow-dark), -4px -4px 10px var(--clay-shadow-light)',
                 border: 'none',
               }}
             >
@@ -147,7 +148,7 @@ function LoginInner() {
           </form>
         </div>
 
-        <p className="text-center text-[11px] text-slate-500 mt-6">
+        <p className="text-center text-[11px] mt-6" style={{ color: 'var(--muted-foreground)' }}>
           Protected access · Data stays safe in your Google Sheet
         </p>
       </div>

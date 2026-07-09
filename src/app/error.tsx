@@ -74,8 +74,8 @@ export default function GlobalError({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #e0e3ed 0%, #eef0f6 50%, #e8eaf2 100%)',
-          color: '#1e293b',
+          background: 'var(--clay-bg, #eef0f6)',
+          color: 'var(--foreground, #1e293b)',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           padding: '24px',
         }}>
@@ -88,7 +88,7 @@ export default function GlobalError({
             maxWidth: '480px',
             width: '100%',
             textAlign: 'center',
-            boxShadow: '10px 10px 24px rgba(163,177,198,0.5), -10px -10px 24px rgba(255,255,255,0.8)',
+            boxShadow: '10px 10px 24px var(--clay-shadow-dark, rgba(163,177,198,0.5)), -10px -10px 24px var(--clay-shadow-light, rgba(255,255,255,0.8))',
           }}>
             {/* Icon */}
             <div style={{
