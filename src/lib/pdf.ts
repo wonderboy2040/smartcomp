@@ -326,11 +326,11 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   y = Math.max(cy, y + 20) + 6
 
-  // ===== TABLE =====
+  // ===== TABLE (Clean Premium - matching reference design) =====
   const head = [['#', 'Item Description', 'HSN', 'Qty', 'Rate', 'Disc', 'Taxable', 'GST%', 'GST Amt', 'Total']]
   const body = data.calc.items.map((item, i) => [
     String(i + 1),
-    item.name + (item.sku ? `\nSKU: ${item.sku}` : ''),
+    item.name + (item.sku ? `\n${item.sku}` : ''),
     item.hsnCode || '-',
     String(item.quantity),
     formatCurrency(item.rate),
@@ -345,21 +345,58 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     startY: y,
     head, body,
     margin: { left: margin, right: margin },
-    styles: { fontSize: 8, cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 }, lineColor: N.borderLight, lineWidth: 0.1, textColor: N.textDark, font: 'helvetica', valign: 'middle' },
-    headStyles: { fillColor: TH, textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 2, right: 2 }, lineColor: TH, lineWidth: 0 },
+    styles: {
+      fontSize: 8,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      lineColor: N.border,
+      lineWidth: 0.15,
+      textColor: N.textDark,
+      font: 'helvetica',
+      valign: 'middle',
+      overflow: 'linebreak',
+      cellWidth: 'auto',
+    },
+    headStyles: {
+      fillColor: TH,
+      textColor: 255,
+      fontStyle: 'bold',
+      halign: 'center',
+      fontSize: 8,
+      cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
+      lineColor: TH,
+      lineWidth: 0,
+      valign: 'middle',
+    },
+    bodyStyles: {
+      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      fontSize: 8,
+    },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 7 },
-      1: { cellWidth: 'auto' },
-      2: { halign: 'center', cellWidth: 13 },
-      3: { halign: 'center', cellWidth: 9 },
-      4: { halign: 'right', cellWidth: 17 },
-      5: { halign: 'right', cellWidth: 13 },
-      6: { halign: 'right', cellWidth: 18 },
-      7: { halign: 'center', cellWidth: 10 },
-      8: { halign: 'right', cellWidth: 17 },
-      9: { halign: 'right', cellWidth: 20, fontStyle: 'bold' },
+      0: { halign: 'center', cellWidth: 8, fontSize: 7.5 },
+      1: { cellWidth: 'auto', fontStyle: 'normal', cellPadding: { left: 3, right: 3 } },
+      2: { halign: 'center', cellWidth: 14, fontSize: 7.5 },
+      3: { halign: 'center', cellWidth: 10 },
+      4: { halign: 'right', cellWidth: 18 },
+      5: { halign: 'right', cellWidth: 15 },
+      6: { halign: 'right', cellWidth: 19 },
+      7: { halign: 'center', cellWidth: 11, fontSize: 7.5 },
+      8: { halign: 'right', cellWidth: 18 },
+      9: { halign: 'right', cellWidth: 22, fontStyle: 'bold' },
     },
     alternateRowStyles: { fillColor: N.bgRow },
+    didDrawCell: (data: any) => {
+      // Subtle border between rows only (no vertical borders)
+      if (data.section === 'body') {
+        doc.setDrawColor(...N.borderLight)
+        doc.setLineWidth(0.1)
+        doc.line(
+          data.cell.x,
+          data.cell.y + data.cell.height,
+          data.cell.x + data.cell.width,
+          data.cell.y + data.cell.height
+        )
+      }
+    },
   })
 
   // @ts-expect-error
