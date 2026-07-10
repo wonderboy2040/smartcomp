@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params
     const url = new URL(req.url)
     const type = url.searchParams.get('type') || 'invoice'
-    const templateId = url.searchParams.get('template') || 'indigo-tech'
+    const templateId = url.searchParams.get('template') || 'indigo-clean'
 
     const shopRows = await listRows<any>('Shop')
     const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }

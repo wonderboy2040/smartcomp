@@ -372,14 +372,14 @@ export function InvoicesPanel() {
 }
 
 export function PdfPreview({ url, onClose }: { url: string; onClose: () => void }) {
-  const [selectedTemplate, setSelectedTemplate] = useState('indigo-tech')
+  const [selectedTemplate, setSelectedTemplate] = useState('indigo-clean')
 
   const templates = [
-    { id: 'indigo-tech', name: 'Indigo Tech', colors: 'from-indigo-500 to-indigo-700' },
-    { id: 'royal-saffron', name: 'Royal Saffron', colors: 'from-orange-500 to-orange-800' },
-    { id: 'emerald-gst', name: 'Emerald GST', colors: 'from-emerald-500 to-emerald-800' },
-    { id: 'corporate-blue', name: 'Corporate Blue', colors: 'from-blue-700 to-blue-950' },
-    { id: 'midnight-gold', name: 'Midnight Gold', colors: 'from-slate-800 to-black' },
+    { id: 'indigo-clean', name: 'Indigo Clean', colors: 'from-indigo-600 to-indigo-500' },
+    { id: 'saffron-white', name: 'Saffron White', colors: 'from-orange-600 to-orange-400' },
+    { id: 'emerald-pro', name: 'Emerald Pro', colors: 'from-emerald-600 to-emerald-500' },
+    { id: 'navy-formal', name: 'Navy Formal', colors: 'from-blue-900 to-blue-700' },
+    { id: 'graphite-gold', name: 'Graphite Gold', colors: 'from-slate-800 to-amber-600' },
   ]
 
   const currentUrl = url + (url.includes('?') ? '&' : '?') + `template=${selectedTemplate}`
