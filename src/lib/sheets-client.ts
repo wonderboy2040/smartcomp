@@ -18,7 +18,7 @@ const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL
 // 2 minutes is a good balance: avoids hammering Apps Script while still picking up
 // changes reasonably quickly. Mutations always invalidate the cache immediately.
 const cache = new Map<string, { data: any; expires: number }>()
-const CACHE_TTL = 120 * 1000 // 2 minutes — dramatically reduces Apps Script calls
+const CACHE_TTL = 30 * 1000 // 30 seconds — fast mutation visibility while still reducing Apps Script calls
 
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key)
@@ -221,6 +221,17 @@ export async function replaceAll(_sheet: string, _data: any[]): Promise<number> 
     'replaceAll() is permanently disabled for data protection. ' +
     'Google Sheets data can never be bulk-overwritten. Use createRow() or updateRow() instead.'
   )
+}
+
+// ===== BULK UPDATE (batch multiple row updates in one call) =====
+// This sends all updates to Apps Script in a single HTTP request,
+// avoiding N separate round-trips for operations like stock deduction.
+export async function bulkUpdate(sheet: string, updates: { id: string; data: any }[]): Promise<number> {
+  if (updates.length === 0) return 0
+  const res = await callAppsScript({ action: 'bulkUpdate', sheet, updates })
+  if (!res.success) throw new Error(res.error || 'Failed to bulk update')
+  invalidateCache(sheet)
+  return res.count
 }
 
 // ===== SHOP =====

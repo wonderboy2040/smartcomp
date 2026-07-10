@@ -44,13 +44,17 @@ export async function POST(req: NextRequest) {
     if (!customerId) return NextResponse.json({ error: 'Customer required' }, { status: 400 })
     if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'Items required' }, { status: 400 })
 
-    const customer = await getRow<any>('Customers', customerId)
+    // PERFORMANCE: Parallel fetch customer, existing quotations, and shop
+    const [customer, existing, shopRows] = await Promise.all([
+      getRow<any>('Customers', customerId),
+      listRows<any>('Quotations'),
+      listRows<any>('Shop', { useCache: true }),
+    ])
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 400 })
 
     const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount })
 
-    const existing = await listRows<any>('Quotations')
-    const shop = await getRow<any>('Shop') || { quotationPrefix: 'QTN' }
+    const shop = shopRows[0] || { quotationPrefix: 'QTN' }
     const number = await nextNumber(shop.quotationPrefix || 'QTN', existing.map((q) => ({ number: q.number })))
 
     const quotation = await createRow('Quotations', {

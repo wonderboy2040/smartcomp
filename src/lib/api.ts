@@ -24,10 +24,10 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 60 * 1000 // data is considered fresh for 60s; older data triggers background refetch.
-// This works with the server-side 2-minute cache: the client won't even ask for
-// new data for 60s, and the server caches for 2 minutes. Combined, this means
-// Apps Script is only hit every ~2 minutes instead of every 15 seconds.
+const STALE_MS = 20 * 1000 // data is considered fresh for 20s; older data triggers background refetch.
+// This works with the server-side 30s cache: the client won't even ask for
+// new data for 20s, and the server caches for 30s. Combined, this means
+// Apps Script is only hit every ~30s instead of on every render.
 
 function notify(key: string) {
   const subs = subscribers.get(key)
@@ -215,7 +215,7 @@ export async function apiPut(url: string, body: any) {
     const keyBase = key.split('?')[0].split('#')[0]
     if (keyBase === listUrl && Array.isArray(cache.get(key))) {
       mutate<any[]>(key, (prev) =>
-        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...data } : x)) : prev
+        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...data } : x)) : prev || []
       )
     }
   }
@@ -237,7 +237,7 @@ export async function apiDelete(url: string) {
     if (keyBase === listUrl && Array.isArray(cache.get(key))) {
       snapshots.set(key, cache.get(key))
       mutate<any[]>(key, (prev) =>
-        prev ? prev.filter((x) => String(x?.id) !== String(targetId)) : prev
+        prev ? prev.filter((x) => String(x?.id) !== String(targetId)) : prev || []
       )
     }
   }

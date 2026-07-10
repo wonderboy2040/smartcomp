@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRow, deleteRow, updateRow, createRow, listRows } from '@/lib/sheets-client'
+import { getRow, deleteRow, updateRow, createRow, listRows, bulkUpdate } from '@/lib/sheets-client'
 import { computeInvoice, nextNumber, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
 
@@ -124,16 +124,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // Update quotation
       await updateRow('Quotations', id, { status: 'converted', convertedToInvoiceId: String(invoice.id || '') })
 
-      // Deduct stock
+      // PERFORMANCE: Batch stock deduction via bulkUpdate
+      const uniqueItems = new Map<string, number>()
       for (const item of calc.items) {
         if (item.itemId) {
-          const dbItem = await getRow<any>('Items', String(item.itemId))
-          if (dbItem) {
-            await updateRow('Items', String(item.itemId), {
-              quantity: Math.max(0, (Number(dbItem.quantity) || 0) - item.quantity),
+          uniqueItems.set(String(item.itemId), (uniqueItems.get(String(item.itemId)) || 0) + item.quantity)
+        }
+      }
+      if (uniqueItems.size > 0) {
+        const itemIds = Array.from(uniqueItems.keys())
+        const dbItems = await Promise.all(itemIds.map((id) => getRow<any>('Items', id)))
+        const stockUpdates: { id: string; data: any }[] = []
+        for (let i = 0; i < itemIds.length; i++) {
+          if (dbItems[i]) {
+            stockUpdates.push({
+              id: itemIds[i],
+              data: { quantity: Math.max(0, (Number(dbItems[i].quantity) || 0) - (uniqueItems.get(itemIds[i]) || 0)) },
             })
           }
         }
+        if (stockUpdates.length > 0) await bulkUpdate('Items', stockUpdates)
       }
 
       // Update customer credit
