@@ -17,10 +17,16 @@ import {
 } from 'lucide-react'
 
 const TEMPLATES = [
-  { id: 'laptop-blue', name: 'Laptop (Blue Tech)', bg: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)', accent: '#3b82f6', accent2: '#fbbf24' },
-  { id: 'laptop-sasta', name: 'Laptop (Sasta Deal)', bg: 'linear-gradient(135deg, #1e40af 50%, #f59e0b 50%)', accent: '#ffffff', accent2: '#fbbf24' },
-  { id: 'accessory-dark', name: 'Accessory (Dark Bold)', bg: 'linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%)', accent: '#f97316', accent2: '#ffffff' },
-  { id: 'monitor-glow', name: 'Monitor (Gold Glow)', bg: 'linear-gradient(135deg, #000000 0%, #0a0a0a 100%)', accent: '#fbbf24', accent2: '#ef4444' },
+  { id: 'laptop-blue', name: 'Laptop Blue', bg: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)', accent: '#3b82f6', accent2: '#fbbf24' },
+  { id: 'laptop-sasta', name: 'Sasta Deal', bg: 'linear-gradient(135deg, #1e40af 50%, #f59e0b 50%)', accent: '#ffffff', accent2: '#fbbf24' },
+  { id: 'accessory-dark', name: 'Dark Bold', bg: 'linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%)', accent: '#f97316', accent2: '#ffffff' },
+  { id: 'monitor-glow', name: 'Gold Glow', bg: 'linear-gradient(135deg, #000000 0%, #0a0a0a 100%)', accent: '#fbbf24', accent2: '#ef4444' },
+  { id: 'printer-pro', name: 'Printer Pro', bg: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', accent: '#06b6d4', accent2: '#fbbf24' },
+  { id: 'ssd-speed', name: 'SSD Speed', bg: 'linear-gradient(135deg, #18181b 0%, #27272a 100%)', accent: '#22c55e', accent2: '#ffffff' },
+  { id: 'ram-gaming', name: 'RAM Gaming', bg: 'linear-gradient(135deg, #581c87 0%, #1e1b4b 100%)', accent: '#a855f7', accent2: '#fbbf24' },
+  { id: 'mouse-rgb', name: 'Mouse RGB', bg: 'linear-gradient(135deg, #7f1d1d 0%, #18181b 100%)', accent: '#ef4444', accent2: '#f97316' },
+  { id: 'keyboard-mech', name: 'Mech Keyboard', bg: 'linear-gradient(135deg, #1c1917 0%, #292524 100%)', accent: '#f59e0b', accent2: '#a3a3a3' },
+  { id: 'service-repair', name: 'Service Repair', bg: 'linear-gradient(135deg, #0c4a6e 0%, #082f49 100%)', accent: '#0ea5e9', accent2: '#fbbf24' },
 ]
 
 export function PosterMakerPanel() {
@@ -59,10 +65,11 @@ export function PosterMakerPanel() {
     try {
       const dataUrl = await toPng(posterRef.current, {
         quality: 1,
-        pixelRatio: 2,
+        pixelRatio: 3, // 3x = 2K+ resolution (800x1200 * 3 = 2400x3600)
         cacheBust: true,
         width: 800,
         height: 1200,
+        backgroundColor: '#000000',
       })
       const link = document.createElement('a')
       link.download = `${product.name.replace(/\s+/g, '_')}_poster.png`
@@ -202,7 +209,7 @@ export function PosterMakerPanel() {
 
         {/* ===== RIGHT: Live Preview ===== */}
         <div className="lg:sticky lg:top-4 self-start">
-          <div className="text-xs text-slate-500 mb-2 text-center">Live Preview (800×1200px)</div>
+          <div className="text-xs text-slate-500 mb-2 text-center">Live Preview (1080×1920 · 2K Export)</div>
           <div className="flex justify-center">
             <div
               ref={posterRef}

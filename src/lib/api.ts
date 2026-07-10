@@ -172,30 +172,48 @@ function doFetch(url: string, options?: RequestInit) {
   return p
 }
 
-// ===== apiPost (CREATE) =====
-// After a successful create, prepend the new item to every cached list URL
-// that matches the same base path. This makes "Add" feel instant — no refetch needed.
+// ===== apiPost (CREATE) — FIRE-AND-FORGET OPTIMISTIC =====
+// UI updates INSTANTLY with a temp ID. Server call runs in background.
+// If server fails, the temp item is removed and error is shown.
 export async function apiPost(url: string, body: any) {
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await r.json()
-  if (!r.ok) throw new Error(data.error || 'Failed')
-
-  // Optimistic: prepend to all cached variants of this list URL
-  // url is the list endpoint itself (e.g. /api/items)
   const base = url.split('?')[0].split('#')[0]
+  const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+  const tempItem = { ...body, id: tempId, _pending: true }
+
+  // INSTANT: prepend temp item to all cached lists
+  const affectedKeys: string[] = []
   for (const key of Array.from(cache.keys())) {
     const keyBase = key.split('?')[0].split('#')[0]
     if (keyBase === base && Array.isArray(cache.get(key))) {
-      mutate<any[]>(key, (prev) => (prev ? [data, ...prev] : [data]))
+      affectedKeys.push(key)
+      mutate<any[]>(key, (prev) => (prev ? [tempItem, ...prev] : [tempItem]))
     }
   }
-  // Also invalidate dashboard so it refreshes in background
   invalidate('/api/dashboard')
-  return data
+
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await r.json()
+    if (!r.ok) throw new Error(data.error || 'Failed')
+
+    // Replace temp item with real data in all caches
+    for (const key of affectedKeys) {
+      mutate<any[]>(key, (prev) =>
+        prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : prev
+      )
+    }
+    return data
+  } catch (e) {
+    // Remove temp item on failure
+    for (const key of affectedKeys) {
+      mutate<any[]>(key, (prev) => prev ? prev.filter((x) => x.id !== tempId) : prev)
+    }
+    throw e
+  }
 }
 
 // ===== apiPut (UPDATE) =====
