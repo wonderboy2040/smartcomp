@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
 
     const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount })
 
-    const shop = shopRows[0] || { quotationPrefix: 'QTN' }
-    const number = await nextNumber(shop.quotationPrefix || 'QTN', existing.map((q) => ({ number: q.number })))
+    const shop = shopRows[0] || { quotationPrefix: 'SCSS' }
+    const number = await nextNumber(shop.quotationPrefix || 'SCSS', existing.map((q) => ({ number: q.number })))
 
     const quotation = await createRow('Quotations', {
       number,

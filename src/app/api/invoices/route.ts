@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
     const due = Math.max(0, calc.grandTotal - paid)
 
     // Generate invoice number
-    const shop = shopRow[0] || { invoicePrefix: 'INV' }
-    const number = await nextNumber(shop.invoicePrefix || 'INV', existing.map((i) => ({ number: i.number })))
+    const shop = shopRow[0] || { invoicePrefix: 'SCSS' }
+    const number = await nextNumber(shop.invoicePrefix || 'SCSS', existing.map((i) => ({ number: i.number })))
 
     // Create invoice
     const invoice = await createRow('Invoices', {

@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: 'invoice',
       })
 
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="Invoice-${invoice.number}.pdf"`,
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: 'quotation',
       })
 
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(new Uint8Array(pdfBuffer), {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="Quotation-${q.number}.pdf"`,

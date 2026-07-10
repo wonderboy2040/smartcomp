@@ -94,8 +94,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // Generate invoice number
       const existingInvoices = await listRows<any>('Invoices')
       const shopRows = await listRows<any>('Shop')
-      const shop = shopRows[0] || { invoicePrefix: 'INV' }
-      const number = await nextNumber(shop.invoicePrefix || 'INV', existingInvoices.map((i) => ({ number: i.number })))
+      const shop = shopRows[0] || { invoicePrefix: 'SCSS' }
+      const number = await nextNumber(shop.invoicePrefix || 'SCSS', existingInvoices.map((i) => ({ number: i.number })))
 
       // Create invoice
       const invoice = await createRow('Invoices', {

@@ -16,6 +16,8 @@ export interface LineItem {
 export interface ComputedLineItem extends LineItem {
   amount: number // rate * qty - discount
   gstAmount: number
+  sgstAmount: number // SGST = half of gstAmount
+  cgstAmount: number // CGST = half of gstAmount
   total: number // amount + gstAmount
   costTotal: number // costPrice * qty
   profit: number // amount - costTotal
@@ -25,6 +27,8 @@ export interface InvoiceCalc {
   items: ComputedLineItem[]
   subtotal: number
   gstAmount: number
+  sgstAmount: number // total SGST (9%)
+  cgstAmount: number // total CGST (9%)
   courierCharges: number
   otherCharges: number
   discount: number
@@ -41,6 +45,8 @@ export function computeLineItem(item: LineItem): ComputedLineItem {
   const gstAmount = item.gstApplicable
     ? (amount * (Number(item.gstRate) || 0)) / 100
     : 0
+  const sgstAmount = round2(gstAmount / 2)
+  const cgstAmount = round2(gstAmount / 2)
   const total = amount + gstAmount
   const costTotal = (Number(item.costPrice) || 0) * qty
   const profit = amount - costTotal
@@ -48,6 +54,8 @@ export function computeLineItem(item: LineItem): ComputedLineItem {
     ...item,
     amount: round2(amount),
     gstAmount: round2(gstAmount),
+    sgstAmount,
+    cgstAmount,
     total: round2(total),
     costTotal: round2(costTotal),
     profit: round2(profit),
@@ -65,6 +73,8 @@ export function computeInvoice(
   const computed = items.map(computeLineItem)
   const subtotal = computed.reduce((s, i) => s + i.amount, 0)
   const gstAmount = computed.reduce((s, i) => s + i.gstAmount, 0)
+  const sgstAmount = computed.reduce((s, i) => s + i.sgstAmount, 0)
+  const cgstAmount = computed.reduce((s, i) => s + i.cgstAmount, 0)
   const courierCharges = Number(options.courierCharges) || 0
   const otherCharges = Number(options.otherCharges) || 0
   const discount = Number(options.discount) || 0
@@ -78,6 +88,8 @@ export function computeInvoice(
     items: computed,
     subtotal: round2(subtotal),
     gstAmount: round2(gstAmount),
+    sgstAmount: round2(sgstAmount),
+    cgstAmount: round2(cgstAmount),
     courierCharges: round2(courierCharges),
     otherCharges: round2(otherCharges),
     discount: round2(discount),
@@ -103,17 +115,23 @@ export function formatNumber(n: number): string {
   return (Number(n) || 0).toLocaleString('en-IN')
 }
 
-// Generate next sequential number
+// Generate next sequential number in format: PREFIX/YY-YY/NNN e.g. SCSS/26-27/001
 export async function nextNumber(
   prefix: string,
   existing: { number: string | number }[]
 ): Promise<string> {
-  const year = new Date().getFullYear()
-  const month = String(new Date().getMonth() + 1).padStart(2, '0')
-  const base = `${prefix}${year}${month}`
+  const now = new Date()
+  const month = now.getMonth() + 1 // 1-12
+  const year = now.getFullYear() % 100 // e.g. 26
+  // Financial year: Apr-Mar. If month >= 4, FY = YY to YY+1; else FY = YY-1 to YY
+  const fyStart = month >= 4 ? year : year - 1
+  const fyEnd = fyStart + 1
+  const fyStr = `${String(fyStart).padStart(2, '0')}-${String(fyEnd).padStart(2, '0')}` // e.g. "26-27"
+  const pfx = prefix || 'SCSS'
+  const base = `${pfx}/${fyStr}/`
+
   let max = 0
   for (const r of existing) {
-    // Defensive: number may be stored as a number in Sheets, coerce to string
     const num = String(r?.number || '')
     if (num.startsWith(base)) {
       const suffix = parseInt(num.slice(base.length), 10)
