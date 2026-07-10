@@ -6,15 +6,15 @@ export async function GET() {
     if (!isConfigured()) {
       return NextResponse.json({
         name: 'Smart Computers',
-        invoicePrefix: 'SCSS',
-        quotationPrefix: 'SCSS',
+        invoicePrefix: 'INV',
+        quotationPrefix: 'QTN',
       })
     }
     const shop = await getShop()
     return NextResponse.json(shop || {
       name: 'Smart Computers',
-      invoicePrefix: 'SCSS',
-      quotationPrefix: 'SCSS',
+      invoicePrefix: 'INV',
+      quotationPrefix: 'QTN',
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })

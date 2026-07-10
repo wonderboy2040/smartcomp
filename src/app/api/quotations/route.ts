@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, getRow } from '@/lib/sheets-client'
-import { computeInvoice, nextNumber, type LineItem } from '@/lib/calc'
+import { computeInvoice, nextQuotationNumber, type LineItem } from '@/lib/calc'
 
 export async function GET(req: NextRequest) {
   try {
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
 
     const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount })
 
-    const shop = shopRows[0] || { quotationPrefix: 'SCSS' }
-    const number = await nextNumber(shop.quotationPrefix || 'SCSS', existing.map((q) => ({ number: q.number })))
+    // Generate quotation number: SCSS/QT/001
+    const number = await nextQuotationNumber(existing.map((q) => ({ number: q.number })))
 
     const quotation = await createRow('Quotations', {
       number,

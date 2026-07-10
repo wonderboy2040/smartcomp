@@ -504,12 +504,8 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                 </div>
               )}
               <div className="flex justify-between text-sm">
-                <span className="text-slate-600">CGST (9%):</span>
-                <span className="font-medium">{formatCurrency(calc.cgstAmount)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600">SGST (9%):</span>
-                <span className="font-medium">{formatCurrency(calc.sgstAmount)}</span>
+                <span className="text-slate-600">GST Amount:</span>
+                <span className="font-medium">{formatCurrency(calc.gstAmount)}</span>
               </div>
               {courierCharges > 0 && (
                 <div className="flex justify-between text-sm">

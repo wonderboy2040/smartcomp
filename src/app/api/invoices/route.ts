@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, updateRow, getRow, bulkUpdate } from '@/lib/sheets-client'
-import { computeInvoice, nextNumber, type LineItem } from '@/lib/calc'
+import { computeInvoice, nextInvoiceNumber, type LineItem } from '@/lib/calc'
 
 export async function GET(req: NextRequest) {
   try {
@@ -67,9 +67,8 @@ export async function POST(req: NextRequest) {
     const paid = Number(amountPaid) || 0
     const due = Math.max(0, calc.grandTotal - paid)
 
-    // Generate invoice number
-    const shop = shopRow[0] || { invoicePrefix: 'SCSS' }
-    const number = await nextNumber(shop.invoicePrefix || 'SCSS', existing.map((i) => ({ number: i.number })))
+    // Generate invoice number: SCSS/26-27/001
+    const number = await nextInvoiceNumber(existing.map((i) => ({ number: i.number })))
 
     // Create invoice
     const invoice = await createRow('Invoices', {

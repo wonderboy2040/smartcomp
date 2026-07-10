@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRow, deleteRow, updateRow, createRow, listRows, bulkUpdate } from '@/lib/sheets-client'
-import { computeInvoice, nextNumber, type LineItem } from '@/lib/calc'
+import { computeInvoice, nextInvoiceNumber, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -91,11 +91,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         discount: Number(q.discount) || 0,
       })
 
-      // Generate invoice number
+      // Generate invoice number: SCSS/26-27/001
       const existingInvoices = await listRows<any>('Invoices')
-      const shopRows = await listRows<any>('Shop')
-      const shop = shopRows[0] || { invoicePrefix: 'SCSS' }
-      const number = await nextNumber(shop.invoicePrefix || 'SCSS', existingInvoices.map((i) => ({ number: i.number })))
+      const number = await nextInvoiceNumber(existingInvoices.map((i) => ({ number: i.number })))
 
       // Create invoice
       const invoice = await createRow('Invoices', {
