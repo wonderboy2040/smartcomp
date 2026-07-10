@@ -13,6 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params
     const url = new URL(req.url)
     const type = url.searchParams.get('type') || 'invoice'
+    const templateId = url.searchParams.get('template') || 'indigo-tech'
 
     const shopRows = await listRows<any>('Shop')
     const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         paymentType: String(invoice.paymentType || ''),
         paymentStatus: String(invoice.paymentStatus || ''),
         docType: 'invoice',
+        templateId,
       })
 
       return new NextResponse(pdfBuffer, {
@@ -101,6 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         notes: String(q.notes || ''),
         terms: String(shop.termsQuotation || ''),
         docType: 'quotation',
+        templateId,
       })
 
       return new NextResponse(pdfBuffer, {

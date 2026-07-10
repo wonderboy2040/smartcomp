@@ -372,19 +372,49 @@ export function InvoicesPanel() {
 }
 
 export function PdfPreview({ url, onClose }: { url: string; onClose: () => void }) {
+  const [selectedTemplate, setSelectedTemplate] = useState('indigo-tech')
+
+  const templates = [
+    { id: 'indigo-tech', name: 'Indigo Tech', colors: 'from-indigo-500 to-indigo-700' },
+    { id: 'royal-saffron', name: 'Royal Saffron', colors: 'from-orange-500 to-orange-800' },
+    { id: 'emerald-gst', name: 'Emerald GST', colors: 'from-emerald-500 to-emerald-800' },
+    { id: 'corporate-blue', name: 'Corporate Blue', colors: 'from-blue-700 to-blue-950' },
+    { id: 'midnight-gold', name: 'Midnight Gold', colors: 'from-slate-800 to-black' },
+  ]
+
+  const currentUrl = url + (url.includes('?') ? '&' : '?') + `template=${selectedTemplate}`
+
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-2 sm:p-4" onClick={onClose}>
-      <div className="bg-white rounded-lg w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
-          <h3 className="font-medium text-sm sm:text-base truncate">PDF Preview (A4)</h3>
-          <div className="flex gap-2 flex-shrink-0">
-            <a href={url} download target="_blank" rel="noreferrer">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        {/* Header with template selector */}
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <h3 className="font-medium text-sm sm:text-base truncate text-slate-800 dark:text-slate-200">PDF Preview (A4)</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Template selector */}
+            <div className="flex gap-1">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedTemplate(t.id)}
+                  className={`w-7 h-7 rounded-lg bg-gradient-to-br ${t.colors} transition-all ${selectedTemplate === t.id ? 'ring-2 ring-offset-1 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`}
+                  title={t.name}
+                />
+              ))}
+            </div>
+            <a href={currentUrl} download target="_blank" rel="noreferrer">
               <Button size="sm" variant="outline">Download</Button>
             </a>
             <Button size="sm" variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>
-        <iframe src={url} className="flex-1 w-full" title="PDF Preview" />
+        {/* Template name */}
+        <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-700">
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            Template: <span className="font-medium text-slate-700 dark:text-slate-300">{templates.find(t => t.id === selectedTemplate)?.name}</span>
+          </p>
+        </div>
+        <iframe src={currentUrl} className="flex-1 w-full" title="PDF Preview" />
       </div>
     </div>
   )

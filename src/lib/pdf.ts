@@ -38,7 +38,67 @@ export interface PdfDocData {
   paymentType?: string
   paymentStatus?: string
   docType: 'invoice' | 'quotation'
+  templateId?: string  // 'indigo-tech' | 'royal-saffron' | 'emerald-gst' | 'corporate-blue' | 'midnight-gold'
 }
+
+// ===== TEMPLATE DEFINITIONS (5 Premium Indian GST Designs) =====
+export interface PdfTemplate {
+  id: string
+  name: string
+  description: string
+  primary: [number, number, number]
+  primaryDark: [number, number, number]
+  accent: [number, number, number]
+  bannerHeight: number
+}
+
+export const PDF_TEMPLATES: PdfTemplate[] = [
+  {
+    id: 'indigo-tech',
+    name: 'Indigo Tech',
+    description: 'Modern indigo with circuit graphics — tech-focused',
+    primary: [99, 102, 241],
+    primaryDark: [67, 56, 202],
+    accent: [16, 185, 129],
+    bannerHeight: 42,
+  },
+  {
+    id: 'royal-saffron',
+    name: 'Royal Saffron',
+    description: 'Indian tricolor inspired — saffron + green premium',
+    primary: [234, 88, 12],       // Saffron
+    primaryDark: [154, 52, 18],   // Deep saffron
+    accent: [22, 163, 74],        // India green
+    bannerHeight: 42,
+  },
+  {
+    id: 'emerald-gst',
+    name: 'Emerald GST',
+    description: 'Professional emerald — clean corporate GST look',
+    primary: [5, 150, 105],
+    primaryDark: [4, 120, 87],
+    accent: [99, 102, 241],
+    bannerHeight: 42,
+  },
+  {
+    id: 'corporate-blue',
+    name: 'Corporate Blue',
+    description: 'Deep navy blue — formal banking/invoice style',
+    primary: [30, 58, 138],
+    primaryDark: [23, 37, 84],
+    accent: [234, 179, 8],
+    bannerHeight: 42,
+  },
+  {
+    id: 'midnight-gold',
+    name: 'Midnight Gold',
+    description: 'Black + gold luxury — premium boutique style',
+    primary: [15, 23, 42],
+    primaryDark: [3, 6, 16],
+    accent: [234, 179, 8],
+    bannerHeight: 42,
+  },
+]
 
 // Premium color palette
 const COLORS = {
@@ -248,19 +308,17 @@ function drawCircuitPattern(doc: jsPDF, x: number, y: number, w: number, h: numb
 }
 
 // Draw a "Smart Computers" branded watermark in empty space
-function drawWatermark(doc: jsPDF, x: number, y: number, w: number, h: number) {
+function drawWatermark(doc: jsPDF, x: number, y: number, w: number, h: number, primaryColor: [number, number, number] = COLORS.primary, accentColor: [number, number, number] = COLORS.accent) {
   doc.saveGraphicsState()
   doc.setGState(doc.GState({ opacity: 0.04 }))
-  // Large faded shop name
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(48)
-  doc.setTextColor(...COLORS.primary)
+  doc.setTextColor(...primaryColor)
   doc.text('SMART', x + w / 2, y + h / 2 - 8, { align: 'center' })
   doc.text('COMPUTERS', x + w / 2, y + h / 2 + 8, { align: 'center' })
-  // Tagline
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  doc.setTextColor(...COLORS.accent)
+  doc.setTextColor(...accentColor)
   doc.text('SALES & SERVICE', x + w / 2, y + h / 2 + 18, { align: 'center' })
   doc.restoreGraphicsState()
 }
@@ -297,15 +355,24 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   const isInvoice = data.docType === 'invoice'
 
+  // ===== SELECT TEMPLATE =====
+  const template = PDF_TEMPLATES.find(t => t.id === data.templateId) || PDF_TEMPLATES[0]
+  const T = {
+    primary: template.primary,
+    primaryDark: template.primaryDark,
+    accent: template.accent,
+    bannerH: template.bannerHeight,
+  }
+
   // ===== PREMIUM HEADER BANNER =====
   // Full-width gradient-like banner
-  doc.setFillColor(...COLORS.primary)
-  doc.rect(0, 0, pageWidth, 42, 'F')
+  doc.setFillColor(...T.primary)
+  doc.rect(0, 0, pageWidth, T.bannerH, 'F')
   // Darker overlay on right
-  doc.setFillColor(...COLORS.primaryDark)
-  doc.rect(pageWidth * 0.5, 0, pageWidth * 0.5, 42, 'F')
+  doc.setFillColor(...T.primaryDark)
+  doc.rect(pageWidth * 0.5, 0, pageWidth * 0.5, T.bannerH, 'F')
   // Circuit pattern overlay
-  drawCircuitPattern(doc, 0, 0, pageWidth, 42, COLORS.white, 0.07)
+  drawCircuitPattern(doc, 0, 0, pageWidth, T.bannerH, COLORS.white, 0.07)
 
   // Tech icons in header right (decorative row)
   const hdrIconSize = 14
@@ -349,10 +416,10 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.text(isInvoice ? 'TAX INVOICE' : 'QUOTATION', pageWidth - margin, 30, { align: 'right' })
 
   // Doc number + date below banner
-  y = 46
+  y = T.bannerH + 4
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
-  doc.setTextColor(...COLORS.primary)
+  doc.setTextColor(...T.primary)
   doc.text(`No: ${data.number}`, margin, y)
   doc.setTextColor(...COLORS.textMid)
   doc.setFont('helvetica', 'normal')
@@ -367,12 +434,12 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setFillColor(...COLORS.bgLighter)
   doc.roundedRect(margin, y, 95, 30, 2, 2, 'F')
   // Left accent bar
-  doc.setFillColor(...COLORS.primary)
+  doc.setFillColor(...T.primary)
   doc.roundedRect(margin, y, 1.5, 30, 0.5, 0.5, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
-  doc.setTextColor(...COLORS.primary)
+  doc.setTextColor(...T.primary)
   doc.text(isInvoice ? 'BILL TO' : 'QUOTE TO', margin + 5, y + 5)
 
   doc.setFont('helvetica', 'bold')
@@ -401,12 +468,12 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   if (isInvoice) {
     doc.setFillColor(...COLORS.bgLighter)
     doc.roundedRect(pageWidth - margin - 75, y, 75, 30, 2, 2, 'F')
-    doc.setFillColor(...COLORS.accent)
+    doc.setFillColor(...T.accent)
     doc.roundedRect(pageWidth - margin - 75, y, 1.5, 30, 0.5, 0.5, 'F')
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
-    doc.setTextColor(...COLORS.accent)
+    doc.setTextColor(...T.accent)
     doc.text('PAYMENT DETAILS', pageWidth - margin - 70, y + 5)
 
     doc.setFont('helvetica', 'normal')
@@ -417,7 +484,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       doc.setTextColor(...COLORS.red)
       doc.text(`Due: ${formatCurrency(data.amountDue)}`, pageWidth - margin - 70, y + 23)
     } else if (data.amountPaid !== undefined && data.amountPaid > 0) {
-      doc.setTextColor(...COLORS.accent)
+      doc.setTextColor(...T.accent)
       doc.text(`Paid: ${formatCurrency(data.amountPaid)}`, pageWidth - margin - 70, y + 23)
     }
   }
@@ -455,7 +522,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       font: 'helvetica',
     },
     headStyles: {
-      fillColor: COLORS.primary,
+      fillColor: T.primary,
       textColor: 255,
       fontStyle: 'bold',
       halign: 'center',
@@ -490,15 +557,72 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const totalsHeight = 40 // estimated
   const signatureY = pageHeight - 45
   const emptySpace = signatureY - (totalsStartY + totalsHeight)
-  if (emptySpace > 30) {
-    // Watermark in center of empty space
-    const wmY = totalsStartY + totalsHeight + 5
-    const wmH = Math.min(emptySpace - 10, 60)
-    drawWatermark(doc, margin, wmY, pageWidth - 2 * margin, wmH)
-    // Tech strip at bottom of empty space
-    if (emptySpace > 50) {
-      drawTechStrip(doc, margin, signatureY - 20, pageWidth - 2 * margin, 12)
+  if (emptySpace > 25) {
+    // ===== PROMOTIONAL AD SPACE =====
+    const adY = totalsStartY + totalsHeight + 8
+    const adH = Math.min(emptySpace - 15, 55)
+    const adW = pageWidth - 2 * margin
+
+    // Ad background box
+    doc.setFillColor(...COLORS.bgLighter)
+    doc.roundedRect(margin, adY, adW, adH, 3, 3, 'F')
+    // Accent top border
+    doc.setFillColor(...T.primary)
+    doc.roundedRect(margin, adY, adW, 2, 1, 1, 'F')
+    // Accent bottom border
+    doc.setFillColor(...T.accent)
+    doc.roundedRect(margin, adY + adH - 2, adW, 2, 1, 1, 'F')
+
+    // Left side: tech icons
+    drawLaptopIcon(doc, margin + 5, adY + 5, 12, T.primary)
+    drawPrinterIcon(doc, margin + 20, adY + 5, 12, T.accent)
+    drawChipIcon(doc, margin + 35, adY + 6, 10, T.primaryDark)
+
+    // Center: promotional text
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.setTextColor(...T.primary)
+    doc.text(`${data.shop.name || 'Smart Computers'}`, margin + 52, adY + 10)
+    doc.setFontSize(9)
+    doc.setTextColor(...COLORS.textMid)
+    doc.text('SALES & SERVICE', margin + 52, adY + 15)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...COLORS.textMid)
+    const promoLines = [
+      'Complete Computer Solutions: Sales, Service, Repair, Upgrades',
+      'Laptops | Desktops | Printers | Accessories | AMC Contracts',
+      'Expert Technicians | Genuine Parts | Warranty Support',
+    ]
+    let promoY = adY + 22
+    for (const line of promoLines) {
+      doc.text(line, margin + 52, promoY)
+      promoY += 4
     }
+
+    // Contact info on right
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(...T.accent)
+    doc.text('CONTACT US', pageWidth - margin - 5, adY + 10, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...COLORS.textMid)
+    if (data.shop.phone) {
+      doc.text(`Phone: ${data.shop.phone}`, pageWidth - margin - 5, adY + 15, { align: 'right' })
+    }
+    if (data.shop.email) {
+      doc.text(`Email: ${data.shop.email}`, pageWidth - margin - 5, adY + 20, { align: 'right' })
+    }
+    if (data.shop.address) {
+      const addrLines = doc.splitTextToSize(data.shop.address, 60)
+      doc.text(addrLines, pageWidth - margin - 5, adY + 25, { align: 'right' })
+    }
+
+    // Watermark behind the ad (very faint)
+    drawWatermark(doc, margin, adY, adW, adH, T.primary, T.accent)
+
+    y = adY + adH + 3
   }
 
   // ===== TOTALS with SGST/CGST =====
@@ -531,9 +655,9 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   // Grand total bar
   ty += 1
-  doc.setFillColor(...COLORS.primary)
+  doc.setFillColor(...T.primary)
   doc.rect(totalsBoxX, ty, totalsBoxW, rowH + 1.5, 'F')
-  doc.setFillColor(...COLORS.primaryDark)
+  doc.setFillColor(...T.primaryDark)
   doc.rect(totalsBoxX + totalsBoxW * 0.5, ty, totalsBoxW * 0.5, rowH + 1.5, 'F')
 
   doc.setFont('helvetica', 'bold')
@@ -564,7 +688,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   if (data.notes) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
-    doc.setTextColor(...COLORS.primary)
+    doc.setTextColor(...T.primary)
     doc.text('Notes:', margin, y)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...COLORS.textMid)
@@ -576,7 +700,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   if (data.terms) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
-    doc.setTextColor(...COLORS.primary)
+    doc.setTextColor(...T.primary)
     doc.text('Terms & Conditions:', margin, y)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...COLORS.textMid)
@@ -599,14 +723,14 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       doc.setFillColor(...COLORS.bgLighter)
       doc.roundedRect(qrX - 3, qrY - 3, qrSize + 65, qrSize + 6, 3, 3, 'F')
       // Accent left border
-      doc.setFillColor(...COLORS.primary)
+      doc.setFillColor(...T.primary)
       doc.roundedRect(qrX - 3, qrY - 3, 1.5, qrSize + 6, 0.5, 0.5, 'F')
 
       doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(11)
-      doc.setTextColor(...COLORS.primary)
+      doc.setTextColor(...T.primary)
       doc.text('Scan to Pay', qrX + qrSize + 5, qrY + 7)
 
       doc.setFont('helvetica', 'normal')
@@ -641,9 +765,9 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.text(`For ${data.shop.name}`, pageWidth - margin - 27, y - 1, { align: 'center' })
 
   // ===== PREMIUM FOOTER =====
-  doc.setFillColor(...COLORS.primary)
+  doc.setFillColor(...T.primary)
   doc.rect(0, pageHeight - 16, pageWidth, 16, 'F')
-  doc.setFillColor(...COLORS.primaryDark)
+  doc.setFillColor(...T.primaryDark)
   doc.rect(pageWidth * 0.5, pageHeight - 16, pageWidth * 0.5, 16, 'F')
   drawCircuitPattern(doc, 0, pageHeight - 16, pageWidth, 16, COLORS.white, 0.06)
 
