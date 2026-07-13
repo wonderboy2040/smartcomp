@@ -95,6 +95,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         status: 'Completed',
         partsUsedJson: JSON.stringify(partsUsed),
         finalAmount,
+        serviceCharge: Number(body?.serviceCharge) || 0,
+        paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
         paymentMode,
         paymentType,
         engineerShare,
@@ -103,6 +105,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         serviceProfit,
         warrantyDays,
         warrantyExpiry,
+        completedDate: new Date().toISOString(),
         diagnosisNotes: String(body?.diagnosisNotes || ''),
         notes: String(body?.notes || ''),
       })
@@ -169,11 +172,49 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (action === 'update') {
       // Generic update
       const data: any = {}
-      const fields = ['customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes', 'warrantyDays', 'status']
+      const fields = ['customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes', 'warrantyDays', 'serviceCharge', 'status']
       for (const f of fields) {
         if (body[f] !== undefined) data[f] = body[f]
       }
+      // Auto-recompute finalAmount if serviceCharge is being updated
+      if (body.serviceCharge !== undefined) {
+        const existing = await getRow<any>('Jobs', id)
+        const partsUsed = safeJsonParse<any[]>(existing?.partsUsedJson, [])
+        const partsTotal = partsUsed.reduce((s: number, p: any) => s + (Number(p?.sellPrice) || 0) * (Number(p?.qty) || 1), 0)
+        data.finalAmount = (Number(body.serviceCharge) || 0) + partsTotal
+      }
       const updated = await updateRow('Jobs', id, data)
+      return NextResponse.json({ success: true, job: updated })
+    }
+
+    if (action === 'recordPayment') {
+      // Record a partial / full payment WITHOUT completing the job
+      const existing = await getRow<any>('Jobs', id)
+      if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      const amount = Number(body?.amount) || 0
+      const mode = String(body?.mode || 'Cash')
+      if (amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
+
+      const newPaid = (Number(existing.paidAmount) || 0) + amount
+      const updated = await updateRow('Jobs', id, {
+        paidAmount: newPaid,
+        paymentMode: mode,
+        updatedAt: new Date().toISOString(),
+      })
+
+      // Also record in ServicePayments sheet
+      await createRow('ServicePayments', {
+        jobId: String(existing.jobId || ''),
+        customerName: String(existing.customerName || ''),
+        amount,
+        mode,
+        type: 'Partial',
+        date: new Date().toISOString(),
+        engineerShare: 0,
+        adminShare: amount,
+        notes: 'Partial payment recorded',
+      }).catch(() => {})
+
       return NextResponse.json({ success: true, job: updated })
     }
 

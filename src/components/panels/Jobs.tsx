@@ -18,11 +18,13 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
+import { ServiceInvoiceModal } from '@/components/ServiceInvoiceModal'
+import { ServiceWhatsAppModal } from '@/components/ServiceWhatsAppModal'
 import {
   Wrench, Plus, Search, Phone, Laptop, Printer, Monitor, Battery, ScanLine,
   Smartphone, ClipboardList, CheckCircle2, Clock, Package, IndianRupee,
   User, Trash2, Edit3, RefreshCw, Send, Eye, ArrowRight, TrendingUp,
-  ExternalLink, Copy
+  ExternalLink, Copy, FileText, MessageSquare,
 } from 'lucide-react'
 
 const DEVICE_ICONS: Record<string, any> = {
@@ -42,18 +44,35 @@ const STATUS_COLORS: Record<string, string> = {
   Delivered: 'bg-purple-50 text-purple-700 border-purple-200',
 }
 
+// Priority color borders (left border on cards/rows)
+const PRIORITY_BORDER: Record<string, string> = {
+  High: 'border-l-4 border-l-red-500',
+  Medium: 'border-l-4 border-l-amber-500',
+  Low: 'border-l-4 border-l-green-500',
+}
+
+const PRIORITY_BADGE: Record<string, string> = {
+  High: 'bg-red-50 text-red-700 border-red-200',
+  Medium: 'bg-amber-50 text-amber-700 border-amber-200',
+  Low: 'bg-green-50 text-green-700 border-green-200',
+}
+
 export function JobsPanel() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [priorityFilter, setPriorityFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [detailJob, setDetailJob] = useState<any | null>(null)
   const [editing, setEditing] = useState<any | null>(null)
+  const [invoiceJobId, setInvoiceJobId] = useState<string | null>(null)
+  const [whatsappJobId, setWhatsappJobId] = useState<string | null>(null)
 
   const { data: jobs, loading, refetch } = useFetch<any[]>('/api/jobs', undefined)
 
   const filtered = (jobs || []).filter((j) => {
     if (statusFilter !== 'all' && j.status !== statusFilter) return false
+    if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false
     if (search) {
       const q = search.toLowerCase()
       return String(j?.jobId || '').toLowerCase().includes(q) ||
@@ -70,6 +89,7 @@ export function JobsPanel() {
     progress: (jobs || []).filter((j) => j.status === 'In Progress').length,
     completed: (jobs || []).filter((j) => j.status === 'Completed').length,
     delivered: (jobs || []).filter((j) => j.status === 'Delivered').length,
+    highPriority: (jobs || []).filter((j) => j.priority === 'High' && (j.status === 'Pending' || j.status === 'In Progress')).length,
   }
 
   const handleDelete = async (id: string) => {
@@ -173,6 +193,23 @@ export function JobsPanel() {
             <SelectItem value="Delivered">Delivered</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-full sm:w-40 h-11">
+            <SelectValue placeholder="All Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priority</SelectItem>
+            <SelectItem value="High">🔴 High</SelectItem>
+            <SelectItem value="Medium">🟡 Medium</SelectItem>
+            <SelectItem value="Low">🟢 Low</SelectItem>
+          </SelectContent>
+        </Select>
+        {stats.highPriority > 0 && (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 px-3 h-11 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            {stats.highPriority} High Priority Active
+          </Badge>
+        )}
       </div>
 
       {/* Mobile cards */}
@@ -188,7 +225,7 @@ export function JobsPanel() {
           filtered.map((j) => {
             const Icon = DEVICE_ICONS[j.deviceType] || Smartphone
             return (
-              <Card key={j.id} className="border-slate-200">
+              <Card key={j.id} className={`border-slate-200 ${PRIORITY_BORDER[j.priority] || ''}`}>
                 <CardContent className="p-3">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -200,17 +237,37 @@ export function JobsPanel() {
                         <p className="text-[10px] text-slate-500 font-mono">{j.jobId}</p>
                       </div>
                     </div>
-                    <Badge variant="outline" className={`${STATUS_COLORS[j.status] || ''} text-[9px] flex-shrink-0`}>
-                      {j.status}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <Badge variant="outline" className={`${STATUS_COLORS[j.status] || ''} text-[9px]`}>
+                        {j.status}
+                      </Badge>
+                      {j.priority && (
+                        <Badge variant="outline" className={`${PRIORITY_BADGE[j.priority] || ''} text-[8px] px-1.5 py-0`}>
+                          {j.priority}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <div className="text-xs space-y-0.5 text-slate-600">
                     <p className="truncate"><span className="font-medium">{j.deviceType}</span>{j.brandModel ? ` · ${j.brandModel}` : ''}</p>
                     <p className="truncate text-slate-500">{j.problemDesc}</p>
                   </div>
+                  {j.serviceType && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] ${j.serviceType === 'Onsite' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {j.serviceType === 'Onsite' ? '🚗 Onsite' : '🏪 In-Shop'}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
                     <p className="text-sm font-bold text-slate-900">{formatCurrency(j.finalAmount || j.estimatedAmount)}</p>
                     <div className="flex gap-1">
+                      <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setWhatsappJobId(j.id)} title="WhatsApp">
+                        <MessageSquare className="w-3.5 h-3.5 text-green-600" />
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setInvoiceJobId(j.id)} title="Invoice">
+                        <FileText className="w-3.5 h-3.5 text-purple-600" />
+                      </Button>
                       <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setDetailJob(j)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
@@ -237,6 +294,8 @@ export function JobsPanel() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Device</TableHead>
                   <TableHead>Problem</TableHead>
+                  <TableHead className="text-center">Type</TableHead>
+                  <TableHead className="text-center">Priority</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -245,11 +304,11 @@ export function JobsPanel() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">Loading...</TableCell>
+                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">Loading...</TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={9} className="text-center py-8 text-slate-500">
                       <Wrench className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                       No jobs found. Click "New Job" to create one.
                     </TableCell>
@@ -258,7 +317,7 @@ export function JobsPanel() {
                   filtered.map((j) => {
                     const Icon = DEVICE_ICONS[j.deviceType] || Smartphone
                     return (
-                      <TableRow key={j.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setDetailJob(j)}>
+                      <TableRow key={j.id} className={`hover:bg-slate-50 cursor-pointer ${PRIORITY_BORDER[j.priority] || ''}`} onClick={() => setDetailJob(j)}>
                         <TableCell className="font-mono text-xs font-medium">{j.jobId}</TableCell>
                         <TableCell>
                           <div className="font-medium text-slate-900">{j.customerName || 'Unknown'}</div>
@@ -273,6 +332,24 @@ export function JobsPanel() {
                         </TableCell>
                         <TableCell className="text-xs text-slate-600 max-w-[200px] truncate">{j.problemDesc}</TableCell>
                         <TableCell className="text-center">
+                          {j.serviceType ? (
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] ${j.serviceType === 'Onsite' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {j.serviceType === 'Onsite' ? '🚗' : '🏪'}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 text-xs">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {j.priority ? (
+                            <Badge variant="outline" className={`${PRIORITY_BADGE[j.priority] || ''} text-[9px]`}>
+                              {j.priority}
+                            </Badge>
+                          ) : (
+                            <span className="text-slate-300 text-xs">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
                           <Badge variant="outline" className={`${STATUS_COLORS[j.status] || ''} text-[10px]`}>
                             {j.status}
                           </Badge>
@@ -282,13 +359,19 @@ export function JobsPanel() {
                         </TableCell>
                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-end gap-1">
-                            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setDetailJob(j)}>
+                            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setWhatsappJobId(j.id)} title="WhatsApp Templates">
+                              <MessageSquare className="w-3.5 h-3.5 text-green-600" />
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setInvoiceJobId(j.id)} title="Generate Invoice">
+                              <FileText className="w-3.5 h-3.5 text-purple-600" />
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setDetailJob(j)} title="View">
                               <Eye className="w-3.5 h-3.5" />
                             </Button>
-                            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => { setEditing(j); setDialogOpen(true) }}>
+                            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => { setEditing(j); setDialogOpen(true) }} title="Edit">
                               <Edit3 className="w-3.5 h-3.5" />
                             </Button>
-                            <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-red-500" onClick={() => handleDelete(j.id)}>
+                            <Button size="sm" variant="outline" className="h-8 w-8 p-0 text-red-500" onClick={() => handleDelete(j.id)} title="Delete">
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
@@ -303,9 +386,10 @@ export function JobsPanel() {
         </CardContent>
       </Card>
 
-      {/* New/Edit Job Dialog */}
+      {/* New/Edit Job Dialog — key forces remount so form resets between edit targets */}
       {dialogOpen && (
         <NewJobDialog
+          key={editing?.id || 'new'}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
           editing={editing}
@@ -313,13 +397,26 @@ export function JobsPanel() {
         />
       )}
 
-      {/* Job Detail Dialog */}
+      {/* Job Detail Dialog — key forces remount when switching jobs so state resets */}
       {detailJob && (
         <JobDetailDialog
+          key={detailJob.id}
           job={detailJob}
           onClose={() => setDetailJob(null)}
           onUpdated={() => { refetch(); setDetailJob(null) }}
+          onOpenInvoice={(id) => { setDetailJob(null); setInvoiceJobId(id) }}
+          onOpenWhatsApp={(id) => { setDetailJob(null); setWhatsappJobId(id) }}
         />
+      )}
+
+      {/* Service Invoice Modal */}
+      {invoiceJobId && (
+        <ServiceInvoiceModal jobId={invoiceJobId} onClose={() => setInvoiceJobId(null)} />
+      )}
+
+      {/* Service WhatsApp Modal */}
+      {whatsappJobId && (
+        <ServiceWhatsAppModal jobId={whatsappJobId} onClose={() => setWhatsappJobId(null)} />
       )}
     </div>
   )
@@ -341,6 +438,8 @@ function NewJobDialog({ open, onOpenChange, editing, onSaved }: {
     serialNumber: editing?.serialNumber || '',
     problemDesc: editing?.problemDesc || '',
     accessories: editing?.accessories || '',
+    serviceType: editing?.serviceType || 'InShop',
+    priority: editing?.priority || 'Low',
     estimatedAmount: editing?.estimatedAmount || 0,
     advanceAmount: editing?.advanceAmount || 0,
     advanceMode: editing?.advanceMode || 'Cash',
@@ -416,6 +515,59 @@ function NewJobDialog({ open, onOpenChange, editing, onSaved }: {
             <Label className="text-xs">Serial Number</Label>
             <Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="Device serial number" className="h-10" />
           </div>
+
+          {/* Service Type — radio cards (In-Shop / Onsite) */}
+          <div>
+            <Label className="text-xs">Service Type</Label>
+            <div className="flex gap-2 mt-1">
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, serviceType: 'InShop' })}
+                className={`flex-1 p-2.5 border-2 rounded-lg text-sm font-medium transition ${form.serviceType === 'InShop' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:border-blue-300'}`}
+              >
+                🏪 In-Shop
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, serviceType: 'Onsite' })}
+                className={`flex-1 p-2.5 border-2 rounded-lg text-sm font-medium transition ${form.serviceType === 'Onsite' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-600 hover:border-green-300'}`}
+              >
+                🚗 Onsite
+              </button>
+            </div>
+          </div>
+
+          {/* Priority — radio cards (Low / Medium / High) */}
+          <div>
+            <Label className="text-xs">Priority</Label>
+            <div className="flex gap-2 mt-1">
+              {(['Low', 'Medium', 'High'] as const).map((p) => {
+                const colorClasses: Record<string, string> = {
+                  Low: 'border-green-500 bg-green-50 text-green-700',
+                  Medium: 'border-amber-500 bg-amber-50 text-amber-700',
+                  High: 'border-red-500 bg-red-50 text-red-700',
+                }
+                const hoverClasses: Record<string, string> = {
+                  Low: 'hover:border-green-300',
+                  Medium: 'hover:border-amber-300',
+                  High: 'hover:border-red-300',
+                }
+                const emojis: Record<string, string> = { Low: '🟢', Medium: '🟡', High: '🔴' }
+                const isSelected = form.priority === p
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setForm({ ...form, priority: p })}
+                    className={`flex-1 p-2.5 border-2 rounded-lg text-sm font-medium transition ${isSelected ? colorClasses[p] : `border-slate-200 text-slate-600 ${hoverClasses[p]}`}`}
+                  >
+                    {emojis[p]} {p}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div>
             <Label className="text-xs">Problem Description *</Label>
             <Textarea value={form.problemDesc} onChange={(e) => setForm({ ...form, problemDesc: e.target.value })} placeholder="Describe the issue..." rows={3} />
@@ -461,18 +613,23 @@ function NewJobDialog({ open, onOpenChange, editing, onSaved }: {
 }
 
 // ===== Job Detail Dialog =====
-function JobDetailDialog({ job, onClose, onUpdated }: {
+function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsApp }: {
   job: any
   onClose: () => void
   onUpdated: () => void
+  onOpenInvoice: (id: string) => void
+  onOpenWhatsApp: (id: string) => void
 }) {
   const { toast } = useToast()
   const [status, setStatus] = useState(job?.status || 'Pending')
-  const [partsUsed, setPartsUsed] = useState<any[]>(safeJsonParse<any[]>(job?.partsUsedJson, []))
+  const [partsUsed, setPartsUsed] = useState<any[]>(safeJsonParse<any[]>(job?.partsUsedJson || job?.partsUsed, []))
   const [finalAmount, setFinalAmount] = useState(Number(job?.finalAmount) || 0)
+  const [serviceCharge, setServiceCharge] = useState(Number(job?.serviceCharge) || 0)
   const [paymentMode, setPaymentMode] = useState(job?.paymentMode || 'Cash')
   const [engineerSharePct, setEngineerSharePct] = useState(50)
   const [newPart, setNewPart] = useState({ name: '', costPrice: 0, sellPrice: 0, qty: 1 })
+  const [quickPayAmount, setQuickPayAmount] = useState('')
+  const [quickPayMode, setQuickPayMode] = useState<'Cash' | 'UPI'>('Cash')
   const [saving, setSaving] = useState(false)
   const [showComplete, setShowComplete] = useState(false)
 
@@ -510,10 +667,31 @@ function JobDetailDialog({ job, onClose, onUpdated }: {
         action: 'complete',
         partsUsed,
         finalAmount,
+        serviceCharge,
+        paidAmount: Number(job?.paidAmount) || 0,
         paymentMode,
         engineerSharePct,
       })
       toast({ title: 'Job completed!', description: 'Profit shares calculated and payment recorded' })
+      onUpdated()
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleQuickPayment = async () => {
+    const amt = Number(quickPayAmount) || 0
+    if (!amt || amt <= 0) {
+      toast({ title: 'Enter valid amount', variant: 'destructive' })
+      return
+    }
+    setSaving(true)
+    try {
+      await apiPut(`/api/jobs/${job.id}`, { action: 'recordPayment', amount: amt, mode: quickPayMode })
+      toast({ title: 'Payment recorded', description: `Rs.${amt} via ${quickPayMode}` })
+      setQuickPayAmount('')
       onUpdated()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -542,10 +720,20 @@ function JobDetailDialog({ job, onClose, onUpdated }: {
     <Dialog open={!!job} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-3xl max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Icon className="w-5 h-5 text-blue-600" />
             <span className="font-mono text-sm">{job.jobId}</span>
             <Badge variant="outline" className={`${STATUS_COLORS[job.status] || ''} text-[10px]`}>{job.status}</Badge>
+            {job.priority && (
+              <Badge variant="outline" className={`${PRIORITY_BADGE[job.priority] || ''} text-[9px]`}>
+                {job.priority === 'High' ? '🔴' : job.priority === 'Medium' ? '🟡' : '🟢'} {job.priority}
+              </Badge>
+            )}
+            {job.serviceType && (
+              <Badge variant="outline" className={`text-[9px] ${job.serviceType === 'Onsite' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                {job.serviceType === 'Onsite' ? '🚗 Onsite' : '🏪 In-Shop'}
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -662,6 +850,33 @@ function JobDetailDialog({ job, onClose, onUpdated }: {
             </div>
           </div>
 
+          {/* Quick Payment Recording — record partial payments without completing job */}
+          <div className="border border-emerald-200 rounded-lg p-3 bg-emerald-50">
+            <Label className="text-sm font-medium text-emerald-900 mb-2 block">Record Payment (partial)</Label>
+            <div className="grid grid-cols-4 gap-2">
+              <Input
+                type="number"
+                placeholder="Amount"
+                value={quickPayAmount}
+                onChange={(e) => setQuickPayAmount(e.target.value)}
+                className="h-9 text-sm col-span-2"
+              />
+              <Select value={quickPayMode} onValueChange={(v) => setQuickPayMode(v as 'Cash' | 'UPI')}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Cash">Cash</SelectItem>
+                  <SelectItem value="UPI">UPI</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleQuickPayment} disabled={saving} size="sm" className="h-9 bg-emerald-600 hover:bg-emerald-700">
+                <IndianRupee className="w-3.5 h-3.5 mr-1" /> Pay
+              </Button>
+            </div>
+            <p className="text-[10px] text-emerald-700 mt-1">
+              Paid so far: Rs.{Number(job.paidAmount) || 0} · Advance: Rs.{Number(job.advanceAmount) || 0}
+            </p>
+          </div>
+
           {/* Complete job */}
           {job.status !== 'Completed' && job.status !== 'Delivered' && (
             <div className="border border-blue-200 rounded-lg p-3 bg-blue-50">
@@ -673,11 +888,17 @@ function JobDetailDialog({ job, onClose, onUpdated }: {
               </div>
               {showComplete && (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <Label className="text-[10px] text-blue-700">Final Amount (Rs.)</Label>
+                      <Label className="text-[10px] text-blue-700">Service Charge (Rs.)</Label>
+                      <Input type="number" value={serviceCharge} onChange={(e) => setServiceCharge(Number(e.target.value))} className="h-9 text-sm" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-blue-700">Final Amount (Rs.) = Service + Parts</Label>
                       <Input type="number" value={finalAmount} onChange={(e) => setFinalAmount(Number(e.target.value))} className="h-9 text-sm" />
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <Label className="text-[10px] text-blue-700">Payment Mode</Label>
                       <Select value={paymentMode} onValueChange={setPaymentMode}>
@@ -720,8 +941,14 @@ function JobDetailDialog({ job, onClose, onUpdated }: {
           )}
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
+        <DialogFooter className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => onOpenWhatsApp(job.id)} className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200">
+            <MessageSquare className="w-4 h-4 mr-1" /> WhatsApp
+          </Button>
+          <Button variant="outline" onClick={() => onOpenInvoice(job.id)} className="bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200">
+            <FileText className="w-4 h-4 mr-1" /> Invoice
+          </Button>
+          <Button variant="outline" onClick={onClose} className="ml-auto">Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

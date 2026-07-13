@@ -144,6 +144,13 @@ export async function listRows<T = any>(
   sheet: string,
   options: { filter?: string; search?: string; useCache?: boolean; includeDeleted?: boolean } = {}
 ): Promise<T[]> {
+  // PERFORMANCE + UX: When APPS_SCRIPT_URL is not configured, return an empty
+  // array instead of throwing. This lets every API route that calls listRows()
+  // on mount (Dashboard, Jobs, Invoices, …) gracefully return `[]` instead of
+  // a 500 error, so the UI shows empty states and the SetupWizard can appear
+  // instead of crash-looping.
+  if (!isConfigured()) return [] as T[]
+
   const useCache = options.useCache !== false
   const cacheKey = `list:${sheet}:${options.filter || ''}:${options.search || ''}:${options.includeDeleted ? '1' : '0'}`
 
@@ -166,6 +173,7 @@ export async function listRows<T = any>(
 
 // ===== GET =====
 export async function getRow<T = any>(sheet: string, id: string): Promise<T | null> {
+  if (!isConfigured()) return null
   const res = await getFromAppsScript({ action: 'get', sheet, id })
   if (!res.success) return null
   return res.data as T
@@ -236,6 +244,7 @@ export async function bulkUpdate(sheet: string, updates: { id: string; data: any
 
 // ===== SHOP =====
 export async function getShop(): Promise<any | null> {
+  if (!isConfigured()) return null
   const cacheKey = 'shop:single'
   const cached = getCached<any>(cacheKey)
   if (cached !== null) return cached

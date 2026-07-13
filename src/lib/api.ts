@@ -244,6 +244,9 @@ export async function apiPost(url: string, body: any) {
 
 // ===== apiPut (UPDATE) =====
 // After a successful update, replace the matching item in every cached list.
+// Handles both direct-object responses (`{ id, ...fields }`) and wrapped
+// responses (`{ success: true, job: { id, ...fields } }`) used by some
+// routes like /api/jobs/[id].
 export async function apiPut(url: string, body: any) {
   const r = await fetch(url, {
     method: 'PUT',
@@ -253,13 +256,28 @@ export async function apiPut(url: string, body: any) {
   const data = await r.json()
   if (!r.ok) throw new Error(data.error || 'Failed')
 
+  // Unwrap { success: true, job/invoice/...: {...} } if present.
+  // Some routes (e.g. /api/jobs/[id]) wrap the updated entity in a `job`,
+  // `invoice`, `quotation`, etc. field. Detect and unwrap so the cache gets
+  // the entity itself, not the wrapper.
+  let entity: any = data
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const wrapperKeys = ['job', 'invoice', 'quotation', 'customer', 'supplier', 'item', 'payment', 'expense', 'amc', 'campaign']
+    for (const wk of wrapperKeys) {
+      if (data[wk] && typeof data[wk] === 'object' && (data[wk].id !== undefined || data[wk].jobId !== undefined)) {
+        entity = data[wk]
+        break
+      }
+    }
+  }
+
   const listUrl = listUrlOf(url)
-  const updatedId = data?.id || idOf(url)
+  const updatedId = entity?.id || idOf(url)
   for (const key of Array.from(cache.keys())) {
     const keyBase = key.split('?')[0].split('#')[0]
     if (keyBase === listUrl && Array.isArray(cache.get(key))) {
       mutate<any[]>(key, (prev) =>
-        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...data } : x)) : prev || []
+        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...entity } : x)) : prev || []
       )
     }
   }

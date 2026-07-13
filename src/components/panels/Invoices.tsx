@@ -351,6 +351,7 @@ export function InvoicesPanel() {
       </Card>
 
       <DocForm
+        key={editing?.id || 'new'}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         docType="invoice"

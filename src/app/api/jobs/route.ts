@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listRows, createRow } from '@/lib/sheets-client'
+import { listRows, createRow, isConfigured } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
 import { generateTrackToken } from '@/lib/notifications'
 
@@ -9,6 +9,7 @@ import { generateTrackToken } from '@/lib/notifications'
  */
 export async function GET(req: NextRequest) {
   try {
+    if (!isConfigured()) return NextResponse.json([])
     const url = new URL(req.url)
     const statusFilter = url.searchParams.get('status')
     const engineerFilter = url.searchParams.get('engineer')
@@ -43,10 +44,15 @@ export async function GET(req: NextRequest) {
       brandModel: String(j?.brandModel || ''),
       serialNumber: String(j?.serialNumber || ''),
       problemDesc: String(j?.problemDesc || ''),
+      accessories: String(j?.accessories || ''),
+      serviceType: String(j?.serviceType || 'InShop'),
+      priority: String(j?.priority || 'Low'),
       status: String(j?.status || 'Pending'),
       estimatedAmount: Number(j?.estimatedAmount) || 0,
       advanceAmount: Number(j?.advanceAmount) || 0,
       finalAmount: Number(j?.finalAmount) || 0,
+      serviceCharge: Number(j?.serviceCharge) || 0,
+      paidAmount: Number(j?.paidAmount) || 0,
       engineerShare: Number(j?.engineerShare) || 0,
       adminShare: Number(j?.adminShare) || 0,
       partsProfit: Number(j?.partsProfit) || 0,
@@ -105,6 +111,8 @@ export async function POST(req: NextRequest) {
       serialNumber: String(body?.serialNumber || ''),
       problemDesc: String(body?.problemDesc || ''),
       accessories: String(body?.accessories || ''),
+      serviceType: String(body?.serviceType || 'InShop'),
+      priority: String(body?.priority || 'Low'),
       estimatedAmount: Number(body?.estimatedAmount) || 0,
       advanceAmount: Number(body?.advanceAmount) || 0,
       advanceMode: String(body?.advanceMode || ''),
@@ -112,6 +120,8 @@ export async function POST(req: NextRequest) {
       assignedEngineer: String(body?.assignedEngineer || ''),
       partsUsedJson: '[]',
       finalAmount: 0,
+      serviceCharge: 0,
+      paidAmount: 0,
       paymentMode: '',
       paymentType: '',
       engineerShare: 0,
@@ -123,6 +133,7 @@ export async function POST(req: NextRequest) {
       warrantyDays: Number(body?.warrantyDays) || 30,
       warrantyExpiry: '',
       statusHistoryJson: JSON.stringify(statusHistory),
+      completedDate: '',
       deliveredAt: '',
     })
 

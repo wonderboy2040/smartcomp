@@ -37,7 +37,7 @@ const SCHEMAS = {
   Quotations: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'validTill', 'itemsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'notes', 'status', 'convertedToInvoiceId', 'createdAt', 'deleted'],
   Payments: ['id', 'invoiceId', 'invoiceNumber', 'customerName', 'amount', 'type', 'date', 'notes', 'reference', 'createdAt', 'deleted'],
   Enquiries: ['id', 'supplierId', 'supplierName', 'supplierPhone', 'itemsJson', 'message', 'status', 'sentAt', 'respondedAt', 'response', 'ratesJson', 'appliedToItems', 'isAuto', 'createdAt', 'deleted'],
-  Jobs: ['id', 'jobId', 'trackToken', 'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'status', 'assignedEngineer', 'partsUsedJson', 'finalAmount', 'paymentMode', 'paymentType', 'engineerShare', 'adminShare', 'partsProfit', 'serviceProfit', 'notes', 'diagnosisNotes', 'warrantyDays', 'warrantyExpiry', 'statusHistoryJson', 'createdAt', 'updatedAt', 'deliveredAt', 'deleted'],
+  Jobs: ['id', 'jobId', 'trackToken', 'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'status', 'assignedEngineer', 'partsUsedJson', 'finalAmount', 'serviceCharge', 'paidAmount', 'paymentMode', 'paymentType', 'engineerShare', 'adminShare', 'partsProfit', 'serviceProfit', 'notes', 'diagnosisNotes', 'warrantyDays', 'warrantyExpiry', 'statusHistoryJson', 'completedDate', 'createdAt', 'updatedAt', 'deliveredAt', 'deleted'],
   ServicePayments: ['id', 'jobId', 'customerName', 'amount', 'mode', 'type', 'date', 'engineerShare', 'adminShare', 'notes', 'createdAt', 'deleted'],
   Expenses: ['id', 'category', 'description', 'amount', 'mode', 'date', 'vendor', 'reference', 'notes', 'createdAt', 'deleted'],
   ItemSerials: ['id', 'itemId', 'itemName', 'serialNumber', 'status', 'invoiceId', 'invoiceNumber', 'customerName', 'purchaseDate', 'warrantyDays', 'warrantyExpiry', 'costPrice', 'notes', 'createdAt', 'updatedAt', 'deleted'],
@@ -464,6 +464,9 @@ function getDashboardStats() {
   var quotations = listRows('Quotations');
   var payments = listRows('Payments');
   var enquiries = listRows('Enquiries');
+  // Service-center sheets (added for service-section integration)
+  var jobs = safeListRows('Jobs');
+  var servicePayments = safeListRows('ServicePayments');
 
   var now = new Date();
   var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -513,6 +516,51 @@ function getDashboardStats() {
   var recentPayments = payments.slice().sort(function(a, b) { return new Date(b.date) - new Date(a.date); }).slice(0, 10);
   var recentEnquiries = enquiries.slice().sort(function(a, b) { return new Date(b.sentAt) - new Date(a.sentAt); }).slice(0, 10);
 
+  // ===== SERVICE SECTION STATS (jobs + service payments) =====
+  // Calculate 50-50 profit share between Admin and Engineer based on PAID service payments.
+  var monthJobs = jobs.filter(function(j) { return new Date(j.createdAt || j.date || 0) >= startOfMonth; });
+  var todayJobs = jobs.filter(function(j) { return new Date(j.createdAt || j.date || 0) >= startOfToday; });
+  var pendingJobs = jobs.filter(function(j) { return j.status === 'Pending' || j.status === 'In Progress'; });
+  var completedJobs = jobs.filter(function(j) { return j.status === 'Completed'; });
+  var deliveredJobs = jobs.filter(function(j) { return j.status === 'Delivered'; });
+  var highPriorityJobs = jobs.filter(function(j) { return j.priority === 'High' && (j.status === 'Pending' || j.status === 'In Progress'); });
+
+  // Today's service collection
+  var todayServicePayments = servicePayments.filter(function(p) { return new Date(p.date) >= startOfToday; });
+  var todayServiceTotal = todayServicePayments.reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+  var todayServiceUPI = todayServicePayments.filter(function(p) { return p.mode === 'UPI'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+  var todayServiceCash = todayServicePayments.filter(function(p) { return p.mode === 'Cash'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+
+  // Month's service collection
+  var monthServicePayments = servicePayments.filter(function(p) { return new Date(p.date) >= startOfMonth; });
+  var monthServiceTotal = monthServicePayments.reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+  var monthServiceUPI = monthServicePayments.filter(function(p) { return p.mode === 'UPI'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+  var monthServiceCash = monthServicePayments.filter(function(p) { return p.mode === 'Cash'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+
+  // 50-50 profit share from PAID service payments only.
+  // Service share = sum of serviceProfit * (paidRatio)
+  // Parts share   = sum of partsProfit   * (paidRatio)
+  // Each side is split 50/50.
+  var svcShare = 0, partsProfitShare = 0;
+  var paidJobIds = {};
+  monthServicePayments.forEach(function(p) { if (p.jobId) paidJobIds[p.jobId] = true; });
+  Object.keys(paidJobIds).forEach(function(jid) {
+    var job = jobs.find(function(x) { return x.jobId === jid; });
+    if (!job) return;
+    var jobPayments = servicePayments.filter(function(p) { return p.jobId === jid && new Date(p.date) >= startOfMonth; });
+    var jobPaid = jobPayments.reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
+    if (jobPaid <= 0) return;
+    var totalJob = Number(job.finalAmount) || 0;
+    var svc = Number(job.serviceProfit) || 0;
+    var pp = Number(job.partsProfit) || 0;
+    var paidRatio = totalJob > 0 ? Math.min(jobPaid / totalJob, 1) : 1;
+    svcShare += Math.round(svc * paidRatio);
+    partsProfitShare += Math.round(pp * paidRatio);
+  });
+  var adminServiceShare = Math.round(svcShare / 2);
+  var adminPartsShare = Math.round(partsProfitShare / 2);
+  var adminTotalShare = adminServiceShare + adminPartsShare;
+
   return {
     stats: {
       totalItems: items.length,
@@ -530,13 +578,48 @@ function getDashboardStats() {
       totalQuotations: monthQuotations.length,
       todayPaymentTotal: todayPaymentTotal,
       pendingEnquiries: pendingEnquiries,
+      // Service section
+      totalJobs: jobs.length,
+      pendingJobs: pendingJobs.length,
+      completedJobs: completedJobs.length,
+      deliveredJobs: deliveredJobs.length,
+      highPriorityJobs: highPriorityJobs.length,
+      todayJobs: todayJobs.length,
+      monthJobs: monthJobs.length,
+      todayServiceTotal: todayServiceTotal,
+      todayServiceUPI: todayServiceUPI,
+      todayServiceCash: todayServiceCash,
+      monthServiceTotal: monthServiceTotal,
+      monthServiceUPI: monthServiceUPI,
+      monthServiceCash: monthServiceCash,
+      adminServiceShare: adminServiceShare,
+      adminPartsShare: adminPartsShare,
+      adminTotalShare: adminTotalShare,
+      engineerServiceShare: adminServiceShare,
+      engineerPartsShare: adminPartsShare,
+      engineerTotalShare: adminTotalShare,
     },
     pendingInvoices: pendingInvoices,
     recentInvoices: recentInvoices,
     recentPayments: recentPayments,
     recentEnquiries: recentEnquiries,
     lowStockList: lowStockItems,
+    recentJobs: jobs.slice().sort(function(a, b) { return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); }).slice(0, 5),
   };
+}
+
+// Safe listRows helper that returns [] if sheet doesn't exist yet (used for
+// optional sheets like Jobs / ServicePayments that may not be present in
+// older deployments).
+function safeListRows(sheetName) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return [];
+    return listRows(sheetName);
+  } catch (e) {
+    return [];
+  }
 }
 
 // ===== SEED DATA =====

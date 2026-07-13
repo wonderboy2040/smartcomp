@@ -9,7 +9,7 @@ import {
   Package, Users, TrendingUp, AlertTriangle,
   Wallet, FileText, MessageSquare, IndianRupee, Clock,
   ArrowUpRight, RefreshCw, CheckCircle2, Sparkles, Zap,
-  TrendingDown, ShoppingBag, CreditCard
+  TrendingDown, ShoppingBag, CreditCard, Wrench, User
 } from 'lucide-react'
 
 export function DashboardView({ onNavigate, sheetsConnected = true }: { onNavigate: (tab: string) => void; sheetsConnected?: boolean }) {
@@ -201,6 +201,118 @@ export function DashboardView({ onNavigate, sheetsConnected = true }: { onNaviga
           onClick={() => onNavigate('whatsapp')}
         />
       </div>
+
+      {/* Service Section — Jobs stats + 50-50 Profit Share cards */}
+      {(stats.totalJobs > 0 || stats.todayServiceTotal > 0) && (
+        <>
+          {/* Service stats row */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
+            <MiniStat
+              label="Total Jobs"
+              value={String(stats.totalJobs || 0)}
+              sub={`${stats.todayJobs || 0} today`}
+              icon={Wrench}
+              color="bg-blue-500"
+              onClick={() => onNavigate('jobs')}
+            />
+            <MiniStat
+              label="Pending Jobs"
+              value={String(stats.pendingJobs || 0)}
+              sub="Need attention"
+              icon={Clock}
+              color="bg-amber-500"
+              onClick={() => onNavigate('jobs')}
+            />
+            <MiniStat
+              label="High Priority"
+              value={String(stats.highPriorityJobs || 0)}
+              sub="Active urgent"
+              icon={AlertTriangle}
+              color="bg-red-500"
+              onClick={() => onNavigate('jobs')}
+            />
+            <MiniStat
+              label="Today's Service"
+              value={formatCurrency(stats.todayServiceTotal || 0)}
+              sub={`UPI: ${formatCurrency(stats.todayServiceUPI || 0)}`}
+              icon={IndianRupee}
+              color="bg-emerald-500"
+              onClick={() => onNavigate('servicepayments')}
+            />
+            <MiniStat
+              label="Month Service"
+              value={formatCurrency(stats.monthServiceTotal || 0)}
+              sub={`Cash: ${formatCurrency(stats.monthServiceCash || 0)}`}
+              icon={TrendingUp}
+              color="bg-purple-500"
+              onClick={() => onNavigate('servicepayments')}
+            />
+          </div>
+
+          {/* 50-50 Profit Share cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+            <Card className="border-0 overflow-hidden shadow-lg">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-4 sm:p-6 text-white">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-lg">Admin Share (50%)</h3>
+                    <p className="text-blue-100 text-xs">Your share from paid service jobs</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white/10 rounded-xl">
+                    <span className="text-blue-100 text-sm">This Month</span>
+                    <span className="font-bold text-xl">{formatCurrency(stats.adminTotalShare || 0)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-white/20 space-y-1">
+                    <div className="flex justify-between text-sm text-blue-100">
+                      <span>Service Share:</span>
+                      <span>{formatCurrency(stats.adminServiceShare || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-blue-100">
+                      <span>Parts Profit Share:</span>
+                      <span>{formatCurrency(stats.adminPartsShare || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="border-0 overflow-hidden shadow-lg">
+              <div className="bg-gradient-to-br from-purple-500 to-purple-700 p-4 sm:p-6 text-white">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-lg">Engineer Share (50%)</h3>
+                    <p className="text-purple-100 text-xs">Engineer share from paid service jobs</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 bg-white/10 rounded-xl">
+                    <span className="text-purple-100 text-sm">This Month</span>
+                    <span className="font-bold text-xl">{formatCurrency(stats.engineerTotalShare || 0)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-white/20 space-y-1">
+                    <div className="flex justify-between text-sm text-purple-100">
+                      <span>Service Share:</span>
+                      <span>{formatCurrency(stats.engineerServiceShare || 0)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-purple-100">
+                      <span>Parts Profit Share:</span>
+                      <span>{formatCurrency(stats.engineerPartsShare || 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
 
       {/* Recent Activity - 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">

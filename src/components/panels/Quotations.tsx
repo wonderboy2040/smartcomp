@@ -314,6 +314,7 @@ export function QuotationsPanel() {
       </Card>
 
       <DocForm
+        key={editing?.id || 'new'}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         docType="quotation"
