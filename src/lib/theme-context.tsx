@@ -11,7 +11,7 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'light',
+  theme: 'dark',
   toggleTheme: () => {},
   setTheme: () => {},
 })
@@ -34,13 +34,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Read initial theme from localStorage so the very first client render
   // matches what the inline script in layout.tsx already applied to <html>.
   // This avoids a flash of wrong theme and avoids hydration mismatches.
+  // DEFAULT IS DARK — first-time visitors get dark mode automatically.
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'light'
+    if (typeof window === 'undefined') return 'dark'
     try {
       const stored = localStorage.getItem('smartcomp-theme')
       if (stored === 'light' || stored === 'dark') return stored
     } catch {}
-    return 'light'
+    return 'dark'
   })
 
   // Apply theme on every change

@@ -51,6 +51,34 @@ export function getConfigError(): string | null {
   return null
 }
 
+/**
+ * Detect when Apps Script returns an HTML page instead of JSON.
+ * This happens when:
+ *   - The URL is the script editor URL (/macros/d/.../edit) instead of the
+ *     deployment URL (/macros/s/.../exec)
+ *   - The Web App isn't deployed yet
+ *   - Access is set to "Only myself" instead of "Anyone"
+ *   - Google is showing a login/consent page
+ * Returns a helpful, human-readable error message in those cases.
+ */
+function diagnoseHtmlResponse(text: string): string | null {
+  if (!text || text.length < 20) return null
+  const lower = text.toLowerCase()
+  // Google login page
+  if (lower.includes('<title>sign in - google accounts</title>') || lower.includes('accounts.google.com/servicelogin')) {
+    return 'Google is asking for sign-in. Open your Apps Script URL directly in the browser, sign in once, then try again. Also make sure your Web App is deployed with "Who has access: Anyone".'
+  }
+  // Apps Script editor / not-deployed page
+  if (lower.includes('<title>apps script</title>') || lower.includes('script.google.com')) {
+    return 'The URL looks like the Apps Script editor, not a deployed Web App. Deploy your script: Deploy → New deployment → Web app → "Anyone" access → copy the /exec URL.'
+  }
+  // Generic HTML (consent screen, error page, etc.)
+  if (lower.includes('<!doctype html') || lower.includes('<html')) {
+    return 'Apps Script returned an HTML page instead of JSON. Common causes: (1) URL is wrong — use the /exec deployment URL, not /edit. (2) Web App access is set to "Only myself" — change to "Anyone". (3) Script has errors — check the Apps Script editor execution log.'
+  }
+  return null
+}
+
 async function callAppsScript(payload: any): Promise<any> {
   if (!APPS_SCRIPT_URL) {
     throw new Error('APPS_SCRIPT_URL not configured')
@@ -78,16 +106,20 @@ async function callAppsScript(payload: any): Promise<any> {
       try {
         return JSON.parse(text)
       } catch {
+        // HTML response — diagnose the most likely cause
+        const hint = diagnoseHtmlResponse(text)
+        if (hint) throw new Error(hint)
         throw new Error('Invalid response from Apps Script: ' + text.slice(0, 200))
       }
     } catch (e: any) {
       lastErr = e
-      // If it's a timeout or 404, retry with backoff. Otherwise throw immediately.
-      const isRetryable = e?.message?.includes('404') ||
+      // If it's a timeout or 404, retry with backoff. HTML/login errors are NOT retryable.
+      const isRetryable = (e?.message?.includes('404') ||
                           e?.message?.includes('timeout') ||
                           e?.message?.includes('aborted') ||
                           e?.name === 'TimeoutError' ||
-                          e?.name === 'AbortError'
+                          e?.name === 'AbortError') &&
+                         !e?.message?.includes('HTML page')
       if (!isRetryable || attempt === 3) throw e
       // Exponential backoff: 1s, 2s, 4s
       await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
@@ -123,15 +155,19 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
       try {
         return JSON.parse(text)
       } catch {
+        // HTML response — diagnose the most likely cause
+        const hint = diagnoseHtmlResponse(text)
+        if (hint) throw new Error(hint)
         throw new Error('Invalid response from Apps Script: ' + text.slice(0, 200))
       }
     } catch (e: any) {
       lastErr = e
-      const isRetryable = e?.message?.includes('404') ||
+      const isRetryable = (e?.message?.includes('404') ||
                           e?.message?.includes('timeout') ||
                           e?.message?.includes('aborted') ||
                           e?.name === 'TimeoutError' ||
-                          e?.name === 'AbortError'
+                          e?.name === 'AbortError') &&
+                         !e?.message?.includes('HTML page')
       if (!isRetryable || attempt === 3) throw e
       await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
     }
@@ -280,6 +316,21 @@ export async function testConnection(): Promise<{ success: boolean; message: str
   try {
     if (!APPS_SCRIPT_URL) {
       return { success: false, message: 'APPS_SCRIPT_URL not set in environment' }
+    }
+    // Pre-flight URL validation — catch the most common mistake before
+    // even hitting the network. The Apps Script Web App URL must end with /exec.
+    const urlStr = String(APPS_SCRIPT_URL).trim()
+    if (urlStr.includes('/macros/d/') && urlStr.includes('/edit')) {
+      return {
+        success: false,
+        message: 'This looks like the Apps Script editor URL, not the Web App URL. In Apps Script: click Deploy → Manage deployments → copy the URL that ends with /exec (not /edit).',
+      }
+    }
+    if (!urlStr.includes('/exec')) {
+      return {
+        success: false,
+        message: 'The Apps Script URL should end with "/exec". Open Apps Script → Deploy → New deployment → Web app → copy the /exec URL.',
+      }
     }
     const res = await callAppsScript({ action: 'test' })
     return res.success

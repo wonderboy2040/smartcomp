@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast'
 import {
   Store, Settings as SettingsIcon, FileSpreadsheet, RefreshCw,
   CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy,
-  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send
+  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X
 } from 'lucide-react'
 
 export function SettingsPanel() {
@@ -164,20 +164,27 @@ function SyncStatus() {
   const { toast } = useToast()
   const { data: status, refetch } = useFetch<any>('/api/sheets/sync', undefined)
   const [testing, setTesting] = useState(false)
+  const [lastError, setLastError] = useState<string | null>(null)
+  const [lastSuccess, setLastSuccess] = useState<string | null>(null)
 
   const handleTest = async () => {
     setTesting(true)
+    setLastError(null)
+    setLastSuccess(null)
     try {
       const r = await fetch('/api/settings', { method: 'POST' })
       const res = await r.json()
       if (res.success) {
+        setLastSuccess(res.message || 'Connected to Google Sheets successfully!')
         toast({ title: 'Connection successful!', description: 'Your Google Sheet is connected.' })
       } else {
-        toast({ title: 'Connection failed', description: res.message, variant: 'destructive' })
+        setLastError(res.message || 'Connection failed')
+        toast({ title: 'Connection failed', description: res.message, variant: 'destructive', duration: 10000 })
       }
       refetch()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      setLastError(e.message || 'Network error')
+      toast({ title: 'Error', description: e.message, variant: 'destructive', duration: 10000 })
     } finally {
       setTesting(false)
     }
@@ -235,6 +242,32 @@ function SyncStatus() {
           <Button variant="outline" onClick={handleTest} disabled={testing} className="w-full">
             {testing ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Testing...</> : <><Zap className="w-4 h-4 mr-1.5" /> Test Connection</>}
           </Button>
+
+          {/* Persistent error/success display — stays visible until dismissed */}
+          {lastError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-red-800 mb-1">Connection Failed</p>
+                <p className="text-xs text-red-700 break-words whitespace-pre-wrap">{lastError}</p>
+              </div>
+              <button onClick={() => setLastError(null)} className="text-red-400 hover:text-red-600 flex-shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {lastSuccess && !lastError && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-emerald-800 mb-1">Connected!</p>
+                <p className="text-xs text-emerald-700 break-words">{lastSuccess}</p>
+              </div>
+              <button onClick={() => setLastSuccess(null)} className="text-emerald-400 hover:text-emerald-600 flex-shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mt-2">
             <div className="flex items-start gap-2">

@@ -55,11 +55,18 @@ export const viewport: Viewport = {
 };
 
 // Inline script to prevent flash-of-wrong-theme (runs before React hydrates)
+// DEFAULT IS DARK — if no stored preference, apply dark mode immediately.
 const themeScript = `
 (function() {
   try {
     var stored = localStorage.getItem('smartcomp-theme');
-    if (stored === 'dark') {
+    // Default to dark if no preference stored
+    if (stored === 'light') {
+      document.documentElement.classList.remove('dark');
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', '#eef0f6');
+    } else {
+      // stored === 'dark' OR no stored preference → dark mode
       document.documentElement.classList.add('dark');
       var meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', '#16172a');
