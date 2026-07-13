@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 
 type Theme = 'light' | 'dark'
 
@@ -16,45 +16,54 @@ const ThemeContext = createContext<ThemeContextType>({
   setTheme: () => {},
 })
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light')
+function applyTheme(t: Theme) {
+  if (typeof document === 'undefined') return
+  if (t === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+  // Update theme-color meta for mobile
+  const meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) {
+    meta.setAttribute('content', t === 'dark' ? '#16172a' : '#eef0f6')
+  }
+}
 
-  // Initialize from localStorage or system preference
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  // Read initial theme from localStorage so the very first client render
+  // matches what the inline script in layout.tsx already applied to <html>.
+  // This avoids a flash of wrong theme and avoids hydration mismatches.
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === 'undefined') return 'light'
+    try {
+      const stored = localStorage.getItem('smartcomp-theme')
+      if (stored === 'light' || stored === 'dark') return stored
+    } catch {}
+    return 'light'
+  })
+
+  // Apply theme on every change
   useEffect(() => {
-    const stored = localStorage.getItem('smartcomp-theme') as Theme | null
-    if (stored === 'light' || stored === 'dark') {
-      setThemeState(stored)
-      applyTheme(stored)
-    } else {
-      // Default to light (claymorphism looks best in light)
-      setThemeState('light')
-      applyTheme('light')
-    }
+    applyTheme(theme)
+  }, [theme])
+
+  const setTheme = useCallback((t: Theme) => {
+    setThemeState(t)
+    try {
+      localStorage.setItem('smartcomp-theme', t)
+    } catch {}
   }, [])
 
-  const applyTheme = (t: Theme) => {
-    if (t === 'dark') {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-    // Update theme-color meta for mobile
-    const meta = document.querySelector('meta[name="theme-color"]')
-    if (meta) {
-      meta.setAttribute('content', t === 'dark' ? '#16172a' : '#eef0f6')
-    }
-  }
-
-  const setTheme = (t: Theme) => {
-    setThemeState(t)
-    localStorage.setItem('smartcomp-theme', t)
-    applyTheme(t)
-  }
-
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light'
-    setTheme(next)
-  }
+  const toggleTheme = useCallback(() => {
+    setThemeState((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light'
+      try {
+        localStorage.setItem('smartcomp-theme', next)
+      } catch {}
+      return next
+    })
+  }, [])
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>

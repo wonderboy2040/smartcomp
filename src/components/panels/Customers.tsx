@@ -20,12 +20,19 @@ import { Plus, Search, Pencil, Trash2, Users, Phone, Mail, Eye } from 'lucide-re
 export function CustomersPanel() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const [ledgerCustomer, setLedgerCustomer] = useState<any | null>(null)
 
+  // Debounce search so we don't fire an API call on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
   const { data: customers, loading, refetch } = useFetch<any[]>(
-    `/api/customers?search=${encodeURIComponent(search)}`,
+    debouncedSearch ? `/api/customers?search=${encodeURIComponent(debouncedSearch)}` : '/api/customers',
     undefined
   )
 

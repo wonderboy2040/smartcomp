@@ -21,14 +21,21 @@ import { Plus, Search, Pencil, Trash2, Package, AlertTriangle } from 'lucide-rea
 
 export function StockPanel() {
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [showLowOnly, setShowLowOnly] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const { toast } = useToast()
 
+  // Debounce search to avoid hammering the API on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
   const { data: items, loading, refetch } = useFetch<any[]>(
-    `/api/items?search=${encodeURIComponent(search)}`,
+    debouncedSearch ? `/api/items?search=${encodeURIComponent(debouncedSearch)}` : '/api/items',
     undefined
   )
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)

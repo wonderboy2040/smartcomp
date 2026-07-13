@@ -55,13 +55,34 @@ export function WhatsAppPanel() {
   const { data: waStatus } = useFetch<any>('/api/whatsapp/status', undefined)
   const cloudApiOn = !!waStatus?.configured
 
-  // Auto-refresh every 15s when on the enquiries tab, so incoming webhook replies show up live.
+  // Auto-refresh every 30s when on the enquiries tab AND the page is visible,
+  // so incoming webhook replies show up live. Paused when tab is hidden to
+  // save battery and avoid hammering Apps Script in the background.
   useEffect(() => {
     if (tab !== 'enquiries') return
-    const id = setInterval(() => {
-      invalidate('/api/enquiries')
-    }, 15000)
-    return () => clearInterval(id)
+    let timer: ReturnType<typeof setInterval> | null = null
+    const start = () => {
+      if (timer) return
+      timer = setInterval(() => {
+        invalidate('/api/enquiries')
+      }, 30000) // 30s — was 15s, doubled to halve background load
+    }
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
+    const onVisibility = () => {
+      if (document.hidden) stop()
+      else start()
+    }
+    if (!document.hidden) start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [tab])
 
   const filteredEnquiries = (enquiries || []).filter((e) => {

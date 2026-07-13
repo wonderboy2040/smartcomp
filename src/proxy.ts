@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * PIN-based access protection middleware (Edge Runtime compatible).
+ * PIN-based access protection proxy (Edge Runtime compatible).
+ *
+ * (Renamed from middleware.ts in Next.js 16 — "proxy" is the new convention;
+ *  the middleware file convention still works but is deprecated.)
  *
  * Behavior:
  *   - If APP_PIN env var is NOT set  -> app is open (backward compatible).
@@ -86,7 +89,7 @@ function isPublic(pathname: string): boolean {
   return false
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const expected = await expectedToken()
   // No PIN configured -> open access
   if (!expected) return NextResponse.next()

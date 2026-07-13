@@ -31,15 +31,20 @@ const STALE_MS = 20 * 1000 // data is considered fresh for 20s; older data trigg
 
 function notify(key: string) {
   const subs = subscribers.get(key)
-  if (subs) subs.forEach((fn) => fn())
+  if (subs) {
+    // Iterate over a copy so unsubscribing during iteration doesn't skip entries.
+    const list = Array.from(subs)
+    for (const fn of list) {
+      try { fn() } catch {}
+    }
+  }
 }
 
 function notifyPattern(prefix: string) {
   // Notify all subscribers whose key starts with prefix (handles query-string variants)
-  for (const key of subscribers.keys()) {
+  for (const key of Array.from(subscribers.keys())) {
     if (key === prefix || key.startsWith(prefix + '?') || key.startsWith(prefix + '#')) {
-      const subs = subscribers.get(key)
-      if (subs) subs.forEach((fn) => fn())
+      notify(key)
     }
   }
 }
@@ -77,7 +82,8 @@ export function invalidate(prefix: string) {
     notify(key)
     // Only refetch if a component is actually subscribed (otherwise it's
     // pointless — it'll refetch on next mount anyway)
-    if (subscribers.has(key) && subscribers.get(key)!.size > 0) {
+    const subs = subscribers.get(key)
+    if (subs && subs.size > 0) {
       doFetch(key)
     }
   }
@@ -104,21 +110,37 @@ function idOf(detailUrl: string): string | null {
 
 // ===== useFetch =====
 export function useFetch<T>(url: string | null, options?: RequestInit) {
+  // Only depend on URL + method + body for refetch decisions — not on the
+  // whole options object (which changes every render if the caller creates
+  // a fresh object inline, causing an infinite refetch loop).
+  const method = options?.method || 'GET'
   const bodyKey = options?.body ? JSON.stringify(options.body) : ''
   const optsRef = useRef(options)
   optsRef.current = options
 
   const [, setTick] = useState(0)
-  const forceRender = useCallback(() => setTick((t) => t + 1), [])
+  const forceRender = useCallback(() => setTick((t) => (t + 1) & 0x7fffffff), [])
 
   // Subscribe to cache changes for this url
   useEffect(() => {
     if (!url) return
     const key = url
-    if (!subscribers.has(key)) subscribers.set(key, new Set())
-    subscribers.get(key)!.add(forceRender)
+    let set = subscribers.get(key)
+    if (!set) {
+      set = new Set()
+      subscribers.set(key, set)
+    }
+    set.add(forceRender)
     return () => {
-      subscribers.get(key)?.delete(forceRender)
+      const s = subscribers.get(key)
+      if (s) {
+        s.delete(forceRender)
+        // Free the set if no subscribers remain — prevents memory leak
+        // when many distinct URLs are visited and unmounted over time.
+        if (s.size === 0) {
+          subscribers.delete(key)
+        }
+      }
     }
   }, [url, forceRender])
 
@@ -133,14 +155,16 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
       // Background fetch (don't clear existing cached data while loading)
       doFetch(url, optsRef.current)
     }
-  }, [url, bodyKey]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, method, bodyKey])
 
   const refetch = useCallback(() => {
     if (!url) return
     // Force a fresh fetch bypassing cache
     timestamps.set(url, 0)
     doFetch(url, optsRef.current)
-  }, [url, bodyKey]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, method, bodyKey])
 
   const data: T | null = url ? (cache.get(url) ?? null) : null
   const hasEverLoaded = url ? timestamps.has(url) : false
@@ -151,7 +175,8 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
 }
 
 function doFetch(url: string, options?: RequestInit) {
-  if (inflight.has(url)) return inflight.get(url)!
+  const existing = inflight.get(url)
+  if (existing) return existing
   const p = fetch(url, options)
     .then(async (r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -161,6 +186,7 @@ function doFetch(url: string, options?: RequestInit) {
       return d
     })
     .catch((e) => {
+      // Don't overwrite existing cached data on error — keep stale data visible
       cache.set(`__error:${url}`, e?.message || 'Failed')
       notify(url)
       throw e
@@ -278,6 +304,7 @@ export async function apiDelete(url: string) {
 // ===== helper: prefetch a URL (warms the cache) =====
 export function prefetch(url: string) {
   if (!cache.has(url) || Date.now() - (timestamps.get(url) || 0) > STALE_MS) {
-    doFetch(url)
+    // Don't throw on prefetch errors — they'd surface as unhandled rejections.
+    doFetch(url).catch(() => {})
   }
 }

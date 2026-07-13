@@ -12,9 +12,12 @@ import {
   TrendingDown, ShoppingBag, CreditCard
 } from 'lucide-react'
 
-export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => void }) {
+export function DashboardView({ onNavigate, sheetsConnected = true }: { onNavigate: (tab: string) => void; sheetsConnected?: boolean }) {
   const { data, loading, refetch } = useFetch<any>('/api/dashboard', undefined)
-  const { data: sheetsData } = useFetch<any>('/api/sheets/sync', undefined)
+
+  // PERFORMANCE: Previously we fetched /api/sheets/sync on every Dashboard mount.
+  // That call returns the same `enabled` flag as the parent's /api/config check,
+  // so the parent now passes `sheetsConnected` directly — saves one network call.
 
   const stats = data?.stats || {}
   const recentInvoices = data?.recentInvoices || []
@@ -36,7 +39,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (tab: string) => voi
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {sheetsData?.enabled ? (
+          {sheetsConnected ? (
             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 px-2 py-1 text-[10px] sm:text-xs">
               <CheckCircle2 className="w-3 h-3 mr-1" /> <span className="hidden sm:inline">Sheets Connected</span><span className="sm:hidden">Connected</span>
             </Badge>
