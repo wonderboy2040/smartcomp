@@ -84,6 +84,12 @@ Changelog of fixes and optimizations applied to the original `wonderboy2040/smar
 20. **`notify()` in `api.ts` iterates over a copy of subscribers**
     - Prevents skipping entries if a subscriber unsubscribes itself during the callback.
 
+21. **CRITICAL: Fixed React error #310 in `page.tsx` (Rules of Hooks violation)**
+    - **Symptom**: Users saw a minified React error #310 ("Rendered more hooks than during the previous render") on production deployments, especially when `APP_PIN` was set.
+    - **Root cause**: `useCallback(handleNavigate)` and `useMemo(shopName)` were called AFTER the early returns `if (!configChecked) return …` and `if (!isConfigured) return <SetupWizard />`. On the first render, the component returned early (0 hooks called). On the next render, when `configChecked` flipped to `true`, those hooks were called — changing the hook count and triggering React error #310.
+    - **Fix**: Moved `useCallback` and `useMemo` ABOVE the early returns, so hook count is constant on every render regardless of config state.
+    - This is a textbook Rules of Hooks violation — hooks must never be conditional or after early returns.
+
 ## What Was NOT Changed (On Purpose)
 
 - **`apps-script/code.gs`** — backend logic untouched. Data protection (soft-delete, blocked replaceAll) is preserved.

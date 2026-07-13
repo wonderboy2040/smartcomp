@@ -152,6 +152,28 @@ function HomeInner() {
     }
   }, [isConfigured])
 
+  // ===== ALL HOOKS MUST BE ABOVE THE EARLY RETURNS BELOW =====
+  // (React's Rules of Hooks: hook count must not change between renders.
+  //  Putting useCallback / useMemo after `if (!configChecked) return …`
+  //  would cause React error #310 "Rendered more hooks than during the
+  //  previous render" on the render where configChecked flips to true.)
+  const handleNavigate = useCallback((tab: string) => {
+    setActive(tab)
+    setSidebarOpen(false)
+    setMountedPanels((prev) => {
+      if (prev.has(tab)) return prev
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [])
+
+  const shopName = useMemo(() => shop?.name || 'Smart Computers', [shop])
+  // ============================================================
+
   // Show setup wizard if not configured
   if (!configChecked) {
     return (
@@ -167,23 +189,6 @@ function HomeInner() {
 
   const lowStockCount = dashData?.stats?.lowStockCount || 0
   const pendingEnquiries = dashData?.stats?.pendingEnquiries || 0
-
-  const handleNavigate = useCallback((tab: string) => {
-    setActive(tab)
-    setSidebarOpen(false)
-    // Lazily mount the panel — it stays mounted afterwards so future switches are instant
-    setMountedPanels((prev) => {
-      if (prev.has(tab)) return prev
-      const next = new Set(prev)
-      next.add(tab)
-      return next
-    })
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }, [])
-
-  const shopName = useMemo(() => shop?.name || 'Smart Computers', [shop])
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--clay-bg)' }}>
