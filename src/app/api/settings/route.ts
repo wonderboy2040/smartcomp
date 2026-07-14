@@ -8,7 +8,7 @@ export async function GET() {
     message: 'Google Sheets sync is configured via APPS_SCRIPT_URL environment variable.',
     urlPreview: urlInfo.urlPreview,
     urlConfigured: urlInfo.configured,
-    urlEndsWithExec: urlInfo.endsWithExec,
+    urlEndsWithExec: urlInfo.endsWithWithExec,
   })
 }
 

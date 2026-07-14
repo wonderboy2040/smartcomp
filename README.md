@@ -240,6 +240,34 @@ Set the `APPS_SCRIPT_URL` env var in Render (or `.env.local` locally) to your Ap
 ### Apps Script returns 401/403
 Re-deploy the Apps Script as a Web App with "Who has access: **Anyone**". If you restricted it, the server can't call it.
 
+### Apps Script returns HTML instead of JSON (the "ʀɴʜss" page) — v2.7 fix
+This is the **most common** error and happens when your deployed Apps Script code is:
+- outdated (pre-v2.7 — missing safety wrappers, so runtime errors escape as Google's HTML error page),
+- has a syntax error (incomplete copy-paste),
+- or was never re-deployed after you updated the code.
+
+**One-click fix (v2.7+)**:
+1. Open your SmartComp app → **Settings → Sync tab**.
+2. Click the new **"Copy latest Apps Script code"** button — this copies the v2.7 `code.gs` to your clipboard directly from your running app (no need to go to GitHub).
+3. Open your Google Sheet → **Extensions → Apps Script**.
+4. In the editor: **Ctrl+A → Delete → Ctrl+V → Ctrl+S**.
+5. Click **Deploy → Manage deployments → pencil icon → Version: New version → Deploy**.
+6. If the URL changed, update `APPS_SCRIPT_URL` env var on Render/Vercel and redeploy.
+7. Come back to Settings → click **"Test Connection"** — it should succeed.
+
+If the clipboard copy fails (some browsers block it on insecure origins), use the **"Download code.gs"** button or click **"Show code"** to view it inline.
+
+### How to verify which Apps Script version you have deployed
+Open your Apps Script URL in the browser with `?action=version` appended, e.g.:
+```
+https://script.google.com/macros/s/AKfycb.../exec?action=version
+```
+You should see JSON like:
+```json
+{"success":true,"version":"2.7","codename":"Protected Edition","features":[...]}
+```
+If the response is HTML or shows a version older than `2.7`, your deployment is stale and needs to be updated with the latest code.
+
 ### PIN screen keeps appearing even after login
 - Make sure `APP_PIN` is set to digits only (e.g. `1234`), not quoted with spaces.
 - Clear browser cookies for the domain and log in again.

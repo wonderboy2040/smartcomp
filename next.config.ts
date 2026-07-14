@@ -56,6 +56,14 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Include apps-script/code.gs in the serverless build output so the
+  // /api/apps-script-code endpoint can read it at runtime. Without this,
+  // Next.js may tree-shake the file out of the deployment on platforms
+  // like Vercel that use file-tracing.
+  outputFileTracingIncludes: {
+    '/api/apps-script-code': ['./apps-script/code.gs'],
+  },
+
   async headers() {
     const securityHeaders = [
       { key: 'X-Content-Type-Options', value: 'nosniff' },

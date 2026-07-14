@@ -166,6 +166,9 @@ function SyncStatus() {
   const { data: settingsInfo } = useFetch<any>('/api/settings', undefined)
   const [testing, setTesting] = useState(false)
   const [debugging, setDebugging] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [showCode, setShowCode] = useState(false)
+  const [codeContent, setCodeContent] = useState<string>('')
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastSuccess, setLastSuccess] = useState<string | null>(null)
   const [debugResult, setDebugResult] = useState<any | null>(null)
@@ -190,6 +193,61 @@ function SyncStatus() {
       toast({ title: 'Error', description: e.message, variant: 'destructive', duration: 10000 })
     } finally {
       setTesting(false)
+    }
+  }
+
+  const handleCopyCode = async () => {
+    setCopying(true)
+    try {
+      const r = await fetch('/api/apps-script-code')
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${r.status}`)
+      }
+      const text = await r.text()
+      setCodeContent(text)
+
+      // Try clipboard copy
+      try {
+        await navigator.clipboard.writeText(text)
+        toast({
+          title: 'Code copied to clipboard!',
+          description: 'Now paste it into your Apps Script editor (Ctrl+A → Delete → Ctrl+V).',
+          duration: 8000,
+        })
+      } catch {
+        // Clipboard API failed — show the code in a modal so user can manually copy
+        setShowCode(true)
+        toast({
+          title: 'Could not auto-copy',
+          description: 'Click "Show code" to view and manually copy the code.',
+          duration: 8000,
+        })
+      }
+    } catch (e: any) {
+      toast({ title: 'Could not fetch code', description: e.message, variant: 'destructive', duration: 10000 })
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  const handleDownloadCode = async () => {
+    try {
+      const r = await fetch('/api/apps-script-code')
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const text = await r.text()
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'code.gs'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast({ title: 'Downloaded code.gs', description: 'Open this file → copy contents → paste into Apps Script editor.' })
+    } catch (e: any) {
+      toast({ title: 'Download failed', description: e.message, variant: 'destructive' })
     }
   }
 
@@ -307,6 +365,93 @@ function SyncStatus() {
               </div>
             </div>
           )}
+
+          {/* ===== ONE-CLICK FIX: Copy latest Apps Script code ===== */}
+          <div className="bg-gradient-to-br from-emerald-50 to-cyan-50 border border-emerald-200 rounded-xl p-4">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-slate-900 text-sm">
+                  Quick Fix: Update your Apps Script code (v2.7)
+                </p>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  If Test Connection fails or returns HTML, your deployed Apps Script is outdated.
+                  Click below to copy the latest code, then paste it into your Apps Script editor.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleCopyCode}
+                disabled={copying}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1 min-w-[160px]"
+                size="sm"
+              >
+                {copying
+                  ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Copying...</>
+                  : <><Copy className="w-4 h-4 mr-1.5" /> Copy latest Apps Script code</>}
+              </Button>
+              <Button
+                onClick={handleDownloadCode}
+                variant="outline"
+                size="sm"
+                className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+              >
+                <FileSpreadsheet className="w-4 h-4 mr-1.5" /> Download code.gs
+              </Button>
+              {codeContent && (
+                <Button
+                  onClick={() => setShowCode(s => !s)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-600"
+                >
+                  <Code className="w-4 h-4 mr-1.5" /> {showCode ? 'Hide' : 'Show'} code
+                </Button>
+              )}
+            </div>
+
+            {/* Collapsible code viewer (shown if clipboard failed or user clicked Show) */}
+            {showCode && codeContent && (
+              <div className="mt-3">
+                <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-[10px] sm:text-xs overflow-auto max-h-72">
+                  <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700 sticky top-0 bg-slate-900 -mt-3 -mx-3 px-3 pt-3">
+                    <span className="font-semibold text-cyan-400">apps-script/code.gs (v2.7, {codeContent.length} chars)</span>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(codeContent); toast({ title: 'Copied to clipboard' }) }}
+                      className="text-emerald-400 hover:text-emerald-300 text-[10px] font-medium"
+                    >
+                      <Copy className="w-3 h-3 inline mr-1" /> Copy
+                    </button>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all text-slate-300">{codeContent}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* Step-by-step instructions */}
+            <details className="mt-3 group">
+              <summary className="text-xs font-medium text-emerald-700 cursor-pointer hover:text-emerald-800 list-none flex items-center gap-1">
+                <span className="group-open:rotate-90 transition-transform">▶</span>
+                Show step-by-step deployment instructions
+              </summary>
+              <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-700 mt-2 pl-2">
+                <li>Click <strong>"Copy latest Apps Script code"</strong> above (or download the file).</li>
+                <li>Open your Google Sheet → click <strong>Extensions → Apps Script</strong>.</li>
+                <li>In the Apps Script editor, press <strong>Ctrl+A</strong> (select all) then <strong>Delete</strong>.</li>
+                <li>Press <strong>Ctrl+V</strong> to paste the new code. Press <strong>Ctrl+S</strong> to save.</li>
+                <li>Click <strong>Deploy → Manage deployments</strong> in the top-right.</li>
+                <li>Click the <strong>pencil (edit) icon</strong> on your existing deployment.</li>
+                <li>Under <strong>Version</strong>, select <strong>"New version"</strong>.</li>
+                <li>Set <strong>"Who has access"</strong> to <strong>"Anyone"</strong>.</li>
+                <li>Click <strong>Deploy</strong> → authorize if prompted → copy the new <code className="bg-emerald-100 px-1 rounded">/exec</code> URL.</li>
+                <li>Update your <code className="bg-emerald-100 px-1 rounded">APPS_SCRIPT_URL</code> env var on Render/Vercel if the URL changed → redeploy.</li>
+                <li>Come back here → click <strong>"Test Connection"</strong>. It should succeed.</li>
+              </ol>
+            </details>
+          </div>
 
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleTest} disabled={testing} className="flex-1">

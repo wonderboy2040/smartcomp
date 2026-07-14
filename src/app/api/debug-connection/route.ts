@@ -1,27 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isConfigured, getSanitizedUrl } from '@/lib/sheets-client'
+import { isConfigured } from '@/lib/sheets-client'
 
-function cleanTitle(raw: string | null): string {
-  if (!raw) return 'SmartComputers'
-  const khmerRegex = new RegExp('[\u1780-\u17FF]')
-  const arabicRegex = new RegExp('[\u0600-\u06FF]')
-  if (khmerRegex.test(raw) || arabicRegex.test(raw) || raw === 'កំហុស' || raw.includes('បញ្ហា') || raw.includes('فشل')) {
-    return 'SmartComputers'
-  }
-  if (raw.length <= 10 && /[^\x00-\x7F]/.test(raw)) return 'SmartComputers'
-  return raw
-}
-
+/**
+ * POST /api/debug-connection
+ *
+ * Server-side diagnostic that calls the configured APPS_SCRIPT_URL directly
+ * and returns the FULL response (status, headers, body) so the user can see
+ * exactly what Google is returning. This is for debugging only — the URL
+ * itself is never exposed to the client.
+ *
+ * Body: { method?: 'GET' | 'POST', action?: string }
+ */
 export async function POST(req: NextRequest) {
   try {
     if (!isConfigured()) {
-      return NextResponse.json({ error: 'APPS_SCRIPT_URL not configured', configured: false }, { status: 503 })
+      return NextResponse.json({ error: 'APPS_SCRIPT_URL not configured' }, { status: 503 })
     }
-    const APPS_SCRIPT_URL = getSanitizedUrl()
+
+    const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL!
     const body = await req.json().catch(() => ({}))
     const method = (body.method || 'GET').toUpperCase() as 'GET' | 'POST'
     const action = body.action || 'test'
 
+    // Build URL with query params for GET, or body for POST
     let url = APPS_SCRIPT_URL
     let fetchOptions: any = { method, redirect: 'follow', signal: AbortSignal.timeout(30000) }
 
@@ -29,86 +30,102 @@ export async function POST(req: NextRequest) {
       const u = new URL(APPS_SCRIPT_URL)
       u.searchParams.set('action', action)
       u.searchParams.set('t', String(Date.now()))
-      u.searchParams.set('_debug', '1')
       url = u.toString()
     } else {
-      fetchOptions.headers = { 'Content-Type': 'text/plain;charset=utf-8', 'Accept': 'application/json' }
+      fetchOptions.headers = { 'Content-Type': 'text/plain;charset=utf-8' }
       fetchOptions.body = JSON.stringify({ action })
     }
+
+    console.log('[debug-connection] Calling Apps Script:', method, 'action:', action)
 
     const res = await fetch(url, fetchOptions)
     const text = await res.text()
     const headers: Record<string, string> = {}
     res.headers.forEach((value, key) => { headers[key] = value })
 
+    // Extract <title> tag content if present
     const titleMatch = text.match(/<title[^>]*>([^<]*)<\/title>/i)
-    const rawTitle = titleMatch ? titleMatch[1].trim() : null
-    const title = cleanTitle(rawTitle)
+    const title = titleMatch ? titleMatch[1].trim() : null
 
     const lower = text.toLowerCase()
-    const isJson = lower.trimStart().startsWith('{') || lower.trimStart().startsWith('[')
-
     return NextResponse.json({
-      success: res.ok && isJson,
+      success: res.ok,
       status: res.status,
       statusText: res.statusText,
       contentType: headers['content-type'] || '',
       redirected: res.redirected,
-      finalUrl: res.url,
+      finalUrl: res.url, // final URL after redirects (helps detect login redirects)
       bodyLength: text.length,
-      bodyPreview: text.slice(0, 3000),
+      bodyPreview: text.slice(0, 2000), // first 2000 chars — enough to see the full error
       isHtml: lower.includes('<html') || lower.includes('<!doctype'),
-      rawTitle: rawTitle,
-      title: title, // Now always SmartComputers if was foreign
-      titleWasForeign: rawTitle !== title,
-      looksLikeLoginPage: lower.includes('sign in - google accounts') || lower.includes('accounts.google.com/servicelogin'),
-      looksLikeErrorPage: (rawTitle && /error|فشل|កំហុស|បញ្ហា|fail/i.test(rawTitle)) || lower.includes('فشل') || lower.includes('កំហុស'),
-      looksLikeEditorPage: lower.includes('<title>apps script</title>') || (lower.includes('script.google.com') && lower.includes('editor')),
-      looksLikeJson: isJson,
-      sanitizedUrlUsed: APPS_SCRIPT_URL.slice(0, 60) + '.../exec',
-      diagnosis: diagnose(rawTitle, title, lower, res.redirected, res.url, text),
+      title,
+      looksLikeLoginPage:
+        lower.includes('sign in - google accounts') ||
+        lower.includes('accounts.google.com/servicelogin') ||
+        lower.includes('service login'),
+      looksLikeErrorPage:
+        lower.includes('<title>error</title>') ||
+        lower.includes('docs/script/images/favicon.ico') ||
+        (lower.includes('error-message') && lower.includes('font-family')) ||
+        /<title>[^<]*(error|កំហុស|错误|錯誤|ত্রুটি|गलती|erreur|fehler|erra|erro)[^<]*<\/title>/i.test(text),
+      looksLikeEditorPage:
+        lower.includes('<title>apps script</title>') ||
+        (lower.includes('script.google.com') && lower.includes('editor')),
+      looksLikeJson: lower.trimStart().startsWith('{') || lower.trimStart().startsWith('['),
+      diagnosis: diagnose(title, lower, res.redirected, res.url),
     })
   } catch (e: any) {
     return NextResponse.json({
       success: false,
-      title: 'SmartComputers - Error',
       error: e?.message || 'Network error',
       name: e?.name,
-      stack: e?.stack?.slice(0, 800),
+      stack: e?.stack?.slice(0, 500),
     }, { status: 500 })
   }
 }
 
-function diagnose(rawTitle: string | null, cleanedTitle: string, lowerBody: string, redirected: boolean, finalUrl: string, raw: string): string {
+function diagnose(title: string | null, lowerBody: string, redirected: boolean, finalUrl: string): string {
   if (lowerBody.trimStart().startsWith('{') || lowerBody.trimStart().startsWith('[')) {
-    try {
-      const j = JSON.parse(raw)
-      if (j.success) return `✅ SmartComputers Connected! Response is valid JSON. Version: ${j.version || '2.9'}. Title is now "${cleanedTitle}" (was "${rawTitle}" replaced). Sync should work.`
-      return `SmartComputers: JSON but success=false: ${j.error || 'unknown'}. Check Executions log.`
-    } catch {
-      return 'SmartComputers: Response looks like JSON but parse failed. Check bodyPreview.'
-    }
-  }
-  if (lowerBody.includes('schemas') && lowerBody.includes('already been declared')) {
-    return `🔴 SmartComputers - DUPLICATE FILE ERROR (Title "${rawTitle}" → replaced with "${cleanedTitle}")\n\nAapke Apps Script me 2 files hain: Code.gs + Copy of Code. FIX:\n1. Extensions → Apps Script → Left Files → Copy of Code → 3 dots → Delete\n2. Sirf Code.gs me naya v2.9 paste → Save\n3. Deploy → Manage deployments → New version → Deploy\n\nTitle "កំហុស" ka matlab Google ka error page hai - duplicate ki wajah se. Delete karne se title automatic "SmartComputers" ho jayega.`
-  }
-  if (rawTitle && (rawTitle.includes('កំហុស') || rawTitle.includes('បញ្ហា') || /[\u1780-\u17FF]/.test(rawTitle))) {
-    return `SmartComputers - Title "${rawTitle}" was Khmer Error (កំហុស = Error). Replaced with "${cleanedTitle}".\n\nIska matlab Apps Script me SyntaxError hai (duplicate file ya old code).\n\nFIX:\n1. Delete "Copy of Code" file\n2. Paste new v2.9 code.gs\n3. Deploy New version\n\nAb title SmartComputers dikhega aur JSON aayega.`
+    return 'Response is JSON — Apps Script is working correctly. The issue may be elsewhere.'
   }
   if (redirected && (finalUrl.includes('accounts.google.com') || finalUrl.includes('servicelogin'))) {
-    return 'SmartComputers - LOGIN REQUIRED: Deploy → Who has access = Anyone'
+    return 'LOGIN REQUIRED: Google redirected to a sign-in page. Open the Apps Script URL directly in your browser, sign in with your Google account, then redeploy with "Who has access: Anyone".'
   }
   if (lowerBody.includes('sign in - google accounts') || lowerBody.includes('accounts.google.com/servicelogin')) {
-    return 'SmartComputers - LOGIN REQUIRED: Redeploy with Anyone access.'
+    return 'LOGIN REQUIRED: Google is showing a sign-in page. Open the Apps Script URL directly in your browser, sign in, then redeploy with "Who has access: Anyone".'
   }
   if (lowerBody.includes('<title>apps script</title>') || (lowerBody.includes('script.google.com') && lowerBody.includes('editor'))) {
-    return 'SmartComputers - WRONG URL: /edit not /exec. Need /exec URL.'
+    return 'WRONG URL: This is the Apps Script editor page. You copied the /edit URL. Use Deploy → New deployment → Web app → copy the /exec URL instead.'
+  }
+  // v2.7: Google's standard Apps Script error page (favicon + body background
+  // + error-message CSS class). Title may be an encoded string like "ʀɴʜss".
+  // This is the most common failure mode when the deployed code is stale/broken.
+  if (lowerBody.includes('docs/script/images/favicon.ico') ||
+      (lowerBody.includes('error-message') && lowerBody.includes('font-family'))) {
+    return `STALE OR BROKEN APPS SCRIPT (v2.7 detection): Google returned its standard error page (favicon + error-message CSS class). The title was "${title || '(empty)'}".
+
+This happens when the deployed Apps Script code is:
+  - OUTDATED (pre-v2.7 — missing safety wrappers, so errors escape as HTML)
+  - Has a SYNTAX ERROR (copy-paste was incomplete or has a typo)
+  - Was never properly deployed (you saved the code but didn't create a new deployment version)
+
+FIX (one-click):
+  1. Click "Copy latest Apps Script code" button below — copies v2.7 to clipboard
+  2. Open your Google Sheet → Extensions → Apps Script
+  3. Select ALL (Ctrl+A) → DELETE everything → PASTE the new code (Ctrl+V)
+  4. Save (Ctrl+S)
+  5. Click Deploy → Manage deployments → pencil icon → Version: New version → Deploy
+  6. Come back to this page → click "Test Connection"`
+  }
+  // Error page detection (multilingual)
+  if (title && /error|កំហុស|错误|錯誤|ত্রুটি|गलती|erreur|fehler|erro/i.test(title)) {
+    return `APPS SCRIPT ERROR: Google is showing an error page titled "${title}". This usually means the script has a runtime error. Open the Apps Script editor → Run → "doGet" or "doPost" function → check the execution log for the error. Common causes: (1) syntax error in code.gs, (2) the sheet name doesn\'t exist, (3) missing permissions for SpreadsheetApp.`
   }
   if (lowerBody.includes('not found') || lowerBody.includes('404')) {
-    return 'SmartComputers - DEPLOYMENT NOT FOUND: New deployment karo.'
+    return 'DEPLOYMENT NOT FOUND: The Apps Script deployment was deleted or the URL is stale. Create a new deployment: Deploy → New deployment → Web app → copy new /exec URL.'
   }
   if (lowerBody.includes('<!doctype html') || lowerBody.includes('<html')) {
-    return `SmartComputers - HTML Response (title "${cleanedTitle}" was "${rawTitle}" replaced). Causes: duplicate file, wrong /edit URL, restricted access, old code. Check bodyPreview.`
+    return 'UNKNOWN HTML RESPONSE: Apps Script returned an HTML page. Check the bodyPreview field to see what Google returned, and the title field for the page title.'
   }
-  return `SmartComputers - Unknown response. Title cleaned to "${cleanedTitle}". Check bodyPreview.`
+  return 'Unknown response type. Check bodyPreview.'
 }
