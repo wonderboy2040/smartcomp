@@ -49,7 +49,7 @@ var SCHEMAS = (typeof SCHEMAS !== 'undefined' && SCHEMAS) ? SCHEMAS : {
 };
 
 var SHEET_NAMES = (typeof SHEET_NAMES !== 'undefined' && SHEET_NAMES) ? SHEET_NAMES : Object.keys(SCHEMAS);
-var SCRIPT_VERSION = '2.8-duplicate-safe';
+var SCRIPT_VERSION = '2.9-SmartComputers-title-fixed';
 
 // ===== GET HANDLER =====
 function doGet(e) {
@@ -58,22 +58,25 @@ function doGet(e) {
     var action = params.action || 'status';
 
     if (action === 'ping') {
-      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: SCRIPT_VERSION });
+      return json({ success: true, message: 'SmartComputers pong', time: new Date().toISOString(), version: SCRIPT_VERSION, brand: 'SmartComputers' });
     }
     if (action === 'test') {
       return json({
         success: true,
-        message: 'Connection successful (Protected Edition v2.8)',
+        message: 'SmartComputers Connected! Google Sheets sync working (Protected Edition v2.9)',
         version: SCRIPT_VERSION,
         dataProtection: true,
         sheets: SHEET_NAMES,
+        brand: 'SmartComputers',
+        title: 'SmartComputers',
         time: new Date().toISOString(),
         duplicateSafe: true,
-        hint: 'If you previously saw SCHEMAS already declared, delete Copy of Code file in Apps Script editor. This version is duplicate-safe via var+guard.'
+        titleFixed: true,
+        hint: 'Title កំហុស removed, now SmartComputers. If you previously saw SCHEMAS already declared, delete Copy of Code file. This version is duplicate-safe.'
       });
     }
     if (action === 'status') {
-      return json({ success: true, message: 'Smart Computers API running (Protected v' + SCRIPT_VERSION + ')', sheets: SHEET_NAMES, dataProtection: true, version: SCRIPT_VERSION, duplicateSafe: true });
+      return json({ success: true, message: 'SmartComputers API running (Protected v' + SCRIPT_VERSION + ')', title: 'SmartComputers', brand: 'SmartComputers', sheets: SHEET_NAMES, dataProtection: true, version: SCRIPT_VERSION, duplicateSafe: true });
     }
 
     try {
@@ -132,10 +135,10 @@ function doPost(e) {
     if (!action) return json({ success: false, error: 'Missing action in body', version: SCRIPT_VERSION });
 
     if (action === 'test') {
-      return json({ success: true, message: 'Connection successful (Protected Edition v2.8)', version: SCRIPT_VERSION, dataProtection: true, duplicateSafe: true, time: new Date().toISOString() });
+      return json({ success: true, message: 'SmartComputers Connected! Google Sheets sync working (Protected v2.9)', title: 'SmartComputers', brand: 'SmartComputers', version: SCRIPT_VERSION, dataProtection: true, duplicateSafe: true, titleFixed: true, time: new Date().toISOString() });
     }
     if (action === 'ping') {
-      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: SCRIPT_VERSION });
+      return json({ success: true, message: 'SmartComputers pong', title: 'SmartComputers', brand: 'SmartComputers', time: new Date().toISOString(), version: SCRIPT_VERSION });
     }
 
     try {
