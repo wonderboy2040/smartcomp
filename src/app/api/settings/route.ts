@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server'
-import { testConnection } from '@/lib/sheets-client'
+import { testConnection, getConfiguredUrlPreview } from '@/lib/sheets-client'
 
-// GET - connection status (no settings stored in app, only env var)
+// GET - connection status + masked URL preview (so user can verify the URL format)
 export async function GET() {
+  const urlInfo = getConfiguredUrlPreview()
   return NextResponse.json({
     message: 'Google Sheets sync is configured via APPS_SCRIPT_URL environment variable.',
+    urlPreview: urlInfo.urlPreview,
+    urlConfigured: urlInfo.configured,
+    urlEndsWithExec: urlInfo.endsWithWithExec,
   })
 }
 

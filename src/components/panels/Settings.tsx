@@ -163,6 +163,7 @@ function ShopSettings() {
 function SyncStatus() {
   const { toast } = useToast()
   const { data: status, refetch } = useFetch<any>('/api/sheets/sync', undefined)
+  const { data: settingsInfo } = useFetch<any>('/api/settings', undefined)
   const [testing, setTesting] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastSuccess, setLastSuccess] = useState<string | null>(null)
@@ -179,7 +180,7 @@ function SyncStatus() {
         toast({ title: 'Connection successful!', description: 'Your Google Sheet is connected.' })
       } else {
         setLastError(res.message || 'Connection failed')
-        toast({ title: 'Connection failed', description: res.message, variant: 'destructive', duration: 10000 })
+        toast({ title: 'Connection failed', description: 'See details below', variant: 'destructive', duration: 10000 })
       }
       refetch()
     } catch (e: any) {
@@ -203,6 +204,48 @@ function SyncStatus() {
           <CardDescription>Your data is stored directly in Google Sheets via Apps Script</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* Show the configured URL (masked) so user can verify format */}
+          {settingsInfo?.urlConfigured && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Code className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <span className="text-xs font-medium text-slate-700">Configured APPS_SCRIPT_URL:</span>
+              </div>
+              <code className="block text-[10px] sm:text-xs bg-white px-2 py-1.5 rounded border border-slate-200 break-all font-mono text-slate-600">
+                {settingsInfo.urlPreview || '(not set)'}
+              </code>
+              <div className="flex items-center gap-2 flex-wrap">
+                {settingsInfo.urlEndsWithExec ? (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px]">
+                    <CheckCircle2 className="w-3 h-3 mr-1" /> URL ends with /exec ✓
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-[10px]">
+                    <AlertCircle className="w-3 h-3 mr-1" /> URL does NOT end with /exec ✗
+                  </Badge>
+                )}
+                {settingsInfo.urlPreview && (
+                  <a
+                    href={settingsInfo.urlPreview.includes('...')
+                      ? '#'
+                      : settingsInfo.urlPreview + '?action=test&t=' + Date.now()}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`text-[10px] text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 ${settingsInfo.urlPreview.includes('...') ? 'pointer-events-none opacity-50' : ''}`}
+                    onClick={(e) => {
+                      if (settingsInfo.urlPreview.includes('...')) {
+                        e.preventDefault()
+                        toast({ title: 'Cannot open masked URL', description: 'The URL is masked for security. Open it manually in your browser.', variant: 'destructive' })
+                      }
+                    }}
+                  >
+                    <ExternalLink className="w-3 h-3" /> Open in browser
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-emerald-100/50 rounded-xl border border-emerald-200">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">

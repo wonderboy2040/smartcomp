@@ -52,29 +52,77 @@ export function getConfigError(): string | null {
 }
 
 /**
+ * Mask a URL for display — shows first 40 and last 30 chars so the user
+ * can verify the format without exposing the full token.
+ */
+function maskUrl(url: string): string {
+  if (!url) return '(empty)'
+  if (url.length <= 70) return url
+  return url.slice(0, 40) + '...' + url.slice(-30)
+}
+
+/**
  * Detect when Apps Script returns an HTML page instead of JSON.
- * This happens when:
- *   - The URL is the script editor URL (/macros/d/.../edit) instead of the
- *     deployment URL (/macros/s/.../exec)
- *   - The Web App isn't deployed yet
- *   - Access is set to "Only myself" instead of "Anyone"
- *   - Google is showing a login/consent page
- * Returns a helpful, human-readable error message in those cases.
+ * Returns a detailed, actionable error message that INCLUDES the actual
+ * HTML snippet so the user can see exactly what Google is returning.
  */
 function diagnoseHtmlResponse(text: string): string | null {
   if (!text || text.length < 20) return null
   const lower = text.toLowerCase()
-  // Google login page
-  if (lower.includes('<title>sign in - google accounts</title>') || lower.includes('accounts.google.com/servicelogin')) {
-    return 'Google is asking for sign-in. Open your Apps Script URL directly in the browser, sign in once, then try again. Also make sure your Web App is deployed with "Who has access: Anyone".'
+  const snippet = text.slice(0, 300).replace(/\s+/g, ' ').trim()
+
+  // Google login page — most common cause of this error
+  if (lower.includes('sign in - google accounts') || lower.includes('accounts.google.com/servicelogin') || lower.includes('service login')) {
+    return `Google is showing a LOGIN page instead of running the script. This means the Web App access is restricted.
+
+FIX: Open your Apps Script → Deploy → Manage deployments → Edit the deployment → set "Who has access" to "Anyone" (not "Only myself" or "Anyone with Google account") → Save → try again.
+
+Response preview: ${snippet}`
   }
-  // Apps Script editor / not-deployed page
-  if (lower.includes('<title>apps script</title>') || lower.includes('script.google.com')) {
-    return 'The URL looks like the Apps Script editor, not a deployed Web App. Deploy your script: Deploy → New deployment → Web app → "Anyone" access → copy the /exec URL.'
+
+  // Apps Script "not found" / "deleted deployment" page
+  if (lower.includes('not found') && lower.includes('script')) {
+    return `Apps Script deployment not found. The deployment may have been deleted or the URL is stale.
+
+FIX: Open Apps Script → Deploy → Manage deployments → create a new deployment → copy the new /exec URL → update your APPS_SCRIPT_URL env var.
+
+Response preview: ${snippet}`
   }
-  // Generic HTML (consent screen, error page, etc.)
-  if (lower.includes('<!doctype html') || lower.includes('<html')) {
-    return 'Apps Script returned an HTML page instead of JSON. Common causes: (1) URL is wrong — use the /exec deployment URL, not /edit. (2) Web App access is set to "Only myself" — change to "Anyone". (3) Script has errors — check the Apps Script editor execution log.'
+
+  // Apps Script editor page (wrong URL — /edit instead of /exec)
+  if (lower.includes('<title>apps script</title>') || (lower.includes('script.google.com') && lower.includes('editor'))) {
+    return `This looks like the Apps Script EDITOR page, not a deployed Web App. You probably copied the /edit URL instead of the /exec URL.
+
+FIX: In Apps Script editor → click "Deploy" → "New deployment" → type "Web app" → set "Who has access: Anyone" → Deploy → copy the URL ending with /exec.
+
+Response preview: ${snippet}`
+  }
+
+  // Google consent / authorization page
+  if (lower.includes('authorize') || lower.includes('would like to') || lower.includes('grant permission')) {
+    return `Google is asking for authorization. This means the script hasn't been authorized yet.
+
+FIX: Open the Apps Script URL directly in your browser → sign in with your Google account → click "Allow" → then try Test Connection again.
+
+Response preview: ${snippet}`
+  }
+
+  // Generic HTML (any other HTML page)
+  if (lower.includes('<!doctype html') || lower.includes('<html') || lower.includes('<head')) {
+    return `Apps Script returned an HTML page instead of JSON. The most common causes are:
+
+1. WRONG URL FORMAT — The URL must end with /exec (deployment URL), NOT /edit (editor URL).
+   Correct format: https://script.google.com/macros/s/AKfycbx.../exec
+   Wrong format:   https://script.google.com/macros/d/.../edit
+
+2. ACCESS RESTRICTED — In Apps Script → Deploy → Manage deployments → edit your deployment → set "Who has access" to "Anyone" (not "Only myself").
+
+3. SCRIPT NOT DEPLOYED — The script exists but hasn't been deployed as a Web App. Deploy → New deployment → Web app.
+
+4. SCRIPT ERRORS — The script has a syntax error. Open Apps Script → Run → check the execution log.
+
+Response preview (first 300 chars):
+${snippet}`
   }
   return null
 }
@@ -312,7 +360,7 @@ export async function getDashboardStats(): Promise<any> {
 }
 
 // ===== TEST CONNECTION =====
-export async function testConnection(): Promise<{ success: boolean; message: string }> {
+export async function testConnection(): Promise<{ success: boolean; message: string; urlPreview?: string }> {
   try {
     if (!APPS_SCRIPT_URL) {
       return { success: false, message: 'APPS_SCRIPT_URL not set in environment' }
@@ -320,24 +368,48 @@ export async function testConnection(): Promise<{ success: boolean; message: str
     // Pre-flight URL validation — catch the most common mistake before
     // even hitting the network. The Apps Script Web App URL must end with /exec.
     const urlStr = String(APPS_SCRIPT_URL).trim()
+    const urlPreview = maskUrl(urlStr)
+
     if (urlStr.includes('/macros/d/') && urlStr.includes('/edit')) {
       return {
         success: false,
-        message: 'This looks like the Apps Script editor URL, not the Web App URL. In Apps Script: click Deploy → Manage deployments → copy the URL that ends with /exec (not /edit).',
+        message: 'This looks like the Apps Script EDITOR URL, not the Web App URL.\n\nFIX: In Apps Script → click "Deploy" → "Manage deployments" → copy the URL that ends with /exec (NOT /edit).',
+        urlPreview,
+      }
+    }
+    if (urlStr.includes('/home/projects/') && urlStr.includes('/edit')) {
+      return {
+        success: false,
+        message: 'This looks like the Apps Script editor URL, not a deployed Web App URL.\n\nFIX: In Apps Script → click "Deploy" → "New deployment" → type "Web app" → set "Who has access: Anyone" → Deploy → copy the /exec URL.',
+        urlPreview,
       }
     }
     if (!urlStr.includes('/exec')) {
       return {
         success: false,
-        message: 'The Apps Script URL should end with "/exec". Open Apps Script → Deploy → New deployment → Web app → copy the /exec URL.',
+        message: 'The Apps Script URL should end with "/exec".\n\nCorrect format: https://script.google.com/macros/s/AKfycbx.../exec\n\nFIX: Open Apps Script → Deploy → New deployment → Web app → copy the /exec URL.',
+        urlPreview,
       }
     }
     const res = await callAppsScript({ action: 'test' })
     return res.success
-      ? { success: true, message: 'Connected to Google Sheets successfully! (Protected Edition)' }
-      : { success: false, message: res.error || 'Connection failed' }
+      ? { success: true, message: 'Connected to Google Sheets successfully!', urlPreview }
+      : { success: false, message: res.error || 'Connection failed', urlPreview }
   } catch (e: any) {
-    return { success: false, message: e?.message || 'Connection failed' }
+    return { success: false, message: e?.message || 'Connection failed', urlPreview: APPS_SCRIPT_URL ? maskUrl(APPS_SCRIPT_URL) : undefined }
+  }
+}
+
+// ===== GET CONFIGURED URL (masked) — for Settings UI display =====
+export function getConfiguredUrlPreview(): { configured: boolean; urlPreview: string | null; endsWithExec: boolean } {
+  if (!APPS_SCRIPT_URL) {
+    return { configured: false, urlPreview: null, endsWithExec: false }
+  }
+  const urlStr = String(APPS_SCRIPT_URL).trim()
+  return {
+    configured: true,
+    urlPreview: maskUrl(urlStr),
+    endsWithExec: urlStr.includes('/exec'),
   }
 }
 
