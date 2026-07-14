@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, updateRow } from '@/lib/sheets-client'
+import { isConfigured } from '@/lib/sheets-client'
 import { sendCustomerNotification } from '@/lib/notifications'
 
 /**

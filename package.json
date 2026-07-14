@@ -1,6 +1,6 @@
 {
   "name": "smart-computers-panel",
-  "version": "2.3.1",
+  "version": "3.0.0",
   "private": true,
   "engines": {
     "node": "20.x"
@@ -9,7 +9,8 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p ${PORT:-10000}",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.11",
@@ -64,7 +65,8 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/react": "^19",

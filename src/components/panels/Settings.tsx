@@ -13,7 +13,9 @@ import { useToast } from '@/hooks/use-toast'
 import {
   Store, Settings as SettingsIcon, FileSpreadsheet, RefreshCw,
   CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy,
-  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X, Bug
+  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X, Bug,
+  Download, Upload, HardDrive, Activity, Cpu, BarChart3, FileJson,
+  FileText
 } from 'lucide-react'
 
 export function SettingsPanel() {
@@ -33,18 +35,21 @@ export function SettingsPanel() {
       </div>
 
       <Tabs defaultValue="shop">
-        <TabsList className="grid w-full grid-cols-4 h-auto">
-          <TabsTrigger value="shop" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
-            <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden xs:inline sm:inline">Shop</span><span className="xs:hidden sm:hidden">Shop</span>
+        <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsTrigger value="shop" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
+            <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Shop
           </TabsTrigger>
-          <TabsTrigger value="whatsapp" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
-            <Cloud className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> WhatsApp
+          <TabsTrigger value="whatsapp" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
+            <Cloud className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">WhatsApp</span><span className="sm:hidden">WA</span>
           </TabsTrigger>
-          <TabsTrigger value="sync" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
+          <TabsTrigger value="sync" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
             <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Sync
           </TabsTrigger>
-          <TabsTrigger value="data" className="flex items-center gap-1 py-2 text-xs sm:text-sm">
+          <TabsTrigger value="data" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
             <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Data
+          </TabsTrigger>
+          <TabsTrigger value="backup" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
+            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Backup v3.0</span><span className="sm:hidden">Backup</span>
           </TabsTrigger>
         </TabsList>
 
@@ -60,6 +65,10 @@ export function SettingsPanel() {
         </TabsContent>
         <TabsContent value="data" className="mt-4">
           <DataSettings />
+        </TabsContent>
+        <TabsContent value="backup" className="mt-4 space-y-4">
+          <BackupExport />
+          <SystemHealth />
         </TabsContent>
       </Tabs>
     </div>
@@ -942,6 +951,202 @@ function MigrationHelper() {
             </Button>
           </div>
         </details>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ===== NEW v3.0: Backup & Export =====
+function BackupExport() {
+  const { toast } = useToast()
+  const [exporting, setExporting] = useState<string | null>(null)
+
+  const handleExport = async (format: 'json' | 'csv', sheet?: string) => {
+    const key = sheet ? `${format}-${sheet}` : `${format}-all`
+    setExporting(key)
+    try {
+      const url = sheet ? `/api/export?sheet=${sheet}&format=${format}` : `/api/export?format=${format}`
+      const r = await fetch(url)
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ error: `HTTP ${r.status}` }))
+        throw new Error(err.error || 'Export failed')
+      }
+
+      if (format === 'csv') {
+        const text = await r.text()
+        const blob = new Blob([text], { type: 'text/csv' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = sheet ? `${sheet}-${new Date().toISOString().split('T')[0]}.csv` : `export-${Date.now()}.csv`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(a.href)
+      } else {
+        const data = await r.json()
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = sheet ? `${sheet}-${new Date().toISOString().split('T')[0]}.json` : `smartcomp-backup-${new Date().toISOString().split('T')[0]}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(a.href)
+      }
+
+      toast({ title: 'Export downloaded', description: `${sheet || 'Full backup'} exported as ${format.toUpperCase()}` })
+    } catch (e: any) {
+      toast({ title: 'Export failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const sheets = [
+    { id: 'Items', label: 'Stock / Items', icon: HardDrive },
+    { id: 'Customers', label: 'Customers', icon: Store },
+    { id: 'Suppliers', label: 'Suppliers', icon: Store },
+    { id: 'Invoices', label: 'Invoices', icon: FileText },
+    { id: 'Quotations', label: 'Quotations', icon: FileText },
+    { id: 'Jobs', label: 'Service Jobs', icon: Activity },
+    { id: 'Expenses', label: 'Expenses', icon: BarChart3 },
+    { id: 'Payments', label: 'Payments', icon: FileJson },
+  ]
+
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+            <Download className="w-4 h-4 text-blue-600" />
+          </div>
+          Backup & Export (NEW v3.0)
+        </CardTitle>
+        <CardDescription>Download your data as JSON or CSV - complete backup safety</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="bg-gradient-to-br from-emerald-50 to-blue-50 border border-emerald-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <HardDrive className="w-5 h-5 text-emerald-600" />
+              <span className="font-semibold text-sm text-slate-900">Full Backup (JSON)</span>
+            </div>
+            <p className="text-xs text-slate-600 mb-3">All 16 sheets in one file - perfect for migration or safety backup</p>
+            <Button onClick={() => handleExport('json')} disabled={!!exporting} size="sm" className="w-full bg-emerald-600 hover:bg-emerald-700">
+              {exporting === 'json-all' ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <FileJson className="w-4 h-4 mr-1" />}
+              Download Full Backup
+            </Button>
+          </div>
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              <span className="font-semibold text-sm text-slate-900">Data Protection</span>
+            </div>
+            <p className="text-xs text-slate-600 mb-2">v3.0 guarantees:</p>
+            <ul className="text-[11px] text-slate-700 space-y-0.5 mb-2">
+              <li>✓ Soft-delete only - never loses data</li>
+              <li>✓ 45s cache + circuit breaker</li>
+              <li>✓ Sanitized inputs + rate limiting</li>
+              <li>✓ Daily backup reminder</li>
+            </ul>
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px]">Protected Edition v3.0</Badge>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-slate-700 mb-2">Export Individual Sheets:</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+            {sheets.map((s) => (
+              <div key={s.id} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="flex items-center gap-2 min-w-0">
+                  <s.icon className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <span className="text-xs font-medium truncate">{s.label}</span>
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-[10px]" onClick={() => handleExport('json', s.id)} disabled={!!exporting}>
+                    JSON
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-[10px]" onClick={() => handleExport('csv', s.id)} disabled={!!exporting}>
+                    CSV
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function SystemHealth() {
+  const { data: health, refetch } = useFetch<any>('/api/health', undefined)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Activity className="w-4 h-4 text-purple-600" />
+            </div>
+            System Health v3.0
+          </CardTitle>
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="h-8">
+            {refreshing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {health ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                <Cpu className="w-5 h-5 text-emerald-600 mx-auto mb-1" />
+                <p className="text-[10px] text-slate-600 uppercase">Version</p>
+                <p className="font-bold text-sm text-emerald-700">{health.version}</p>
+                <p className="text-[10px] text-slate-500">{health.codename}</p>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                <BarChart3 className="w-5 h-5 text-blue-600 mx-auto mb-1" />
+                <p className="text-[10px] text-slate-600 uppercase">Status</p>
+                <p className="font-bold text-sm text-blue-700 capitalize">{health.status}</p>
+                <p className="text-[10px] text-slate-500">{health.configured ? 'Configured ✓' : 'Not configured'}</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 text-slate-100 rounded-lg p-3 text-xs font-mono space-y-1">
+              <div className="flex justify-between"><span className="text-slate-400">Uptime:</span> <span className="text-emerald-400">{Math.floor((health.uptime || 0) / 60)} min</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Node:</span> <span className="text-cyan-400">{health.env?.nodeVersion || 'N/A'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Cache size:</span> <span className="text-yellow-400">{health.cache?.size || 0} / {health.cache?.maxSize || 200}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Circuit breaker:</span> <span className={health.cache?.circuitBreaker?.active ? 'text-red-400' : 'text-green-400'}>{health.cache?.circuitBreaker?.active ? 'ACTIVE ⚠️' : 'OK ✓'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Features:</span> <span className="text-purple-400">{Object.keys(health.features || {}).filter((k: any) => (health.features as any)[k]).length} enabled</span></div>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(health.features || {}).map(([k, v]) => (
+                <Badge key={k} variant="outline" className={`${v ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-500 border-slate-200'} text-[9px]`}>
+                  {k}: {v ? '✓' : '✗'}
+                </Badge>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-6 text-slate-500 text-sm">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+            Loading health data...
+          </div>
+        )}
       </CardContent>
     </Card>
   )

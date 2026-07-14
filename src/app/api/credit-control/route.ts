@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows } from '@/lib/sheets-client'
+import { isConfigured } from '@/lib/sheets-client'
 
 /**
  * GET /api/credit-control

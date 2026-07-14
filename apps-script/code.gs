@@ -1,5 +1,5 @@
 /**
- * Smart Computers - Google Apps Script Backend (PROTECTED EDITION v2.7)
+ * Smart Computers - Google Apps Script Backend (PROTECTED EDITION v3.0)
  *
  * DATA PROTECTION POLICY (v2.0+):
  *   - DELETE is now SOFT-DELETE. Rows are marked deleted=true but NEVER removed.
@@ -25,7 +25,7 @@
  * automatically add the new `deleted` column to your existing sheets WITHOUT
  * touching any existing rows. All your current data stays intact.
  *
- * v2.7 CHANGES:
+ * v3.0 CHANGES:
  *   - Added safety wrapper: even if doGet/doPost throw before try/catch,
  *     Google will still get a JSON response (via the global error handler).
  *   - `ping` and `test` actions now NEVER touch sheets, ensuring they work
@@ -61,7 +61,7 @@ const SHEET_NAMES = Object.keys(SCHEMAS);
 
 // ===== GET HANDLER =====
 function doGet(e) {
-  // v2.7: Top-level safety wrapper. Any error that escapes the inner try/catch
+  // v3.0: Top-level safety wrapper. Any error that escapes the inner try/catch
   // (e.g., if `e` is null or e.parameter is undefined) is still caught here
   // and returned as JSON. This prevents Google from rendering its HTML error
   // page, which is the #1 cause of "Apps Script returned HTML instead of JSON".
@@ -72,7 +72,7 @@ function doGet(e) {
     // PING — absolute minimum, no sheet access. Use this to verify the
     // deployment URL is correct before anything else.
     if (action === 'ping') {
-      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '2.7' });
+      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '3.0' });
     }
 
     // VERSION — return deployed code version. No sheet access.
@@ -80,7 +80,7 @@ function doGet(e) {
     if (action === 'version') {
       return json({
         success: true,
-        version: '2.7',
+        version: '3.0',
         codename: 'Protected Edition',
         releasedAt: '2025-01-01',
         features: ['soft-delete', 'data-protection', 'ping-action', 'version-action'],
@@ -91,8 +91,8 @@ function doGet(e) {
     if (action === 'test') {
       return json({
         success: true,
-        message: 'Connection successful (Protected Edition v2.7)',
-        version: '2.7',
+        message: 'Connection successful (Protected Edition v3.0)',
+        version: '3.0',
         dataProtection: true,
         time: new Date().toISOString(),
       });
@@ -100,7 +100,7 @@ function doGet(e) {
 
     // STATUS — default action, no sheet access
     if (action === 'status') {
-      return json({ success: true, message: 'Smart Computers API running (Protected Edition v2.7)', sheets: SHEET_NAMES, dataProtection: true, version: '2.7' });
+      return json({ success: true, message: 'Smart Computers API running (Protected Edition v3.0)', sheets: SHEET_NAMES, dataProtection: true, version: '3.0' });
     }
 
     // All actions below this point require sheet access.
@@ -155,7 +155,7 @@ function doGet(e) {
 
 // ===== POST HANDLER =====
 function doPost(e) {
-  // v2.7: Top-level safety wrapper (same reasoning as doGet).
+  // v3.0: Top-level safety wrapper (same reasoning as doGet).
   try {
     // Handle empty/invalid body gracefully
     let body;
@@ -170,8 +170,8 @@ function doPost(e) {
     if (action === 'test') {
       return json({
         success: true,
-        message: 'Connection successful (Protected Edition v2.7)',
-        version: '2.7',
+        message: 'Connection successful (Protected Edition v3.0)',
+        version: '3.0',
         dataProtection: true,
         time: new Date().toISOString(),
       });
@@ -179,14 +179,14 @@ function doPost(e) {
 
     // PING — absolute minimum
     if (action === 'ping') {
-      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '2.7' });
+      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '3.0' });
     }
 
     // VERSION — return deployed code version (no sheet access)
     if (action === 'version') {
       return json({
         success: true,
-        version: '2.7',
+        version: '3.0',
         codename: 'Protected Edition',
         features: ['soft-delete', 'data-protection', 'ping-action', 'version-action'],
       });

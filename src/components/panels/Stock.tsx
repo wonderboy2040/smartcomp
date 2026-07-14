@@ -17,7 +17,8 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload } from 'lucide-react'
+import { toCSV, downloadCSV } from '@/lib/utils'
 
 export function StockPanel() {
   const [search, setSearch] = useState('')
@@ -76,9 +77,17 @@ export function StockPanel() {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Stock & Inventory</h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage items, GST rates, prices and quantities</p>
         </div>
-        <Button onClick={handleAdd} className="bg-slate-900 hover:bg-slate-800 h-11">
-          <Plus className="w-4 h-4 mr-1.5" /> Add Item
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => {
+            const csv = toCSV(filtered as any[], ['name','sku','category','quantity','costPrice','sellingPrice','gstRate'])
+            downloadCSV(csv, `stock-${new Date().toISOString().split('T')[0]}.csv`)
+          }} className="h-11" size="sm">
+            <Download className="w-4 h-4 mr-1" /> Export CSV
+          </Button>
+          <Button onClick={handleAdd} className="bg-slate-900 hover:bg-slate-800 h-11">
+            <Plus className="w-4 h-4 mr-1.5" /> Add Item
+          </Button>
+        </div>
       </div>
 
       <Card className="border-slate-200">

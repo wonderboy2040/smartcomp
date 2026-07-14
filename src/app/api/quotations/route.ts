@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, getRow } from '@/lib/sheets-client'
+import { isConfigured } from '@/lib/sheets-client'
 import { computeInvoice, nextQuotationNumber, type LineItem } from '@/lib/calc'
 
 export async function GET(req: NextRequest) {
