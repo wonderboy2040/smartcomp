@@ -376,6 +376,39 @@ function SyncStatus() {
             </div>
           )}
 
+          {/* Quick Fix guide — shown when there's an error */}
+          {lastError && (
+            <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mt-2">
+              <div className="flex items-start gap-2">
+                <Bug className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900 flex-1 min-w-0">
+                  <p className="font-bold mb-2">Quick Fix Guide (3 steps):</p>
+                  <ol className="list-decimal list-inside space-y-2">
+                    <li>
+                      <strong>Open your Google Sheet</strong> → Extensions → Apps Script
+                    </li>
+                    <li>
+                      <strong>Delete everything</strong> in the code editor, then paste the <strong>NEW</strong> code.gs from this app's <code className="bg-amber-100 px-1 rounded">apps-script/code.gs</code> file (v2.6 — fixed test action)
+                    </li>
+                    <li>
+                      Click <strong>Deploy → Manage deployments</strong> → click the pencil icon → <strong>Version: New version</strong> → <strong>Deploy</strong> → copy the new <code className="bg-amber-100 px-1 rounded">/exec</code> URL
+                    </li>
+                  </ol>
+                  <div className="mt-3 p-2 bg-white border border-amber-200 rounded text-[11px]">
+                    <p className="font-semibold mb-1">Why this happens:</p>
+                    <p>The Apps Script returned an HTML error page (titled "فشل" / "Error") instead of JSON. This means the OLD script code has a runtime error — usually because it tries to access sheets before checking if the script is properly deployed. The NEW code (v2.6) handles the <code className="bg-amber-100 px-1 rounded">test</code> action WITHOUT touching sheets, so Test Connection will work even if sheets aren't set up yet.</p>
+                  </div>
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-[11px]">
+                    <p className="font-semibold mb-1">After updating code.gs:</p>
+                    <p>1. Click <strong>"Debug Connection"</strong> button above — it should now show "Is JSON: true" and "Status: 200"</p>
+                    <p>2. Then click <strong>"Test Connection"</strong> — it should succeed</p>
+                    <p>3. Refresh the page — data will start loading</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 mt-2">
             <div className="flex items-start gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />

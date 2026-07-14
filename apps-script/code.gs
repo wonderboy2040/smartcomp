@@ -57,11 +57,40 @@ function doGet(e) {
     const params = e.parameter || {};
     const action = params.action || 'status';
 
+    // PING — absolute minimum, no sheet access. Use this to verify the
+    // deployment URL is correct before anything else.
+    if (action === 'ping') {
+      return json({ success: true, message: 'pong', time: new Date().toISOString() });
+    }
+
+    // TEST — basic connectivity + version info. Does NOT touch sheets.
+    if (action === 'test') {
+      return json({
+        success: true,
+        message: 'Connection successful (Protected Edition)',
+        version: '2.6',
+        dataProtection: true,
+        time: new Date().toISOString(),
+      });
+    }
+
+    // STATUS — default action, no sheet access
     if (action === 'status') {
       return json({ success: true, message: 'Smart Computers API running (Protected Edition v2.0)', sheets: SHEET_NAMES, dataProtection: true });
     }
 
-    ensureAllSheets();
+    // All actions below this point require sheet access.
+    // Wrap in a separate try-catch so sheet-access errors are reported
+    // with a clear message instead of Google's generic HTML error page.
+    try {
+      ensureAllSheets();
+    } catch (sheetErr) {
+      return json({
+        success: false,
+        error: 'Sheet access failed: ' + sheetErr.toString() + '. Make sure the script is bound to a Google Sheet (open the sheet → Extensions → Apps Script) and the script has permission to access spreadsheets.',
+        action: action,
+      });
+    }
 
     if (action === 'list') {
       const sheet = params.sheet;
@@ -97,10 +126,41 @@ function doGet(e) {
 // ===== POST HANDLER =====
 function doPost(e) {
   try {
-    const body = JSON.parse(e.postData.contents);
+    // Handle empty/invalid body gracefully
+    let body;
+    try {
+      body = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      return json({ success: false, error: 'Invalid JSON body: ' + parseErr.toString() });
+    }
     const action = body.action;
 
-    ensureAllSheets();
+    // TEST — basic connectivity, NO sheet access (mirrors doGet test action)
+    if (action === 'test') {
+      return json({
+        success: true,
+        message: 'Connection successful (Protected Edition)',
+        version: '2.6',
+        dataProtection: true,
+        time: new Date().toISOString(),
+      });
+    }
+
+    // PING — absolute minimum
+    if (action === 'ping') {
+      return json({ success: true, message: 'pong', time: new Date().toISOString() });
+    }
+
+    // All actions below require sheet access.
+    try {
+      ensureAllSheets();
+    } catch (sheetErr) {
+      return json({
+        success: false,
+        error: 'Sheet access failed: ' + sheetErr.toString() + '. Make sure the script is bound to a Google Sheet (open the sheet → Extensions → Apps Script) and the script has permission to access spreadsheets.',
+        action: action,
+      });
+    }
 
     switch (action) {
       case 'create':
@@ -119,8 +179,6 @@ function doPost(e) {
         return json({ success: false, error: 'replace action is permanently disabled for data protection. Use create/update instead.' });
       case 'saveShop':
         return json(saveShop(body.data));
-      case 'test':
-        return json({ success: true, message: 'Connection successful (Protected Edition)', sheets: getSheetInfo(), dataProtection: true });
       case 'seed':
         return json(seedData());
       case 'purge':
