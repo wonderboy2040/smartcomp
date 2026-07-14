@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast'
 import {
   Store, Settings as SettingsIcon, FileSpreadsheet, RefreshCw,
   CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy,
-  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X
+  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X, Bug
 } from 'lucide-react'
 
 export function SettingsPanel() {
@@ -165,8 +165,10 @@ function SyncStatus() {
   const { data: status, refetch } = useFetch<any>('/api/sheets/sync', undefined)
   const { data: settingsInfo } = useFetch<any>('/api/settings', undefined)
   const [testing, setTesting] = useState(false)
+  const [debugging, setDebugging] = useState(false)
   const [lastError, setLastError] = useState<string | null>(null)
   const [lastSuccess, setLastSuccess] = useState<string | null>(null)
+  const [debugResult, setDebugResult] = useState<any | null>(null)
 
   const handleTest = async () => {
     setTesting(true)
@@ -188,6 +190,30 @@ function SyncStatus() {
       toast({ title: 'Error', description: e.message, variant: 'destructive', duration: 10000 })
     } finally {
       setTesting(false)
+    }
+  }
+
+  const handleDebug = async () => {
+    setDebugging(true)
+    setDebugResult(null)
+    try {
+      const r = await fetch('/api/debug-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'GET', action: 'test' }),
+      })
+      const res = await r.json()
+      setDebugResult(res)
+      if (res.success && res.looksLikeJson) {
+        toast({ title: 'Apps Script is working!', description: 'Response is valid JSON' })
+      } else {
+        toast({ title: 'See debug output below', description: res.diagnosis || 'Check the response details', variant: 'destructive', duration: 10000 })
+      }
+    } catch (e: any) {
+      setDebugResult({ error: e.message, bodyPreview: e.stack })
+      toast({ title: 'Debug failed', description: e.message, variant: 'destructive' })
+    } finally {
+      setDebugging(false)
     }
   }
 
@@ -282,9 +308,47 @@ function SyncStatus() {
             </div>
           )}
 
-          <Button variant="outline" onClick={handleTest} disabled={testing} className="w-full">
-            {testing ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Testing...</> : <><Zap className="w-4 h-4 mr-1.5" /> Test Connection</>}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleTest} disabled={testing} className="flex-1">
+              {testing ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Testing...</> : <><Zap className="w-4 h-4 mr-1.5" /> Test Connection</>}
+            </Button>
+            <Button variant="outline" onClick={handleDebug} disabled={debugging} className="flex-1">
+              {debugging ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Debugging...</> : <><Bug className="w-4 h-4 mr-1.5" /> Debug Connection</>}
+            </Button>
+          </div>
+
+          {/* Debug result — shows the FULL response from Apps Script */}
+          {debugResult && (
+            <div className="bg-slate-900 text-slate-100 rounded-lg p-3 font-mono text-[10px] sm:text-xs overflow-x-auto max-h-80 overflow-y-auto">
+              <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-700">
+                <span className="font-semibold text-cyan-400">Apps Script Response</span>
+                <button onClick={() => setDebugResult(null)} className="text-slate-400 hover:text-white">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="space-y-1">
+                <div><span className="text-slate-400">Status:</span> <span className={debugResult.success ? 'text-green-400' : 'text-red-400'}>{debugResult.status} {debugResult.statusText}</span></div>
+                <div><span className="text-slate-400">Content-Type:</span> <span className="text-yellow-300">{debugResult.contentType}</span></div>
+                <div><span className="text-slate-400">Redirected:</span> <span className="text-yellow-300">{String(debugResult.redirected)}</span></div>
+                {debugResult.finalUrl && <div><span className="text-slate-400">Final URL:</span> <span className="text-yellow-300 break-all">{debugResult.finalUrl}</span></div>}
+                <div><span className="text-slate-400">Body length:</span> <span className="text-yellow-300">{debugResult.bodyLength} chars</span></div>
+                <div><span className="text-slate-400">Page title:</span> <span className="text-yellow-300">{debugResult.title || '(none)'}</span></div>
+                <div><span className="text-slate-400">Is JSON:</span> <span className={debugResult.looksLikeJson ? 'text-green-400' : 'text-red-400'}>{String(debugResult.looksLikeJson)}</span></div>
+                <div><span className="text-slate-400">Is HTML:</span> <span className={debugResult.isHtml ? 'text-red-400' : 'text-green-400'}>{String(debugResult.isHtml)}</span></div>
+                <div><span className="text-slate-400">Looks like login page:</span> <span className={debugResult.looksLikeLoginPage ? 'text-red-400' : 'text-green-400'}>{String(debugResult.looksLikeLoginPage)}</span></div>
+                <div><span className="text-slate-400">Looks like error page:</span> <span className={debugResult.looksLikeErrorPage ? 'text-red-400' : 'text-green-400'}>{String(debugResult.looksLikeErrorPage)}</span></div>
+              </div>
+              {debugResult.diagnosis && (
+                <div className="mt-2 p-2 bg-blue-900/50 rounded text-blue-200 text-xs leading-relaxed">
+                  <span className="font-semibold">Diagnosis: </span>{debugResult.diagnosis}
+                </div>
+              )}
+              <div className="mt-2">
+                <div className="text-slate-400 mb-1">Body preview (first 2000 chars):</div>
+                <pre className="whitespace-pre-wrap break-all text-slate-300">{debugResult.bodyPreview}</pre>
+              </div>
+            </div>
+          )}
 
           {/* Persistent error/success display — stays visible until dismissed */}
           {lastError && (
