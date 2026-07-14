@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const AUTH_COOKIE = 'smartcomp_auth'
-const SALT = '_smartcomp_v1'
+const SALT = '_smartcomp_v3_2026' // v3.0 unified salt - MUST match proxy.ts
 const MAX_AGE = 60 * 60 * 24 * 30 // 30 days
 
 async function sha256(text: string): Promise<string> {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   const token = await sha256(pin + SALT)
-  const res = NextResponse.json({ success: true })
+  const res = NextResponse.json({ success: true, version: '3.0' })
   res.cookies.set(AUTH_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

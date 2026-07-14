@@ -1,34 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * PIN-based access protection + rate limiting - UPGRADED v3.0
- *
- * v3.0 improvements:
- * - Enhanced public path handling
- * - Better security headers injection
- * - Rate limiting hints (actual limiting in API routes)
- * - Improved timing-safe comparison
- * - Support for both old middleware.ts and new proxy.ts conventions
+ * PIN-based access protection - FIXED v3.0.1
+ * 
+ * BUGFIX v3.0.1: SALT mismatch fixed - login and proxy now use same SALT
+ * Also supports both old (_smartcomp_v1) and new (_smartcomp_v3_2026) salts
+ * for backward compatibility when users upgrade.
  */
 
 const AUTH_COOKIE = 'smartcomp_auth'
-const SALT = '_smartcomp_v3_2026'
+const SALT_V3 = '_smartcomp_v3_2026'
+const SALT_V1 = '_smartcomp_v1' // legacy support
 
 let cachedPin: string | undefined
-let cachedToken: string | null = null
+let cachedTokens: { v3: string | null; v1: string | null } | null = null
 
-async function expectedToken(): Promise<string | null> {
+async function expectedTokens(): Promise<{ v3: string | null; v1: string | null }> {
   const pin = process.env.APP_PIN
-  if (!pin) return null
-  if (pin === cachedPin && cachedToken !== null) return cachedToken
+  if (!pin) return { v3: null, v1: null }
+  
+  if (pin === cachedPin && cachedTokens) return cachedTokens
+  
   cachedPin = pin
   const enc = new TextEncoder()
-  const data = enc.encode(pin + SALT)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  cachedToken = Array.from(new Uint8Array(digest))
+  
+  // Generate both tokens for backward compatibility
+  const dataV3 = enc.encode(pin + SALT_V3)
+  const digestV3 = await crypto.subtle.digest('SHA-256', dataV3)
+  const tokenV3 = Array.from(new Uint8Array(digestV3))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
-  return cachedToken
+  
+  const dataV1 = enc.encode(pin + SALT_V1)
+  const digestV1 = await crypto.subtle.digest('SHA-256', dataV1)
+  const tokenV1 = Array.from(new Uint8Array(digestV1))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  
+  cachedTokens = { v3: tokenV3, v1: tokenV1 }
+  return cachedTokens
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -68,21 +78,27 @@ function isPublic(pathname: string): boolean {
   if (pathname === '/sw.js' || pathname === '/sw-register.js' || pathname === '/offline.html') return true
   if (pathname === '/robots.txt' || pathname === '/logo.svg' || pathname === '/icon.svg') return true
   if (pathname === '/clear-cache.html') return true
-  // Allow public assets
   if (pathname.match(/\.(png|jpg|jpeg|svg|ico|webp|avif|woff|woff2|ttf|eot)$/)) return true
   return false
 }
 
 export async function proxy(req: NextRequest) {
-  const expected = await expectedToken()
-  if (!expected) return NextResponse.next()
+  const tokens = await expectedTokens()
+  
+  // No PIN configured -> open access
+  if (!tokens.v3) return NextResponse.next()
 
   const { pathname } = req.nextUrl
 
   if (isPublic(pathname)) return NextResponse.next()
 
   const token = req.cookies.get(AUTH_COOKIE)?.value
-  if (token && safeEqual(token, expected)) return NextResponse.next()
+  if (token) {
+    // Accept either v3 or v1 token for backward compatibility
+    if (safeEqual(token, tokens.v3!) || safeEqual(token, tokens.v1!)) {
+      return NextResponse.next()
+    }
+  }
 
   const accept = req.headers.get('accept') || ''
   const isHtml = accept.includes('text/html')
@@ -98,7 +114,7 @@ export async function proxy(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: 'Unauthorized. PIN required.', code: 'PIN_REQUIRED', version: '3.0' },
+    { error: 'Unauthorized. PIN required.', code: 'PIN_REQUIRED', version: '3.0.1' },
     { 
       status: 401,
       headers: {
