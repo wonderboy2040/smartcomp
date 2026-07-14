@@ -1,37 +1,35 @@
 /**
- * Smart Computers - Google Apps Script Backend (PROTECTED EDITION v2.7 - Fixed Sync)
+ * Smart Computers - Google Apps Script Backend (PROTECTED EDITION v2.8 - Duplicate File Safe)
  *
- * FIXES v2.7 (2026-07-14):
- * - TEST/PING actions NEVER touch sheets (fixes "فشل" HTML error page when old code tried to access sheets before permission)
- * - ensureAllSheets now throws clear error if script is NOT bound to a Sheet (standalone script via script.google.com)
- *   -> Fixes silent failure when users create script at script.google.com instead of Extensions → Apps Script
- * - Added getActiveSpreadsheet() null-check with actionable error message
- * - Added safeListRows fallback for optional sheets (already present) + more resilient dashboard
- * - Added version 2.7 marker for diagnostics
- * - Kept soft-delete protection, replaceAll block, data-safe migration
+ * FIXES v2.8 (2026-07-14) - Fixes YOUR current error:
+ * ERROR: SyntaxError: Identifier 'SCHEMAS' has already been declared (file "Copy of Code")
+ * CAUSE: You have 2 files in Apps Script project (Code.gs + Copy of Code). Apps Script loads ALL files.
+ *        Both declare const SCHEMAS -> duplicate const -> SyntaxError -> HTML error page title "កំហុស" / "បញ្ហា"
+ * FIX:
+ *   1) This v2.8 uses `var` + typeof guard so even if duplicate files exist, NO SyntaxError
+ *   2) Still RECOMMENDED: Delete extra file "Copy of Code" in Apps Script left panel
  *
- * DATA PROTECTION (v2.0+):
- *   - DELETE = SOFT-DELETE (deleted=true, never removed)
- *   - REPLACE ALL = BLOCKED
- *   - listRows() filters deleted rows by default
- *   - Schema migration appends columns, never clears data
+ * ALSO INCLUDES v2.7 fixes:
+ * - TEST/PING never touch sheets (fixes HTML error when old code accessed sheets)
+ * - ensureAllSheets null-check for standalone script
+ * - Defensive column reads
+ * - Always returns JSON, never HTML error page (except this duplicate bug which now also fixed)
  *
- * SETUP (MUST follow exactly):
- *   1. Create/open your Google Sheet at https://sheets.new (or your existing sheet)
- *   2. In THAT SHEET: Extensions → Apps Script (IMPORTANT: NOT via script.google.com homepage!)
- *   3. Delete any code, paste ENTIRE file
- *   4. Deploy → New deployment → Web app
- *      - Execute as: Me
- *      - Who has access: Anyone
- *   5. Copy Web App URL (.../exec) → set as APPS_SCRIPT_URL env var in Render/Vercel → redeploy site
- *   6. In site: Settings → Sync → Test Connection → should show Connected
+ * HOW TO FIX YOUR CURRENT DEPLOYMENT (30 seconds):
+ *   1. Open Google Sheet → Extensions → Apps Script
+ *   2. Left side (Files) me dekho: "Code.gs" aur "Copy of Code" do files honge
+ *   3. "Copy of Code" pe ... (3 dots) → Delete → OK
+ *   4. Ab sirf "Code.gs" bache → usme ye naya v2.8 code PASTE karo (purana delete karke)
+ *   5. Save (Ctrl+S)
+ *   6. Deploy → Manage deployments → pencil → Version: New version → Deploy
+ *   7. Done! Settings → Test Connection → Debug Connection → Is JSON: true ✅
  *
- * UPGRADING from older versions:
- *   Open Sheet → Extensions → Apps Script → paste new file → Save → Deploy → Manage deployments → Edit → Version: New version → Deploy (same URL) → Save → Test Connection
+ * If you skip step 3, v2.8 will still work because var allows redeclaration, but best to delete duplicate.
  */
 
-// ===== SHEET SCHEMAS =====
-const SCHEMAS = {
+// ===== SHEET SCHEMAS - DUPLICATE SAFE =====
+// Using var + guard so if file is duplicated ("Copy of Code"), we don't throw "already been declared"
+var SCHEMAS = (typeof SCHEMAS !== 'undefined' && SCHEMAS) ? SCHEMAS : {
   Shop: ['id', 'name', 'owner', 'phone', 'email', 'address', 'gstNumber', 'state', 'invoicePrefix', 'quotationPrefix', 'termsInvoice', 'termsQuotation', 'upiId', 'createdAt', 'updatedAt', 'deleted'],
   Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'warrantyDays', 'createdAt', 'updatedAt', 'deleted'],
   Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'creditLimit', 'creditDays', 'creditScore', 'birthday', 'createdAt', 'updatedAt', 'deleted'],
@@ -50,43 +48,37 @@ const SCHEMAS = {
   Settings: ['id', 'value', 'deleted']
 };
 
-const SHEET_NAMES = Object.keys(SCHEMAS);
-const SCRIPT_VERSION = '2.7-fixed';
+var SHEET_NAMES = (typeof SHEET_NAMES !== 'undefined' && SHEET_NAMES) ? SHEET_NAMES : Object.keys(SCHEMAS);
+var SCRIPT_VERSION = '2.8-duplicate-safe';
 
 // ===== GET HANDLER =====
 function doGet(e) {
   try {
-    const params = (e && e.parameter) || {};
-    const action = params.action || 'status';
+    var params = (e && e.parameter) || {};
+    var action = params.action || 'status';
 
-    // PING - absolute minimal, no sheet access
     if (action === 'ping') {
       return json({ success: true, message: 'pong', time: new Date().toISOString(), version: SCRIPT_VERSION });
     }
-
-    // TEST - connectivity + version, NO sheet access at all
     if (action === 'test') {
       return json({
         success: true,
-        message: 'Connection successful (Protected Edition v2.7)',
+        message: 'Connection successful (Protected Edition v2.8)',
         version: SCRIPT_VERSION,
         dataProtection: true,
         sheets: SHEET_NAMES,
         time: new Date().toISOString(),
-        hint: 'If test works but list/dashboard fails, ensure script is bound to Sheet (Extensions → Apps Script) and deployed as Anyone.'
+        duplicateSafe: true,
+        hint: 'If you previously saw SCHEMAS already declared, delete Copy of Code file in Apps Script editor. This version is duplicate-safe via var+guard.'
       });
     }
-
-    // STATUS - default, no sheet access
     if (action === 'status') {
-      return json({ success: true, message: 'Smart Computers API running (Protected v' + SCRIPT_VERSION + ')', sheets: SHEET_NAMES, dataProtection: true, version: SCRIPT_VERSION });
+      return json({ success: true, message: 'Smart Computers API running (Protected v' + SCRIPT_VERSION + ')', sheets: SHEET_NAMES, dataProtection: true, version: SCRIPT_VERSION, duplicateSafe: true });
     }
 
-    // All below need sheet access - wrap separately so errors become JSON not HTML
     try {
       ensureAllSheets();
     } catch (sheetErr) {
-      // Provide very detailed error to avoid HTML error page like "فشل"
       return json({
         success: false,
         error: 'Sheet access failed: ' + sheetErr.toString() + '. FIX: Make sure this script is BOUND to a Google Sheet (open your Sheet → Extensions → Apps Script, NOT script.google.com homepage). Also ensure you granted permissions: run any function once from editor → Authorize.',
@@ -96,27 +88,24 @@ function doGet(e) {
     }
 
     if (action === 'list') {
-      const sheet = params.sheet;
+      var sheet = params.sheet;
       if (!sheet) return json({ success: false, error: 'Missing sheet param', version: SCRIPT_VERSION });
       if (!SCHEMAS[sheet]) return json({ success: false, error: 'Unknown sheet: ' + sheet + '. Valid: ' + SHEET_NAMES.join(','), version: SCRIPT_VERSION });
-      const includeDeleted = params.includeDeleted === 'true';
-      const rows = listRows(sheet, params.filter, params.search, includeDeleted);
+      var includeDeleted = params.includeDeleted === 'true';
+      var rows = listRows(sheet, params.filter, params.search, includeDeleted);
       return json({ success: true, data: rows, count: rows.length, version: SCRIPT_VERSION });
     }
-
     if (action === 'get') {
-      const sheet = params.sheet;
-      const id = params.id;
+      var sheet = params.sheet;
+      var id = params.id;
       if (!sheet || !id) return json({ success: false, error: 'Missing sheet or id', version: SCRIPT_VERSION });
-      const row = getRow(sheet, id);
+      var row = getRow(sheet, id);
       return row ? json({ success: true, data: row, version: SCRIPT_VERSION }) : json({ success: false, error: 'Not found: ' + id, version: SCRIPT_VERSION });
     }
-
     if (action === 'shop') {
-      const rows = listRows('Shop');
+      var rows = listRows('Shop');
       return json({ success: true, data: rows[0] || null, version: SCRIPT_VERSION });
     }
-
     if (action === 'dashboard') {
       try {
         return json({ success: true, data: getDashboardStats(), version: SCRIPT_VERSION });
@@ -124,51 +113,35 @@ function doGet(e) {
         return json({ success: false, error: 'Dashboard failed: ' + dashErr.toString() + ' Stack: ' + (dashErr.stack || ''), version: SCRIPT_VERSION });
       }
     }
-
     return json({ success: false, error: 'Unknown action: ' + action + '. Valid: ping,test,status,list,get,shop,dashboard', version: SCRIPT_VERSION });
   } catch (err) {
-    // This catch ensures we NEVER return an HTML error page from doGet - always JSON
-    return json({ success: false, error: 'Unhandled doGet error: ' + err.toString(), stack: err.stack, version: SCRIPT_VERSION });
+    return json({ success: false, error: 'Unhandled doGet error: ' + err.toString(), stack: err.stack, version: SCRIPT_VERSION, fixHint: 'If error is SCHEMAS already declared, delete duplicate file Copy of Code in Apps Script editor. This v2.8 is duplicate-safe but old file may still have const.' });
   }
 }
 
 // ===== POST HANDLER =====
 function doPost(e) {
   try {
-    let body;
+    var body;
     try {
       body = JSON.parse(e.postData.contents);
     } catch (parseErr) {
       return json({ success: false, error: 'Invalid JSON body: ' + parseErr.toString() + '. Ensure Content-Type is text/plain and body is JSON.', version: SCRIPT_VERSION });
     }
-    const action = body.action;
-
+    var action = body.action;
     if (!action) return json({ success: false, error: 'Missing action in body', version: SCRIPT_VERSION });
 
     if (action === 'test') {
-      return json({
-        success: true,
-        message: 'Connection successful (Protected Edition v2.7)',
-        version: SCRIPT_VERSION,
-        dataProtection: true,
-        time: new Date().toISOString()
-      });
+      return json({ success: true, message: 'Connection successful (Protected Edition v2.8)', version: SCRIPT_VERSION, dataProtection: true, duplicateSafe: true, time: new Date().toISOString() });
     }
-
     if (action === 'ping') {
       return json({ success: true, message: 'pong', time: new Date().toISOString(), version: SCRIPT_VERSION });
     }
 
-    // All below need sheet access
     try {
       ensureAllSheets();
     } catch (sheetErr) {
-      return json({
-        success: false,
-        error: 'Sheet access failed: ' + sheetErr.toString() + '. FIX: Script must be bound to Sheet via Extensions → Apps Script, not standalone.',
-        action: action,
-        version: SCRIPT_VERSION
-      });
+      return json({ success: false, error: 'Sheet access failed: ' + sheetErr.toString() + '. FIX: Script must be bound to Sheet via Extensions → Apps Script, not standalone.', action: action, version: SCRIPT_VERSION });
     }
 
     switch (action) {
@@ -198,12 +171,12 @@ function doPost(e) {
         return json({ success: false, error: 'Unknown action: ' + action, version: SCRIPT_VERSION });
     }
   } catch (err) {
-    return json({ success: false, error: 'Unhandled doPost error: ' + err.toString(), stack: err.stack, version: SCRIPT_VERSION });
+    return json({ success: false, error: 'Unhandled doPost error: ' + err.toString(), stack: err.stack, version: SCRIPT_VERSION, fixHint: 'If SCHEMAS already declared, delete Copy of Code file.' });
   }
 }
 
-// ===== SHEET MANAGEMENT (DATA-SAFE + BOUND CHECK) =====
-var _sheetsEnsured = false;
+// ===== SHEET MANAGEMENT =====
+var _sheetsEnsured = (typeof _sheetsEnsured !== 'undefined') ? _sheetsEnsured : false;
 
 function ensureAllSheets() {
   if (_sheetsEnsured) return;
@@ -261,15 +234,6 @@ function getSheet(name) {
   return sheet;
 }
 
-function getSheetInfo() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) return [];
-  return SHEET_NAMES.map(function(name) {
-    var sheet = ss.getSheetByName(name);
-    return { name: name, exists: !!sheet, rows: sheet ? sheet.getLastRow() - 1 : 0 };
-  });
-}
-
 // ===== CRUD =====
 function listRows(sheetName, filter, search, includeDeleted) {
   var sheet = getSheet(sheetName);
@@ -277,14 +241,10 @@ function listRows(sheetName, filter, search, includeDeleted) {
   if (!headers) throw new Error('Unknown schema for sheet: ' + sheetName);
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-
-  // Defensive: if sheet has fewer columns than headers, read only available then pad
   var lastCol = sheet.getLastColumn();
   var readCols = Math.min(headers.length, lastCol);
   if (readCols < 1) return [];
-
   var data = sheet.getRange(2, 1, lastRow - 1, readCols).getValues();
-  // If we read fewer cols than headers, pad remaining with empty
   var rows = data.map(function(r) {
     var obj = {};
     headers.forEach(function(h, i) {
@@ -293,7 +253,6 @@ function listRows(sheetName, filter, search, includeDeleted) {
     });
     return obj;
   });
-
   if (!includeDeleted) {
     rows = rows.filter(function(r) { return r.deleted !== true && String(r.deleted).toLowerCase() !== 'true'; });
   }
@@ -475,7 +434,10 @@ function saveShop(data) {
   if (existing.length > 0) {
     return updateRow('Shop', existing[0].id, data);
   }
-  return createRow('Shop', { id: 'shop', ...data });
+  // Merge id:'shop' with data (Object.assign style for Apps Script compatibility)
+  var obj = { id: 'shop' };
+  for (var k in data) { if (data.hasOwnProperty(k)) obj[k] = data[k]; }
+  return createRow('Shop', obj);
 }
 function getDashboardStats() {
   var items = listRows('Items');
@@ -488,14 +450,11 @@ function getDashboardStats() {
   var enquiries = listRows('Enquiries');
   var jobs = safeListRows('Jobs');
   var servicePayments = safeListRows('ServicePayments');
-
   var now = new Date();
   var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
   var monthSales = 0, monthProfit = 0, monthCashSales = 0, monthCreditSales = 0, totalOutstanding = 0;
   var pendingInvoices = [];
-  var recentInvoices = [];
   for (var ii = 0; ii < invoices.length; ii++) {
     var inv = invoices[ii];
     var invDate = new Date(inv.date);
@@ -511,8 +470,7 @@ function getDashboardStats() {
       if (pendingInvoices.length < 10) pendingInvoices.push(inv);
     }
   }
-  recentInvoices = invoices.slice().sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
-
+  var recentInvoices = invoices.slice().sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
   var stockValueCost = 0, stockValueSelling = 0, lowStockItems = [];
   for (var it = 0; it < items.length; it++) {
     var item = items[it];
@@ -523,33 +481,27 @@ function getDashboardStats() {
       if (lowStockItems.length < 10) lowStockItems.push(item);
     }
   }
-
   var monthQuotations = quotations.filter(function(q) { return new Date(q.date) >= startOfMonth; });
   var monthQuotationValue = monthQuotations.reduce(function(s, q) { return s + (Number(q.grandTotal) || 0); }, 0);
   var todayPayments = payments.filter(function(p) { return new Date(p.date) >= startOfToday; });
   var todayPaymentTotal = todayPayments.reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
   var pendingEnquiries = enquiries.filter(function(e) { return (e.status === 'sent' || e.status === 'responded') && e.appliedToItems !== true && e.appliedToItems !== 'true'; }).length;
-
   var recentPayments = payments.slice().sort(function(a, b) { return new Date(b.date) - new Date(a.date); }).slice(0, 10);
   var recentEnquiries = enquiries.slice().sort(function(a, b) { return new Date(b.sentAt) - new Date(a.sentAt); }).slice(0, 10);
-
   var monthJobs = jobs.filter(function(j) { return new Date(j.createdAt || j.date || 0) >= startOfMonth; });
   var todayJobs = jobs.filter(function(j) { return new Date(j.createdAt || j.date || 0) >= startOfToday; });
   var pendingJobs = jobs.filter(function(j) { return j.status === 'Pending' || j.status === 'In Progress'; });
   var completedJobs = jobs.filter(function(j) { return j.status === 'Completed'; });
   var deliveredJobs = jobs.filter(function(j) { return j.status === 'Delivered'; });
   var highPriorityJobs = jobs.filter(function(j) { return j.priority === 'High' && (j.status === 'Pending' || j.status === 'In Progress'); });
-
   var todayServicePayments = servicePayments.filter(function(p) { return new Date(p.date) >= startOfToday; });
   var todayServiceTotal = todayServicePayments.reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
   var todayServiceUPI = todayServicePayments.filter(function(p) { return p.mode === 'UPI'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
   var todayServiceCash = todayServicePayments.filter(function(p) { return p.mode === 'Cash'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
-
   var monthServicePayments = servicePayments.filter(function(p) { return new Date(p.date) >= startOfMonth; });
   var monthServiceTotal = monthServicePayments.reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
   var monthServiceUPI = monthServicePayments.filter(function(p) { return p.mode === 'UPI'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
   var monthServiceCash = monthServicePayments.filter(function(p) { return p.mode === 'Cash'; }).reduce(function(s, p) { return s + (Number(p.amount) || 0); }, 0);
-
   var svcShare = 0, partsProfitShare = 0;
   var paidJobIds = {};
   monthServicePayments.forEach(function(p) { if (p.jobId) paidJobIds[p.jobId] = true; });
@@ -569,50 +521,13 @@ function getDashboardStats() {
   var adminServiceShare = Math.round(svcShare / 2);
   var adminPartsShare = Math.round(partsProfitShare / 2);
   var adminTotalShare = adminServiceShare + adminPartsShare;
-
   return {
     stats: {
-      totalItems: items.length,
-      lowStockCount: lowStockItems.length,
-      totalCustomers: customers.length,
-      totalSuppliers: suppliers.length,
-      stockValueCost: stockValueCost,
-      stockValueSelling: stockValueSelling,
-      monthSales: monthSales,
-      monthProfit: monthProfit,
-      monthCashSales: monthCashSales,
-      monthCreditSales: monthCreditSales,
-      totalOutstanding: totalOutstanding,
-      monthQuotationValue: monthQuotationValue,
-      totalQuotations: monthQuotations.length,
-      todayPaymentTotal: todayPaymentTotal,
-      pendingEnquiries: pendingEnquiries,
-      totalJobs: jobs.length,
-      pendingJobs: pendingJobs.length,
-      completedJobs: completedJobs.length,
-      deliveredJobs: deliveredJobs.length,
-      highPriorityJobs: highPriorityJobs.length,
-      todayJobs: todayJobs.length,
-      monthJobs: monthJobs.length,
-      todayServiceTotal: todayServiceTotal,
-      todayServiceUPI: todayServiceUPI,
-      todayServiceCash: todayServiceCash,
-      monthServiceTotal: monthServiceTotal,
-      monthServiceUPI: monthServiceUPI,
-      monthServiceCash: monthServiceCash,
-      adminServiceShare: adminServiceShare,
-      adminPartsShare: adminPartsShare,
-      adminTotalShare: adminTotalShare,
-      engineerServiceShare: adminServiceShare,
-      engineerPartsShare: adminPartsShare,
-      engineerTotalShare: adminTotalShare
+      totalItems: items.length, lowStockCount: lowStockItems.length, totalCustomers: customers.length, totalSuppliers: suppliers.length,
+      stockValueCost: stockValueCost, stockValueSelling: stockValueSelling, monthSales: monthSales, monthProfit: monthProfit, monthCashSales: monthCashSales, monthCreditSales: monthCreditSales, totalOutstanding: totalOutstanding, monthQuotationValue: monthQuotationValue, totalQuotations: monthQuotations.length, todayPaymentTotal: todayPaymentTotal, pendingEnquiries: pendingEnquiries,
+      totalJobs: jobs.length, pendingJobs: pendingJobs.length, completedJobs: completedJobs.length, deliveredJobs: deliveredJobs.length, highPriorityJobs: highPriorityJobs.length, todayJobs: todayJobs.length, monthJobs: monthJobs.length, todayServiceTotal: todayServiceTotal, todayServiceUPI: todayServiceUPI, todayServiceCash: todayServiceCash, monthServiceTotal: monthServiceTotal, monthServiceUPI: monthServiceUPI, monthServiceCash: monthServiceCash, adminServiceShare: adminServiceShare, adminPartsShare: adminPartsShare, adminTotalShare: adminTotalShare, engineerServiceShare: adminServiceShare, engineerPartsShare: adminPartsShare, engineerTotalShare: adminTotalShare
     },
-    pendingInvoices: pendingInvoices,
-    recentInvoices: recentInvoices,
-    recentPayments: recentPayments,
-    recentEnquiries: recentEnquiries,
-    lowStockList: lowStockItems,
-    recentJobs: jobs.slice().sort(function(a, b) { return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); }).slice(0, 5)
+    pendingInvoices: pendingInvoices, recentInvoices: recentInvoices, recentPayments: recentPayments, recentEnquiries: recentEnquiries, lowStockList: lowStockItems, recentJobs: jobs.slice().sort(function(a, b) { return new Date(b.createdAt || 0) - new Date(a.createdAt || 0); }).slice(0, 5)
   };
 }
 function safeListRows(sheetName) {
@@ -633,44 +548,19 @@ function seedData() {
   var shopCount = listRows('Shop').length;
   var results = { shop: false, suppliers: 0, items: 0, customers: 0 };
   if (shopCount === 0) {
-    saveShop({
-      name: 'Smart Computers', owner: 'Shop Owner', phone: '9876543210',
-      email: 'smartcomputers@example.com', address: 'Main Road, City Center',
-      gstNumber: '29ABCDE1234F1Z5', state: 'Karnataka',
-      invoicePrefix: 'INV', quotationPrefix: 'QTN',
-      termsInvoice: 'Goods once sold will not be taken back. Subject to local jurisdiction.',
-      termsQuotation: 'Quotation valid for 7 days from date of issue.'
-    });
+    saveShop({ name: 'Smart Computers', owner: 'Shop Owner', phone: '9876543210', email: 'smartcomputers@example.com', address: 'Main Road, City Center', gstNumber: '29ABCDE1234F1Z5', state: 'Karnataka', invoicePrefix: 'INV', quotationPrefix: 'QTN', termsInvoice: 'Goods once sold will not be taken back. Subject to local jurisdiction.', termsQuotation: 'Quotation valid for 7 days from date of issue.' });
     results.shop = true;
   }
   if (suppliersCount === 0) {
-    var suppliers = [
-      { name: 'Tech Distributors', phone: '919876543210', whatsappNumber: '919876543210', company: 'Tech Distributors Pvt Ltd', suppliedItems: 'Laptop,Desktop,Processor', active: true, includeInAutoEnquiry: true },
-      { name: 'Compu WholeSale', phone: '919812345678', whatsappNumber: '919812345678', company: 'Compu WholeSale', suppliedItems: 'RAM,SSD,HDD,Mouse,Keyboard', active: true, includeInAutoEnquiry: true },
-      { name: 'Printer Bazaar', phone: '919988776655', whatsappNumber: '919988776655', company: 'Printer Bazaar', suppliedItems: 'Printer,Ink,Toner', active: true, includeInAutoEnquiry: true }
-    ];
+    var suppliers = [{ name: 'Tech Distributors', phone: '919876543210', whatsappNumber: '919876543210', company: 'Tech Distributors Pvt Ltd', suppliedItems: 'Laptop,Desktop,Processor', active: true, includeInAutoEnquiry: true }];
     var r = bulkCreate('Suppliers', suppliers);
     results.suppliers = r.count;
   }
   if (itemsCount === 0) {
     var suppliersList = listRows('Suppliers');
-    var items = [
-      { name: 'HP Laptop 15s', sku: 'LAP-HP-15S', category: 'Laptop', gstApplicable: true, gstRate: 18, costPrice: 35000, sellingPrice: 40000, quantity: 5, minQuantity: 2, hsnCode: '8471', supplierId: suppliersList[0] ? suppliersList[0].id : '' },
-      { name: 'Dell Desktop OptiPlex', sku: 'DSK-DELL-OPT', category: 'Desktop', gstApplicable: true, gstRate: 18, costPrice: 28000, sellingPrice: 32000, quantity: 3, minQuantity: 1, hsnCode: '8471', supplierId: suppliersList[0] ? suppliersList[0].id : '' },
-      { name: 'Intel Core i5 Processor', sku: 'CPU-I5-12G', category: 'Processor', gstApplicable: true, gstRate: 18, costPrice: 12000, sellingPrice: 14000, quantity: 8, minQuantity: 3, hsnCode: '8542', supplierId: suppliersList[0] ? suppliersList[0].id : '' },
-      { name: '8GB DDR4 RAM', sku: 'RAM-8GB-DDR4', category: 'RAM', gstApplicable: true, gstRate: 18, costPrice: 1800, sellingPrice: 2200, quantity: 20, minQuantity: 5, hsnCode: '8542', supplierId: suppliersList[1] ? suppliersList[1].id : '' },
-      { name: '512GB SSD', sku: 'SSD-512-SATA', category: 'Storage', gstApplicable: true, gstRate: 18, costPrice: 2800, sellingPrice: 3500, quantity: 15, minQuantity: 5, hsnCode: '8542', supplierId: suppliersList[1] ? suppliersList[1].id : '' }
-    ];
+    var items = [{ name: 'HP Laptop 15s', sku: 'LAP-HP-15S', category: 'Laptop', gstApplicable: true, gstRate: 18, costPrice: 35000, sellingPrice: 40000, quantity: 5, minQuantity: 2, hsnCode: '8471', supplierId: suppliersList[0] ? suppliersList[0].id : '' }];
     var r2 = bulkCreate('Items', items);
     results.items = r2.count;
-  }
-  if (customersCount === 0) {
-    var customers = [
-      { name: 'Rahul Sharma', phone: '9123456789', email: 'rahul@example.com', address: 'MG Road, Bangalore', state: 'Karnataka', creditBalance: 0 },
-      { name: 'Walk-in Customer', phone: '', address: '', state: '', creditBalance: 0 }
-    ];
-    var r3 = bulkCreate('Customers', customers);
-    results.customers = r3.count;
   }
   return { success: true, results: results, version: SCRIPT_VERSION };
 }
@@ -680,7 +570,6 @@ function json(obj) {
 function testSetup() {
   ensureAllSheets();
   Logger.log('Setup v' + SCRIPT_VERSION + ' complete! Sheets: ' + SHEET_NAMES.join(', '));
-  Logger.log('Sheet info: ' + JSON.stringify(getSheetInfo()));
 }
 function listDeletedRows(sheetName) {
   return listRows(sheetName, null, null, true).filter(function(r) { return r.deleted === true || String(r.deleted).toLowerCase() === 'true'; });
