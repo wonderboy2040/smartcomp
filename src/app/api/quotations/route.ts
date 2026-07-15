@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listRows, createRow, getRow } from '@/lib/sheets-client'
-import { isConfigured } from '@/lib/sheets-client'
+import { listRows, getRow, createQuotationFull } from '@/lib/sheets-client'
 import { computeInvoice, nextQuotationNumber, type LineItem } from '@/lib/calc'
 
 export async function GET(req: NextRequest) {
@@ -31,13 +30,16 @@ export async function GET(req: NextRequest) {
       grandTotal: Number(q.grandTotal) || 0,
     }))
 
-    return NextResponse.json(result)
+    return NextResponse.json(result, {
+      headers: { 'X-Ultra-Fast': 'true', 'X-Version': '4.0' }
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now()
   try {
     const body = await req.json()
     const { customerId, items, courierCharges, otherCharges, discount, notes, validTill, status, date } = body
@@ -45,20 +47,17 @@ export async function POST(req: NextRequest) {
     if (!customerId) return NextResponse.json({ error: 'Customer required' }, { status: 400 })
     if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'Items required' }, { status: 400 })
 
-    // PERFORMANCE: Parallel fetch customer, existing quotations, and shop
-    const [customer, existing, shopRows] = await Promise.all([
+    const [customer, existing] = await Promise.all([
       getRow<any>('Customers', customerId),
-      listRows<any>('Quotations'),
-      listRows<any>('Shop', { useCache: true }),
+      listRows<any>('Quotations', { useCache: true }),
     ])
     if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 400 })
 
     const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount })
-
-    // Generate quotation number: SCSS/QT/001
     const number = await nextQuotationNumber(existing.map((q) => ({ number: q.number })))
 
-    const quotation = await createRow('Quotations', {
+    // ULTRA FAST: Single call
+    const result = await createQuotationFull({
       number,
       customerId,
       customerName: customer.name,
@@ -78,9 +77,19 @@ export async function POST(req: NextRequest) {
       convertedToInvoiceId: '',
     })
 
+    const elapsed = Date.now() - startTime
+
     return NextResponse.json({
-      ...quotation,
+      ...result.data,
       customer: { id: customerId, name: customer.name, phone: customer.phone, gstNumber: customer.gstNumber },
+      ultraFast: true,
+      elapsedMs: elapsed,
+    }, {
+      headers: {
+        'X-Ultra-Fast': 'true',
+        'X-Elapsed-Ms': elapsed.toString(),
+        'X-Version': '4.0',
+      }
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })

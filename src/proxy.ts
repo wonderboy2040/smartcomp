@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * PIN-based access protection - FIXED v3.0.3
+ * PIN-based access protection - FIXED v4.0.0
  * 
- * BUGFIX v3.0.3: SALT mismatch fixed - login and proxy now use same SALT
+ * BUGFIX v4.0.0: SALT mismatch fixed - login and proxy now use same SALT
  * Also supports both old (_smartcomp_v1) and new (_smartcomp_v3_2026) salts
  * for backward compatibility when users upgrade.
  */
@@ -114,7 +114,7 @@ export async function proxy(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: 'Unauthorized. PIN required.', code: 'PIN_REQUIRED', version: '3.0.3' },
+    { error: 'Unauthorized. PIN required.', code: 'PIN_REQUIRED', version: '4.0.0' },
     { 
       status: 401,
       headers: {

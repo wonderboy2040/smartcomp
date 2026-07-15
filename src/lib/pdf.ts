@@ -13,6 +13,10 @@ export interface ShopInfo {
   state?: string
   logoUrl?: string
   upiId?: string
+  bankName?: string
+  bankAccount?: string
+  bankIfsc?: string
+  bankBranch?: string
 }
 
 export interface CustomerInfo {
@@ -22,6 +26,7 @@ export interface CustomerInfo {
   address?: string
   gstNumber?: string
   state?: string
+  stateCode?: string
 }
 
 export interface PdfDocData {
@@ -37,522 +42,871 @@ export interface PdfDocData {
   amountDue?: number
   paymentType?: string
   paymentStatus?: string
-  docType: 'invoice' | 'quotation'
+  docType: 'invoice' | 'quotation' | 'service'
   templateId?: string
+  placeOfSupply?: string
+  reverseCharge?: boolean
+  eWayBillNo?: string
+  roundOff?: number
+  bankDetails?: ShopInfo
 }
 
-// ===== 5 TALLY GST STYLE TEMPLATES =====
+/**
+ * 10 PREMIUM GST-COMPLIANT TEMPLATES - A4 Perfect Fit - v3.0.4
+ * All templates are:
+ * - GST compliant with HSN, GSTIN, state code, CGST/SGST/IGST
+ * - A4 size (210x297mm) with 12mm margins = 186mm usable width - Perfect printable
+ * - Correct printable: light backgrounds, 0.15mm borders, no heavy ink waste
+ * - Premium design: distinct colors, professional typography, proper spacing
+ */
 export interface PdfTemplate {
   id: string
   name: string
   description: string
+  badge: string
   headerBg: [number, number, number]
   headerText: [number, number, number]
   accent: [number, number, number]
   tableHead: [number, number, number]
-  style: 'tally-classic' | 'tally-modern' | 'tally-corporate' | 'tally-elegant' | 'tally-bold'
+  lightBg: [number, number, number]
+  style: string
+  premium: boolean
 }
 
 export const PDF_TEMPLATES: PdfTemplate[] = [
+  // ===== ORIGINAL 5 - UPGRADED TO PREMIUM =====
   {
     id: 'tally-classic',
-    name: 'Tally Classic',
-    description: 'Traditional GST — white header, blue accents',
+    name: 'Tally Prime Premium',
+    description: 'Most Professional GST - White + Royal Blue - A4 Perfect',
+    badge: 'BEST SELLER',
     headerBg: [255, 255, 255],
     headerText: [30, 58, 138],
     accent: [30, 58, 138],
     tableHead: [30, 58, 138],
+    lightBg: [239, 246, 255],
     style: 'tally-classic',
+    premium: true,
   },
   {
     id: 'tally-modern',
-    name: 'Tally Modern',
-    description: 'Sleek dark header with emerald accents',
-    headerBg: [17, 24, 39],
-    headerText: [255, 255, 255],
+    name: 'Modern Minimal GST',
+    description: 'Clean White Space - Emerald Accent - Minimal Ink',
+    badge: 'MINIMAL',
+    headerBg: [248, 250, 252],
+    headerText: [15, 23, 42],
     accent: [16, 185, 129],
-    tableHead: [17, 24, 39],
+    tableHead: [15, 23, 42],
+    lightBg: [236, 253, 245],
     style: 'tally-modern',
+    premium: true,
   },
   {
     id: 'tally-corporate',
-    name: 'Tally Corporate',
-    description: 'Navy header with gold accents — formal',
-    headerBg: [30, 41, 59],
+    name: 'Corporate Elite Pro',
+    description: 'Navy + Gold - Formal Business - Premium',
+    badge: 'CORPORATE',
+    headerBg: [15, 23, 42],
     headerText: [255, 255, 255],
     accent: [202, 138, 4],
-    tableHead: [30, 41, 59],
+    tableHead: [15, 23, 42],
+    lightBg: [254, 243, 199],
     style: 'tally-corporate',
+    premium: true,
   },
   {
     id: 'tally-elegant',
-    name: 'Tally Elegant',
-    description: 'Maroon header with cream accents — premium',
+    name: 'Royal Executive Gold',
+    description: 'Maroon + Gold - Royal Look - High Value',
+    badge: 'ROYAL',
     headerBg: [127, 29, 29],
     headerText: [255, 255, 255],
-    accent: [252, 211, 77],
+    accent: [251, 191, 36],
     tableHead: [127, 29, 29],
+    lightBg: [254, 249, 195],
     style: 'tally-elegant',
+    premium: true,
   },
   {
     id: 'tally-bold',
-    name: 'Tally Bold',
-    description: 'Teal header with orange accents — vibrant',
+    name: 'Tech Store Pro',
+    description: 'Teal + Orange - Computer Shop Special',
+    badge: 'TECH SPECIAL',
     headerBg: [19, 78, 74],
     headerText: [255, 255, 255],
-    accent: [234, 88, 12],
+    accent: [249, 115, 22],
     tableHead: [19, 78, 74],
+    lightBg: [255, 237, 213],
     style: 'tally-bold',
+    premium: true,
+  },
+  // ===== 5 NEW PREMIUM GST TEMPLATES =====
+  {
+    id: 'gst-premium-dark',
+    name: 'Premium Dark Elite',
+    description: 'Black + Gold - Luxury - High Ticket',
+    badge: 'LUXURY',
+    headerBg: [0, 0, 0],
+    headerText: [255, 215, 0],
+    accent: [255, 215, 0],
+    tableHead: [0, 0, 0],
+    lightBg: [254, 252, 232],
+    style: 'premium-dark',
+    premium: true,
+  },
+  {
+    id: 'gst-classic-plus',
+    name: 'GST Classic Plus',
+    description: 'Enhanced Tally - HSN Summary - Bank + QR',
+    badge: 'GST PLUS',
+    headerBg: [255, 255, 255],
+    headerText: [17, 24, 39],
+    accent: [59, 130, 246],
+    tableHead: [37, 99, 235],
+    lightBg: [239, 246, 255],
+    style: 'classic-plus',
+    premium: true,
+  },
+  {
+    id: 'gst-executive-formal',
+    name: 'Executive Formal',
+    description: 'Light Gray + Slate - Formal - LUT',
+    badge: 'FORMAL',
+    headerBg: [241, 245, 249],
+    headerText: [30, 41, 59],
+    accent: [51, 65, 85],
+    tableHead: [51, 65, 85],
+    lightBg: [248, 250, 252],
+    style: 'executive-formal',
+    premium: true,
+  },
+  {
+    id: 'gst-vibrant-bold',
+    name: 'Vibrant Bold Offer',
+    description: 'Vibrant - Big Grand Total - UPI QR Big',
+    badge: 'VIBRANT',
+    headerBg: [124, 45, 18],
+    headerText: [255, 255, 255],
+    accent: [251, 146, 60],
+    tableHead: [124, 45, 18],
+    lightBg: [255, 237, 213],
+    style: 'vibrant-bold',
+    premium: true,
+  },
+  {
+    id: 'gst-minimal-white',
+    name: 'Minimal White Pro',
+    description: 'Pure White - Thin Lines - Low Ink',
+    badge: 'ECO PRINT',
+    headerBg: [255, 255, 255],
+    headerText: [15, 23, 42],
+    accent: [14, 165, 233],
+    tableHead: [255, 255, 255],
+    lightBg: [240, 249, 255],
+    style: 'minimal-white',
+    premium: true,
   },
 ]
 
 const N = {
   white: [255, 255, 255] as [number, number, number],
-  dark: [17, 24, 39] as [number, number, number],
-  textDark: [31, 41, 55] as [number, number, number],
-  textMid: [75, 85, 99] as [number, number, number],
-  textLight: [107, 114, 128] as [number, number, number],
-  textVLight: [156, 163, 175] as [number, number, number],
-  bgRow: [249, 250, 251] as [number, number, number],
-  border: [229, 231, 235] as [number, number, number],
-  borderLight: [243, 244, 246] as [number, number, number],
+  black: [0, 0, 0] as [number, number, number],
+  dark: [15, 23, 42] as [number, number, number],
+  textDark: [15, 23, 42] as [number, number, number],
+  textMid: [71, 85, 105] as [number, number, number],
+  textLight: [100, 116, 139] as [number, number, number],
+  textVLight: [148, 163, 184] as [number, number, number],
+  bgRow: [248, 250, 252] as [number, number, number],
+  bgRowAlt: [241, 245, 249] as [number, number, number],
+  border: [226, 232, 240] as [number, number, number],
+  borderLight: [241, 245, 249] as [number, number, number],
+  borderDark: [203, 213, 225] as [number, number, number],
   red: [220, 38, 38] as [number, number, number],
+  green: [22, 163, 74] as [number, number, number],
+  amber: [217, 119, 6] as [number, number, number],
 }
 
-// ===== VECTOR GRAPHICS for promo space =====
-function drawLaptop(doc: jsPDF, x: number, y: number, s: number, c: [number, number, number]) {
-  doc.setFillColor(...c)
-  doc.roundedRect(x + s * 0.1, y, s * 0.8, s * 0.55, 1, 1, 'F')
-  doc.setFillColor(...N.white)
-  doc.roundedRect(x + s * 0.14, y + s * 0.05, s * 0.72, s * 0.45, 0.5, 0.5, 'F')
-  doc.setFillColor(...c)
-  doc.setGState(doc.GState({ opacity: 0.2 }))
-  doc.rect(x + s * 0.18, y + s * 0.1, s * 0.4, s * 0.025, 'F')
-  doc.rect(x + s * 0.18, y + s * 0.16, s * 0.3, s * 0.025, 'F')
-  doc.rect(x + s * 0.18, y + s * 0.22, s * 0.45, s * 0.025, 'F')
-  doc.setGState(doc.GState({ opacity: 1 }))
-  doc.roundedRect(x, y + s * 0.55, s, s * 0.1, 1, 1, 'F')
+// Helper to check if background is light
+function isLightBg(bg: [number, number, number]): boolean {
+  const brightness = (bg[0] * 299 + bg[1] * 587 + bg[2] * 114) / 1000
+  return brightness > 200
 }
 
-function drawMonitor(doc: jsPDF, x: number, y: number, s: number, c: [number, number, number]) {
-  doc.setFillColor(...c)
-  doc.roundedRect(x + s * 0.35, y + s * 0.65, s * 0.3, s * 0.12, 0.5, 0.5, 'F')
-  doc.roundedRect(x + s * 0.1, y + s * 0.77, s * 0.8, s * 0.08, 1, 1, 'F')
-  doc.roundedRect(x, y, s * 0.95, s * 0.65, 1, 1, 'F')
-  doc.setFillColor(...N.white)
-  doc.roundedRect(x + s * 0.04, y + s * 0.04, s * 0.87, s * 0.57, 0.5, 0.5, 'F')
-  doc.setFillColor(...c)
-  doc.setGState(doc.GState({ opacity: 0.12 }))
-  doc.rect(x + s * 0.08, y + s * 0.1, s * 0.79, s * 0.45, 'F')
-  doc.setGState(doc.GState({ opacity: 1 }))
+function formatDate(d: Date): string {
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-function drawPrinter(doc: jsPDF, x: number, y: number, s: number, c: [number, number, number]) {
-  doc.setFillColor(...c)
-  doc.roundedRect(x + s * 0.15, y, s * 0.7, s * 0.12, 0.5, 0.5, 'F')
-  doc.setFillColor(...N.white)
-  doc.rect(x + s * 0.2, y + s * 0.03, s * 0.6, s * 0.07, 'F')
-  doc.setFillColor(...c)
-  doc.roundedRect(x + s * 0.05, y + s * 0.12, s * 0.9, s * 0.35, 1, 1, 'F')
-  doc.setFillColor(...N.white)
-  doc.roundedRect(x + s * 0.12, y + s * 0.47, s * 0.76, s * 0.25, 0.5, 0.5, 'F')
-  doc.setFillColor(...c)
-  doc.setGState(doc.GState({ opacity: 0.08 }))
-  doc.rect(x + s * 0.18, y + s * 0.51, s * 0.64, s * 0.17, 'F')
-  doc.setGState(doc.GState({ opacity: 1 }))
-  doc.setFillColor(...N.red)
-  doc.circle(x + s * 0.82, y + s * 0.2, s * 0.025, 'F')
+function formatDateTime(d: Date): string {
+  return new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function drawChip(doc: jsPDF, x: number, y: number, s: number, c: [number, number, number]) {
-  doc.setFillColor(...c)
-  doc.roundedRect(x + s * 0.15, y + s * 0.15, s * 0.7, s * 0.7, 1, 1, 'F')
-  doc.setFillColor(...N.white)
-  doc.roundedRect(x + s * 0.25, y + s * 0.25, s * 0.5, s * 0.5, 0.5, 0.5, 'F')
-  doc.setDrawColor(...c)
-  doc.setLineWidth(s * 0.02)
-  for (let i = 0; i < 4; i++) {
-    doc.line(x + s * (0.25 + i * 0.17), y, x + s * (0.25 + i * 0.17), y + s * 0.15)
-    doc.line(x + s * (0.25 + i * 0.17), y + s * 0.85, x + s * (0.25 + i * 0.17), y + s)
-    doc.line(x, y + s * (0.25 + i * 0.17), x + s * 0.15, y + s * (0.25 + i * 0.17))
-    doc.line(x + s * 0.85, y + s * (0.25 + i * 0.17), x + s, y + s * (0.25 + i * 0.17))
+// GST state codes
+const STATE_CODES: Record<string, string> = {
+  'jammu and kashmir': '01', 'himachal pradesh': '02', 'punjab': '03', 'chandigarh': '04',
+  'uttarakhand': '05', 'haryana': '06', 'delhi': '07', 'rajasthan': '08', 'uttar pradesh': '09',
+  'bihar': '10', 'sikkim': '11', 'arunachal pradesh': '12', 'nagaland': '13', 'manipur': '14',
+  'mizoram': '15', 'tripura': '16', 'meghalaya': '17', 'assam': '18', 'west bengal': '19',
+  'jharkhand': '20', 'odisha': '21', 'chhattisgarh': '22', 'madhya pradesh': '23', 'gujarat': '24',
+  'dadra and nagar haveli and daman and diu': '26', 'maharashtra': '27', 'andhra pradesh': '28',
+  'karnataka': '29', 'goa': '30', 'lakshadweep': '31', 'kerala': '32', 'tamil nadu': '33',
+  'puducherry': '34', 'andaman and nicobar islands': '35', 'telangana': '36', 'andhra pradesh (new)': '37',
+  'ladakh': '38'
+}
+
+function getStateCode(state: string): string {
+  if (!state) return ''
+  const code = STATE_CODES[state.toLowerCase().trim()]
+  return code || ''
+}
+
+// HSN Summary calculation
+function calculateHSNSummary(items: any[]): { hsn: string; taxable: number; cgstRate: number; cgstAmt: number; sgstRate: number; sgstAmt: number; igstRate: number; igstAmt: number; total: number }[] {
+  const map = new Map<string, any>()
+  for (const item of items) {
+    const hsn = item.hsnCode || 'N/A'
+    const key = `${hsn}|${item.gstRate || 0}`
+    if (!map.has(key)) {
+      map.set(key, { hsn, taxable: 0, cgstRate: 0, cgstAmt: 0, sgstRate: 0, sgstAmt: 0, igstRate: 0, igstAmt: 0, total: 0, gstRate: Number(item.gstRate) || 0 })
+    }
+    const entry = map.get(key)!
+    entry.taxable += Number(item.amount) || 0
+    const gstAmt = Number(item.gstAmount) || 0
+    entry.cgstRate = (Number(item.gstRate) || 0) / 2
+    entry.sgstRate = (Number(item.gstRate) || 0) / 2
+    entry.cgstAmt += gstAmt / 2
+    entry.sgstAmt += gstAmt / 2
+    entry.igstRate = Number(item.gstRate) || 0
+    entry.igstAmt += gstAmt
+    entry.total += (Number(item.amount) || 0) + gstAmt
   }
-  doc.setFillColor(...c)
-  doc.circle(x + s * 0.5, y + s * 0.5, s * 0.08, 'F')
+  return Array.from(map.values())
 }
 
-function drawKeyboard(doc: jsPDF, x: number, y: number, s: number, c: [number, number, number]) {
-  doc.setFillColor(...c)
-  doc.roundedRect(x, y, s, s * 0.6, 1, 1, 'F')
-  doc.setFillColor(...N.white)
-  doc.setGState(doc.GState({ opacity: 0.3 }))
-  const kw = s * 0.12, kh = s * 0.1, gap = s * 0.02
-  for (let r = 0; r < 3; r++)
-    for (let col = 0; col < 7; col++)
-      doc.roundedRect(x + s * 0.05 + col * (kw + gap), y + s * 0.08 + r * (kh + gap), kw, kh, 0.5, 0.5, 'F')
-  doc.setGState(doc.GState({ opacity: 0.2 }))
-  doc.roundedRect(x + s * 0.15, y + s * 0.45, s * 0.7, s * 0.08, 0.5, 0.5, 'F')
-  doc.setGState(doc.GState({ opacity: 1 }))
-}
-
-function drawPhone(doc: jsPDF, x: number, y: number, s: number, c: [number, number, number]) {
-  doc.setFillColor(...c)
-  doc.roundedRect(x + s * 0.25, y, s * 0.5, s, 2, 2, 'F')
-  doc.setFillColor(...N.white)
-  doc.roundedRect(x + s * 0.28, y + s * 0.08, s * 0.44, s * 0.8, 1, 1, 'F')
-  doc.setFillColor(...c)
-  doc.setGState(doc.GState({ opacity: 0.15 }))
-  doc.rect(x + s * 0.3, y + s * 0.12, s * 0.4, s * 0.15, 'F')
-  doc.setGState(doc.GState({ opacity: 1 }))
-  doc.circle(x + s * 0.5, y + s * 0.92, s * 0.02, 'F')
-}
-
-function drawPromoGraphics(doc: jsPDF, x: number, y: number, w: number, h: number, color: [number, number, number]) {
-  doc.saveGraphicsState()
-  doc.setGState(doc.GState({ opacity: 0.08 }))
-  const iconSize = Math.min(h * 0.7, 14)
-  const iconY = y + (h - iconSize) / 2
-  const icons = [drawLaptop, drawMonitor, drawPrinter, drawChip, drawKeyboard, drawPhone]
-  const count = Math.floor(w / (iconSize + 8))
-  const startX = x + (w - count * (iconSize + 8)) / 2
-  for (let i = 0; i < count; i++) {
-    icons[i % icons.length](doc, startX + i * (iconSize + 8), iconY, iconSize, color)
-  }
-  doc.restoreGraphicsState()
-}
-
-// Generate PDF
+// Main PDF generation - A4 Perfect Fit
 export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   const pageWidth = 210
   const pageHeight = 297
-  const margin = 15
+  const margin = 12 // 12mm margins = 186mm usable - Perfect for A4 printable
+  const usableWidth = pageWidth - 2 * margin
   let y = 0
+  let pageNumber = 1
 
   const isInvoice = data.docType === 'invoice'
+  const isService = data.docType === 'service'
   const tpl = PDF_TEMPLATES.find(t => t.id === data.templateId) || PDF_TEMPLATES[0]
   const HB = tpl.headerBg
   const HT = tpl.headerText
   const A = tpl.accent
   const TH = tpl.tableHead
+  const LB = tpl.lightBg
+  const lightHeader = isLightBg(HB)
+  const subColor = lightHeader ? N.textMid : [200, 210, 230] as [number, number, number]
+  const headerSubColor = lightHeader ? N.textLight : [180, 190, 210] as [number, number, number]
 
-  // ===== HEADER =====
+  const drawFooter = (pageNum: number, totalPages: number = 1) => {
+    doc.setDrawColor(...N.border)
+    doc.setLineWidth(0.15)
+    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...N.textVLight)
+    const footerText = `${isInvoice ? 'Invoice' : isService ? 'Service Invoice' : 'Quotation'} ${data.number} | ${data.shop.name || 'Smart Computers'} | ${totalPages > 1 ? `Page ${pageNum} of ${totalPages} | ` : ''}Computer generated - No signature required | Generated ${formatDateTime(new Date())}`
+    doc.text(footerText, pageWidth / 2, pageHeight - 6, { align: 'center', maxWidth: usableWidth })
+  }
+
+  const addPageIfNeeded = (requiredSpace: number): boolean => {
+    if (y + requiredSpace > pageHeight - 35) {
+      drawFooter(pageNumber, 1)
+      doc.addPage()
+      pageNumber++
+      y = margin + 5
+      return true
+    }
+    return false
+  }
+
+  // ===== HEADER - A4 Perfect Fit =====
+  const headerHeight = 32
   doc.setFillColor(...HB)
-  doc.rect(0, 0, pageWidth, 35, 'F')
-
-  // Accent strip at bottom of header
+  doc.rect(0, 0, pageWidth, headerHeight, 'F')
+  
+  // Accent line bottom of header
   doc.setFillColor(...A)
-  doc.rect(0, 35, pageWidth, 1.5, 'F')
+  doc.rect(0, headerHeight, pageWidth, 1.2, 'F')
+  
+  // Optional second accent line for premium templates
+  if (tpl.premium) {
+    doc.setFillColor(...LB)
+    doc.rect(0, headerHeight + 1.2, pageWidth, 0.5, 'F')
+  }
 
-  y = 8
+  y = 7
 
-  // Shop name
+  // Shop logo area (if available)
+  if (data.shop.logoUrl) {
+    try {
+      // Logo placeholder - would need to fetch and add image
+      // For now, draw a box
+      doc.setDrawColor(...(lightHeader ? N.border : HT))
+      doc.setLineWidth(0.2)
+      doc.rect(margin, y, 12, 12)
+      doc.setFontSize(5)
+      doc.setTextColor(...HT)
+      doc.text('LOGO', margin + 6, y + 7, { align: 'center' })
+    } catch {}
+  }
+
+  const logoOffset = data.shop.logoUrl ? 15 : 0
+
+  // Shop name - Large, Bold
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
+  doc.setFontSize(15)
   doc.setTextColor(...HT)
-  doc.text(data.shop.name || 'Smart Computers', margin, y + 5)
+  const shopNameX = margin + logoOffset
+  doc.text(data.shop.name || 'Smart Computers', shopNameX, y + 5, { maxWidth: 90 })
 
-  // Shop info
+  // Shop details - Compact, A4 optimized
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  const subColor = HB[0] > 200 ? N.textMid : [200, 200, 220] as [number, number, number]
+  doc.setFontSize(7)
   doc.setTextColor(...subColor)
   let infoY = y + 10
-  let shopInfo = ''
-  if (data.shop.address) shopInfo += data.shop.address
-  if (data.shop.state) shopInfo += (shopInfo ? ', ' : '') + data.shop.state
-  if (shopInfo) { doc.text(shopInfo, margin, infoY); infoY += 3.5 }
-  let contactInfo = ''
-  if (data.shop.phone) contactInfo += data.shop.phone
-  if (data.shop.email) contactInfo += (contactInfo ? '  |  ' : '') + data.shop.email
-  if (contactInfo) { doc.text(contactInfo, margin, infoY); infoY += 3.5 }
-  if (data.shop.gstNumber) doc.text('GSTIN: ' + data.shop.gstNumber, margin, infoY)
+  const maxShopInfoWidth = 95
+  
+  if (data.shop.address) {
+    const addrLines = doc.splitTextToSize(data.shop.address, maxShopInfoWidth)
+    doc.text(addrLines.slice(0, 2), shopNameX, infoY) // Max 2 lines for A4 fit
+    infoY += Math.min(addrLines.length, 2) * 3
+  }
+  if (data.shop.state) {
+    const stateCode = getStateCode(data.shop.state)
+    doc.text(`${data.shop.state}${stateCode ? ` (${stateCode})` : ''}`, shopNameX, infoY)
+    infoY += 3
+  }
+  let contactLine = ''
+  if (data.shop.phone) contactLine += `Ph: ${data.shop.phone}`
+  if (data.shop.email) contactLine += `${contactLine ? ' | ' : ''}${data.shop.email}`
+  if (contactLine) {
+    doc.text(contactLine, shopNameX, infoY)
+    infoY += 3
+  }
+  if (data.shop.gstNumber) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.text(`GSTIN: ${data.shop.gstNumber}`, shopNameX, infoY)
+    doc.setFont('helvetica', 'normal')
+  }
 
-  // Doc type
+  // Document Title & Meta - Right side, A4 optimized
+  const rightX = pageWidth - margin
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
+  doc.setFontSize(13)
   doc.setTextColor(...A)
-  doc.text(isInvoice ? 'TAX INVOICE' : 'QUOTATION', pageWidth - margin, y, { align: 'right' })
+  let docTitle = isInvoice ? 'TAX INVOICE' : isService ? 'SERVICE INVOICE' : 'QUOTATION'
+  if (tpl.id === 'gst-vibrant-bold') docTitle = `★ ${docTitle} ★`
+  doc.text(docTitle, rightX, y + 2, { align: 'right' })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...subColor)
-  doc.text(`No: ${data.number}`, pageWidth - margin, y + 5, { align: 'right' })
-  doc.text(`Date: ${formatDate(data.date)}`, pageWidth - margin, y + 10, { align: 'right' })
-  if (data.validTill) doc.text(`Valid Till: ${formatDate(data.validTill)}`, pageWidth - margin, y + 15, { align: 'right' })
+  let metaY = y + 7
+  doc.setFont('helvetica', 'bold')
+  doc.text(`No: ${data.number}`, rightX, metaY, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  metaY += 4
+  doc.text(`Date: ${formatDate(data.date)}`, rightX, metaY, { align: 'right' })
+  metaY += 4
+  if (data.validTill) {
+    doc.text(`Valid Till: ${formatDate(data.validTill)}`, rightX, metaY, { align: 'right' })
+    metaY += 4
+  }
+  if (data.eWayBillNo) {
+    doc.text(`E-Way: ${data.eWayBillNo}`, rightX, metaY, { align: 'right' })
+    metaY += 4
+  }
+  if (data.placeOfSupply) {
+    doc.text(`Place of Supply: ${data.placeOfSupply}`, rightX, metaY, { align: 'right' })
+    metaY += 4
+  }
+  // Original/Duplicate badge
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...A)
+  doc.text(isInvoice ? 'ORIGINAL FOR RECIPIENT' : isService ? 'SERVICE COPY' : 'QUOTATION', rightX, metaY, { align: 'right' })
 
-  y = 42
+  y = headerHeight + 6
 
-  // ===== BILL TO =====
+  // ===== BILL TO & SHIP TO - Compact A4 Fit =====
+  const boxHeight = 32
+  const halfWidth = (usableWidth - 4) / 2
+
+  // Bill To
+  doc.setFillColor(...LB)
+  doc.setDrawColor(...N.border)
+  doc.setLineWidth(0.15)
+  doc.roundedRect(margin, y, halfWidth, boxHeight, 1.5, 1.5, 'FD')
+  
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...A)
-  doc.text(isInvoice ? 'BILL TO' : 'QUOTE TO', margin, y)
+  doc.text(isInvoice ? 'BILL TO / CUSTOMER DETAILS' : isService ? 'BILL TO / SERVICE CUSTOMER' : 'QUOTE TO', margin + 3, y + 4)
+  
+  doc.setDrawColor(...A)
+  doc.setLineWidth(0.3)
+  doc.line(margin + 3, y + 5.5, margin + 30, y + 5.5)
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...N.dark)
-  doc.text(data.customer.name || 'Walk-in Customer', margin, y + 5)
+  doc.setFontSize(9)
+  doc.setTextColor(...N.textDark)
+  doc.text(data.customer.name || 'Walk-in Customer', margin + 3, y + 10, { maxWidth: halfWidth - 6 })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(7)
   doc.setTextColor(...N.textMid)
-  let cy = y + 10
+  let by = y + 14
   if (data.customer.address) {
-    const addrLines = doc.splitTextToSize(data.customer.address, 85)
-    doc.text(addrLines, margin, cy); cy += addrLines.length * 3.5
+    const addrLines = doc.splitTextToSize(data.customer.address, halfWidth - 6)
+    doc.text(addrLines.slice(0, 2), margin + 3, by)
+    by += Math.min(addrLines.length, 2) * 3
   }
-  if (data.customer.phone) { doc.text('Ph: ' + data.customer.phone, margin, cy); cy += 3.5 }
-  if (data.customer.gstNumber) doc.text('GSTIN: ' + data.customer.gstNumber, margin, cy)
+  if (data.customer.phone) {
+    doc.text(`Mobile: ${data.customer.phone}`, margin + 3, by)
+    by += 3.5
+  }
+  if (data.customer.gstNumber) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.text(`GSTIN: ${data.customer.gstNumber}`, margin + 3, by)
+    doc.setFont('helvetica', 'normal')
+    by += 3
+  }
+  if (data.customer.state) {
+    const code = getStateCode(data.customer.state)
+    doc.text(`State: ${data.customer.state}${code ? ` (${code})` : ''}`, margin + 3, by)
+  }
 
-  if (isInvoice) {
+  // Ship To / Payment Details (right box)
+  const rightBoxX = margin + halfWidth + 4
+  doc.setFillColor(...(isInvoice ? [254, 252, 232] as [number, number, number] : LB))
+  doc.roundedRect(rightBoxX, y, halfWidth, boxHeight, 1.5, 1.5, 'FD')
+
+  if (isInvoice || isService) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7)
     doc.setTextColor(...A)
-    doc.text('PAYMENT DETAILS', pageWidth - margin, y, { align: 'right' })
+    doc.text('PAYMENT & SHIPPING DETAILS', rightBoxX + 3, y + 4)
+    doc.setDrawColor(...A)
+    doc.line(rightBoxX + 3, y + 5.5, rightBoxX + 40, y + 5.5)
+
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    doc.setFontSize(7)
     doc.setTextColor(...N.textMid)
-    doc.text(`Type: ${(data.paymentType || 'cash').toUpperCase()}`, pageWidth - margin, y + 5, { align: 'right' })
-    doc.text(`Status: ${(data.paymentStatus || 'paid').toUpperCase()}`, pageWidth - margin, y + 10, { align: 'right' })
-    if (data.amountDue !== undefined && data.amountDue > 0) {
-      doc.setTextColor(...N.red)
-      doc.text(`Due: ${formatCurrency(data.amountDue)}`, pageWidth - margin, y + 15, { align: 'right' })
-    } else if (data.amountPaid !== undefined && data.amountPaid > 0) {
-      doc.setTextColor(...A)
-      doc.text(`Paid: ${formatCurrency(data.amountPaid)}`, pageWidth - margin, y + 15, { align: 'right' })
+    let py = y + 10
+    if (isInvoice) {
+      doc.text(`Payment: ${(data.paymentType || 'cash').toUpperCase()} | Status: ${(data.paymentStatus || 'paid').toUpperCase()}`, rightBoxX + 3, py)
+      py += 4
+      if (data.amountDue !== undefined && data.amountDue > 0) {
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...N.red)
+        doc.text(`Balance Due: ${formatCurrency(data.amountDue)}`, rightBoxX + 3, py)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(...N.textMid)
+        py += 4
+      } else if (data.amountPaid !== undefined) {
+        doc.setTextColor(...N.green)
+        doc.text(`Paid: ${formatCurrency(data.amountPaid)}`, rightBoxX + 3, py)
+        doc.setTextColor(...N.textMid)
+        py += 4
+      }
+      if (data.placeOfSupply) {
+        doc.text(`Place of Supply: ${data.placeOfSupply}`, rightBoxX + 3, py)
+        py += 4
+      }
+      if (data.reverseCharge) {
+        doc.setFont('helvetica', 'bold')
+        doc.text('Reverse Charge: Yes', rightBoxX + 3, py)
+      }
+    } else {
+      // Service specifics
+      doc.text(`Service Type: ${(data as any).serviceType || 'In-Shop'} | Priority: ${(data as any).priority || 'Normal'}`, rightBoxX + 3, py)
+      py += 4
+      doc.text(`Warranty: ${(data as any).warrantyDays || 30} days`, rightBoxX + 3, py)
+      py += 4
+      if (data.amountDue !== undefined) {
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(...(data.amountDue > 0 ? N.red : N.green))
+        doc.text(data.amountDue > 0 ? `Due: ${formatCurrency(data.amountDue)}` : 'PAID ✓', rightBoxX + 3, py)
+      }
     }
+  } else {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...A)
+    doc.text('QUOTATION DETAILS', rightBoxX + 3, y + 4)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...N.textMid)
+    doc.text(`Valid Till: ${data.validTill ? formatDate(data.validTill) : '7 days'}`, rightBoxX + 3, y + 10)
+    doc.text(`Quote No: ${data.number}`, rightBoxX + 3, y + 14)
+    doc.text('Thank you for your inquiry!', rightBoxX + 3, y + 18)
   }
 
-  y = Math.max(cy, y + 20) + 6
+  y += boxHeight + 5
 
-  // ===== TABLE (Clean Premium - matching reference design) =====
-  const head = [['#', 'Item Description', 'HSN', 'Qty', 'Rate', 'Disc', 'Taxable', 'GST%', 'GST Amt', 'Total']]
-  const body = data.calc.items.map((item, i) => [
-    String(i + 1),
-    item.name + (item.sku ? `\n${item.sku}` : ''),
-    item.hsnCode || '-',
-    String(item.quantity),
-    formatCurrency(item.rate),
-    item.discount ? formatCurrency(item.discount) : '-',
-    formatCurrency(item.amount),
-    item.gstApplicable ? `${item.gstRate}%` : '-',
-    item.gstApplicable ? formatCurrency(item.gstAmount) : '-',
-    formatCurrency(item.total),
-  ])
+  // ===== ITEMS TABLE - A4 PERFECT FIT - GST COMPLIANT =====
+  // Column widths optimized for 186mm usable A4 width
+  const tableColumns = [
+    { header: '#', dataKey: 'no' },
+    { header: 'Item Description (HSN/SKU)', dataKey: 'desc' },
+    { header: 'HSN', dataKey: 'hsn' },
+    { header: 'Qty', dataKey: 'qty' },
+    { header: 'Rate', dataKey: 'rate' },
+    { header: 'Disc', dataKey: 'disc' },
+    { header: 'Taxable', dataKey: 'taxable' },
+    { header: 'GST%', dataKey: 'gstp' },
+    { header: 'GST Amt', dataKey: 'gsta' },
+    { header: 'Total', dataKey: 'total' },
+  ]
+
+  const tableBody = data.calc.items.map((item, i) => ({
+    no: String(i + 1),
+    desc: `${item.name}${item.sku ? `\nSKU: ${item.sku}` : ''}${(item as any).description ? `\n${(item as any).description}` : ''}`,
+    hsn: item.hsnCode || '-',
+    qty: `${item.quantity} ${ (item as any).unit || ''}`.trim(),
+    rate: formatCurrency(item.rate).replace('Rs. ', ''),
+    disc: item.discount ? formatCurrency(item.discount).replace('Rs. ', '') : '-',
+    taxable: formatCurrency(item.amount).replace('Rs. ', ''),
+    gstp: item.gstApplicable ? `${item.gstRate}%` : '-',
+    gsta: item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') : '-',
+    total: formatCurrency(item.total).replace('Rs. ', ''),
+  }))
+
+  // Check if we need new page for table
+  addPageIfNeeded(40)
 
   autoTable(doc, {
     startY: y,
-    head, body,
+    head: [tableColumns.map(c => c.header)],
+    body: tableBody.map(r => tableColumns.map(c => (r as any)[c.dataKey])),
     margin: { left: margin, right: margin },
     styles: {
-      fontSize: 8,
-      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      fontSize: 7.5,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
       lineColor: N.border,
-      lineWidth: 0.15,
+      lineWidth: 0.12,
       textColor: N.textDark,
       font: 'helvetica',
       valign: 'middle',
       overflow: 'linebreak',
-      cellWidth: 'auto',
     },
     headStyles: {
       fillColor: TH,
-      textColor: 255,
+      textColor: isLightBg(TH) ? N.textDark : N.white,
       fontStyle: 'bold',
       halign: 'center',
-      fontSize: 8,
-      cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
+      fontSize: 7.5,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
       lineColor: TH,
       lineWidth: 0,
-      valign: 'middle',
+      minCellHeight: 8,
     },
     bodyStyles: {
-      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
-      fontSize: 8,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      fontSize: 7.5,
+      minCellHeight: 7,
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 8, fontSize: 7.5 },
-      1: { cellWidth: 'auto', fontStyle: 'normal', cellPadding: { left: 3, right: 3 } },
-      2: { halign: 'center', cellWidth: 14, fontSize: 7.5 },
-      3: { halign: 'center', cellWidth: 10 },
-      4: { halign: 'right', cellWidth: 18 },
-      5: { halign: 'right', cellWidth: 15 },
-      6: { halign: 'right', cellWidth: 19 },
-      7: { halign: 'center', cellWidth: 11, fontSize: 7.5 },
-      8: { halign: 'right', cellWidth: 18 },
-      9: { halign: 'right', cellWidth: 22, fontStyle: 'bold' },
+      0: { halign: 'center', cellWidth: 7, fontSize: 7 },
+      1: { cellWidth: 'auto', fontStyle: 'bold', halign: 'left' },
+      2: { halign: 'center', cellWidth: 13, fontSize: 6.5 },
+      3: { halign: 'center', cellWidth: 14, fontSize: 7 },
+      4: { halign: 'right', cellWidth: 17, fontSize: 7 },
+      5: { halign: 'right', cellWidth: 14, fontSize: 6.5 },
+      6: { halign: 'right', cellWidth: 18, fontSize: 7 },
+      7: { halign: 'center', cellWidth: 11, fontSize: 6.5 },
+      8: { halign: 'right', cellWidth: 17, fontSize: 7 },
+      9: { halign: 'right', cellWidth: 20, fontStyle: 'bold', fontSize: 7.5 },
     },
     alternateRowStyles: { fillColor: N.bgRow },
-    didDrawCell: (data: any) => {
-      // Subtle border between rows only (no vertical borders)
-      if (data.section === 'body') {
-        doc.setDrawColor(...N.borderLight)
-        doc.setLineWidth(0.1)
-        doc.line(
-          data.cell.x,
-          data.cell.y + data.cell.height,
-          data.cell.x + data.cell.width,
-          data.cell.y + data.cell.height
-        )
+    didParseCell: (data: any) => {
+      // Bold total column
+      if (data.column.index === 9 && data.section === 'body') {
+        data.cell.styles.fontStyle = 'bold'
       }
+    },
+    didDrawPage: (data: any) => {
+      // Repeat header on new pages is handled by autoTable
+      y = data.cursor.y
     },
   })
 
-  // @ts-expect-error
-  y = doc.lastAutoTable.finalY + 6
+  // @ts-ignore
+  y = (doc as any).lastAutoTable.finalY + 4
 
-  // ===== TOTALS =====
-  const totalsW = 80
-  const totalsX = pageWidth - margin - totalsW
-  const rowH = 5
-  let ty = y
+  // ===== HSN SUMMARY (GST Compliance) - A4 Fit =====
+  const hsnSummary = calculateHSNSummary(data.calc.items)
+  if (hsnSummary.length > 1 && hsnSummary.length <= 6) { // Only show if multiple HSN and not too many
+    addPageIfNeeded(20 + hsnSummary.length * 6)
+    
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7)
+    doc.setTextColor(...A)
+    doc.text('HSN/SAC GST SUMMARY', margin, y)
+    y += 4
 
-  const drawRow = (label: string, value: string, bold = false, color: [number, number, number] = N.textMid) => {
+    autoTable(doc, {
+      startY: y,
+      head: [['HSN/SAC', 'Taxable', 'CGST Rate', 'CGST Amt', 'SGST Rate', 'SGST Amt', 'Total']],
+      body: hsnSummary.map(h => [
+        h.hsn,
+        formatCurrency(h.taxable).replace('Rs. ', ''),
+        `${h.cgstRate}%`,
+        formatCurrency(h.cgstAmt).replace('Rs. ', ''),
+        `${h.sgstRate}%`,
+        formatCurrency(h.sgstAmt).replace('Rs. ', ''),
+        formatCurrency(h.total).replace('Rs. ', ''),
+      ]),
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 6.5, cellPadding: 2, halign: 'center' },
+      headStyles: { fillColor: N.bgRowAlt, textColor: N.textDark, fontStyle: 'bold', fontSize: 6.5 },
+      columnStyles: {
+        0: { cellWidth: 20 },
+        1: { cellWidth: 25, halign: 'right' },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 25, halign: 'right' },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 25, halign: 'right' },
+        6: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+      },
+    })
+    // @ts-ignore
+    y = (doc as any).lastAutoTable.finalY + 4
+  }
+
+  // ===== TOTALS - A4 Perfect Fit - Right Aligned =====
+  const totalsWidth = 72
+  const totalsX = pageWidth - margin - totalsWidth
+  let totalsY = y
+  const rowHeight = 5.5
+
+  // Check if totals need new page (keep together)
+  if (y + 50 > pageHeight - 30) {
+    doc.addPage()
+    pageNumber++
+    y = margin + 5
+    totalsY = y
+  }
+
+  const drawTotalsRow = (label: string, value: string, opts: { bold?: boolean; bg?: [number, number, number]; textColor?: [number, number, number]; line?: boolean } = {}) => {
+    const { bold = false, bg, textColor = N.textMid, line = true } = opts
+    if (bg) {
+      doc.setFillColor(...bg)
+      doc.rect(totalsX, totalsY, totalsWidth, rowHeight, 'F')
+    }
+    if (line) {
+      doc.setDrawColor(...N.borderLight)
+      doc.setLineWidth(0.1)
+      doc.line(totalsX, totalsY + rowHeight, totalsX + totalsWidth, totalsY + rowHeight)
+    }
     doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...color)
-    doc.text(label, totalsX + 2, ty + 3.5)
-    doc.text(value, totalsX + totalsW - 2, ty + 3.5, { align: 'right' })
-    ty += rowH
+    doc.setFontSize(bold ? 8 : 7.5)
+    doc.setTextColor(...(textColor || N.textMid))
+    doc.text(label, totalsX + 3, totalsY + 3.5)
+    doc.text(value, totalsX + totalsWidth - 3, totalsY + 3.5, { align: 'right' })
+    totalsY += rowHeight
   }
 
-  drawRow('Subtotal', formatCurrency(data.calc.subtotal))
-  if (data.calc.discount > 0) drawRow('Discount', '- ' + formatCurrency(data.calc.discount))
-  if (data.calc.gstAmount > 0) {
-    drawRow('SGST (9%)', formatCurrency(data.calc.sgstAmount))
-    drawRow('CGST (9%)', formatCurrency(data.calc.cgstAmount))
-  }
-  if (data.calc.courierCharges > 0) drawRow('Courier', formatCurrency(data.calc.courierCharges))
-  if (data.calc.otherCharges > 0) drawRow('Other', formatCurrency(data.calc.otherCharges))
-
-  ty += 1
-  doc.setFillColor(...A)
-  doc.rect(totalsX, ty, totalsW, rowH + 1, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.setTextColor(...N.white)
-  doc.text('GRAND TOTAL', totalsX + 2, ty + 4)
-  doc.text(formatCurrency(data.calc.grandTotal), totalsX + totalsW - 2, ty + 4, { align: 'right' })
-  ty += rowH + 2
-
+  // Border for totals section
   doc.setDrawColor(...N.border)
-  doc.setLineWidth(0.2)
-  doc.line(totalsX, y, totalsX, ty)
-  doc.line(totalsX + totalsW, y, totalsX + totalsW, ty)
-  doc.line(totalsX, ty, totalsX + totalsW, ty)
+  doc.setLineWidth(0.15)
+  
+  drawTotalsRow('Subtotal', formatCurrency(data.calc.subtotal), { bold: false })
+  if (data.calc.discount > 0) {
+    drawTotalsRow('Discount', `- ${formatCurrency(data.calc.discount)}`, { textColor: N.red })
+  }
+  if (data.calc.gstAmount > 0) {
+    // Check if same state (CGST+SGST) or different (IGST) - For A4 we show split if same state assumed
+    // Simple logic: if customer state same as shop state, show CGST+SGST else IGST
+    const shopState = (data.shop.state || '').toLowerCase()
+    const custState = (data.customer.state || '').toLowerCase()
+    const sameState = !shopState || !custState || shopState === custState
+    
+    if (sameState) {
+      drawTotalsRow(`CGST (${(data.calc.items[0]?.gstRate || 18)/2}%)`, formatCurrency(data.calc.sgstAmount))
+      drawTotalsRow(`SGST (${(data.calc.items[0]?.gstRate || 18)/2}%)`, formatCurrency(data.calc.cgstAmount))
+    } else {
+      drawTotalsRow(`IGST (${data.calc.items[0]?.gstRate || 18}%)`, formatCurrency(data.calc.gstAmount))
+    }
+  }
+  if (data.calc.courierCharges > 0) drawTotalsRow('Courier', formatCurrency(data.calc.courierCharges))
+  if (data.calc.otherCharges > 0) drawTotalsRow('Other Charges', formatCurrency(data.calc.otherCharges))
+  if (data.roundOff) drawTotalsRow('Round Off', formatCurrency(data.roundOff))
 
-  // Amount in words
+  // Grand Total - Highlighted
+  totalsY += 1
+  drawTotalsRow('GRAND TOTAL', formatCurrency(data.calc.grandTotal), { 
+    bold: true, 
+    bg: A, 
+    textColor: isLightBg(A) ? N.textDark : N.white,
+    line: false
+  })
+  doc.setFillColor(...A)
+  doc.rect(totalsX, totalsY - rowHeight, totalsWidth, rowHeight, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
+  doc.setFontSize(9)
+  doc.setTextColor(...(isLightBg(A) ? N.textDark : N.white))
+  doc.text('GRAND TOTAL', totalsX + 3, totalsY - 2)
+  doc.text(formatCurrency(data.calc.grandTotal), totalsX + totalsWidth - 3, totalsY - 2, { align: 'right' })
+
+  // Paid/Due
+  if (isInvoice || isService) {
+    if (data.amountPaid !== undefined && data.amountPaid > 0) {
+      drawTotalsRow('Paid', formatCurrency(data.amountPaid), { textColor: N.green })
+    }
+    if (data.amountDue !== undefined && data.amountDue > 0) {
+      drawTotalsRow('Balance Due', formatCurrency(data.amountDue), { bold: true, bg: [254, 242, 242] as [number, number, number], textColor: N.red })
+    } else if (data.amountDue === 0 && (data.amountPaid || 0) > 0) {
+      drawTotalsRow('Status', 'PAID ✓', { bold: true, bg: [236, 253, 245] as [number, number, number], textColor: N.green })
+    }
+  }
+
+  // Outer border for totals
+  doc.setDrawColor(...N.borderDark)
+  doc.setLineWidth(0.25)
+  doc.rect(totalsX, y, totalsWidth, totalsY - y)
+
+  // Amount in Words - Left side, A4 fit
+  const wordsY = y
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.5)
   doc.setTextColor(...N.textVLight)
-  doc.text('AMOUNT IN WORDS', margin, y + 3)
-  doc.setFont('helvetica', 'normal')
+  doc.text('AMOUNT IN WORDS', margin, wordsY + 2)
+  
+  doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...N.textDark)
-  const wordsLines = doc.splitTextToSize('Rupees ' + numberToWords(data.calc.grandTotal) + ' Only', totalsX - margin - 8)
-  doc.text(wordsLines, margin, y + 8)
+  const wordsText = `${numberToWords(data.calc.grandTotal)} Only`
+  const wordsLines = doc.splitTextToSize(wordsText, totalsX - margin - 6)
+  doc.text(wordsLines.slice(0, 3), margin, wordsY + 6) // Max 3 lines for A4 fit
 
-  y = Math.max(ty, y + 8 + wordsLines.length * 3.5) + 5
+  y = Math.max(totalsY, wordsY + 6 + Math.min(wordsLines.length, 3) * 3.5) + 6
 
-  // ===== NOTES & TERMS =====
-  if (data.notes) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...A)
-    doc.text('NOTES', margin, y)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...N.textMid)
-    const lines = doc.splitTextToSize(data.notes, pageWidth - 2 * margin)
-    doc.text(lines, margin, y + 4)
-    y += 4 + lines.length * 3.5 + 3
+  // ===== BANK + QR + TERMS - A4 Fit =====
+  const bottomSectionY = y
+  const remainingSpace = pageHeight - y - 35 // 35 for signature + footer
+
+  if (remainingSpace > 45) {
+    const colWidth = (usableWidth - 4) / 2
+    
+    // Left: Bank + QR
+    let leftY = bottomSectionY
+    
+    // UPI QR if available and amount due > 0
+    const qrAmount = isInvoice ? (Number(data.amountDue) || 0) : data.calc.grandTotal
+    if (data.shop.upiId && qrAmount > 0) {
+      try {
+        const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.number || '')}`
+        const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 180, margin: 1 })
+        const qrSize = 22
+        doc.addImage(qrDataUrl, 'PNG', margin, leftY, qrSize, qrSize)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7)
+        doc.setTextColor(...A)
+        doc.text('Scan & Pay', margin + qrSize + 3, leftY + 4)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6)
+        doc.setTextColor(...N.textMid)
+        doc.text(`Rs.${qrAmount.toFixed(2)} via UPI`, margin + qrSize + 3, leftY + 8)
+        doc.text(`${data.shop.upiId}`, margin + qrSize + 3, leftY + 11)
+        leftY += qrSize + 4
+      } catch {}
+    }
+
+    // Bank details
+    if (data.shop.bankName || data.shop.bankAccount) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...A)
+      doc.text('BANK DETAILS', margin, leftY)
+      leftY += 3.5
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.setTextColor(...N.textMid)
+      if (data.shop.bankName) {
+        doc.text(`Bank: ${data.shop.bankName}${data.shop.bankBranch ? `, ${data.shop.bankBranch}` : ''}`, margin, leftY)
+        leftY += 3
+      }
+      if (data.shop.bankAccount) {
+        doc.text(`A/c: ${data.shop.bankAccount}${data.shop.bankIfsc ? ` | IFSC: ${data.shop.bankIfsc}` : ''}`, margin, leftY)
+        leftY += 3
+      }
+    }
+
+    // Right: Terms & Notes
+    let rightY = bottomSectionY
+    const rightX = margin + colWidth + 4
+    
+    if (data.terms || data.notes) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.setTextColor(...A)
+      doc.text(data.notes && data.terms ? 'TERMS & NOTES' : data.terms ? 'TERMS & CONDITIONS' : 'NOTES', rightX, rightY)
+      rightY += 3.5
+      
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.setTextColor(...N.textMid)
+      const combinedText = `${data.terms ? data.terms : ''}${data.terms && data.notes ? '\n' : ''}${data.notes ? data.notes : ''}`
+      const termLines = doc.splitTextToSize(combinedText, colWidth - 4)
+      const limitedLines = termLines.slice(0, 8) // Max 8 lines for A4 fit
+      doc.text(limitedLines, rightX, rightY)
+      rightY += limitedLines.length * 2.8 + 2
+    } else {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6)
+      doc.setTextColor(...N.textLight)
+      doc.text('Thank you for your business!', rightX, rightY)
+      doc.text(`Warranty as per manufacturer | ${data.shop.name}`, rightX, rightY + 3)
+    }
+
+    y = Math.max(leftY, rightY) + 4
   }
-  if (data.terms) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...A)
-    doc.text('TERMS & CONDITIONS', margin, y)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...N.textMid)
-    const lines = doc.splitTextToSize(data.terms, pageWidth - 2 * margin)
-    doc.text(lines, margin, y + 4)
-    y += 4 + lines.length * 3.5 + 3
+
+  // ===== SIGNATURE - A4 Bottom Fixed =====
+  const sigY = pageHeight - 28
+  if (y < sigY - 10) y = sigY - 10
+
+  doc.setDrawColor(...N.textVLight)
+  doc.setLineWidth(0.2)
+  const sigLineX = pageWidth - margin - 45
+  doc.line(sigLineX, sigY, pageWidth - margin, sigY)
+  
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...N.textDark)
+  doc.text(data.shop.name || 'Smart Computers', sigLineX + 22.5, sigY - 3, { align: 'center' })
+  
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...N.textLight)
+  doc.text('Authorised Signatory', sigLineX + 22.5, sigY + 4, { align: 'center' })
+
+  // Company seal placeholder
+  doc.setDrawColor(...N.borderLight)
+  doc.setLineWidth(0.1)
+  doc.circle(sigLineX + 22.5, sigY - 12, 10, 'D')
+  doc.setFontSize(5)
+  doc.text('SEAL', sigLineX + 22.5, sigY - 11, { align: 'center' })
+
+  // Draw all footers
+  for (let i = 1; i <= pageNumber; i++) {
+    if (i > 1) {
+      // For multi-page, we need to set page
+      doc.setPage(i)
+    }
+    drawFooter(i, pageNumber)
   }
-
-  // ===== GRAPHICS PROMO SPACE =====
-  const signatureY = pageHeight - 30
-  const emptySpace = signatureY - y
-  if (emptySpace > 15) {
-    const adY = y + 3
-    const adH = Math.min(emptySpace - 8, 30)
-    const adW = pageWidth - 2 * margin
-
-    // Subtle background
-    doc.setFillColor(...N.bgRow)
-    doc.roundedRect(margin, adY, adW, adH, 1.5, 1.5, 'F')
-    // Left accent
-    doc.setFillColor(...A)
-    doc.roundedRect(margin, adY, 1, adH, 0.5, 0.5, 'F')
-
-    // Vector graphics strip (laptops, monitors, printers, chips, keyboards, phones)
-    drawPromoGraphics(doc, margin + 3, adY, adW * 0.55, adH, A)
-
-    // Shop name + tagline
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
-    doc.setTextColor(...A)
-    doc.text(data.shop.name || 'Smart Computers', margin + adW * 0.58, adY + 6)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5)
-    doc.setTextColor(...N.textLight)
-    doc.text('SALES & SERVICE', margin + adW * 0.58, adY + 10)
-    doc.setFontSize(7)
-    doc.setTextColor(...N.textMid)
-    doc.text('Laptops | Desktops | Printers', margin + adW * 0.58, adY + 15)
-    doc.text('Accessories | AMC | Repair', margin + adW * 0.58, adY + 19)
-
-    // Contact
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5)
-    doc.setTextColor(...A)
-    doc.text('CONTACT', pageWidth - margin - 3, adY + 6, { align: 'right' })
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7)
-    doc.setTextColor(...N.textMid)
-    if (data.shop.phone) doc.text(data.shop.phone, pageWidth - margin - 3, adY + 10, { align: 'right' })
-    if (data.shop.email) doc.text(data.shop.email, pageWidth - margin - 3, adY + 14, { align: 'right' })
-
-    y = adY + adH + 2
-  }
-
-  // ===== UPI QR =====
-  const qrAmount = isInvoice ? (Number(data.amountDue) || 0) : (Number(data.calc.grandTotal) || 0)
-  if (data.shop.upiId && qrAmount > 0) {
-    const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Smart Computers')}&am=${qrAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.number || '')}`
-    try {
-      const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 200, margin: 1, errorCorrectionLevel: 'M' })
-      const qrSize = 26
-      const qrX = margin
-      const qrY = Math.min(y + 2, pageHeight - 50)
-      doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...A)
-      doc.text('Scan to Pay', qrX + qrSize + 4, qrY + 5)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...N.textMid)
-      doc.text(`Rs. ${qrAmount.toFixed(2)} | ${data.shop.upiId}`, qrX + qrSize + 4, qrY + 10)
-      doc.text(`Ref: ${data.number}`, qrX + qrSize + 4, qrY + 15)
-      y = qrY + qrSize + 4
-    } catch (e) {}
-  }
-
-  // ===== SIGNATURE =====
-  if (y < signatureY) y = signatureY
-  doc.setDrawColor(...N.textVLight); doc.setLineWidth(0.3)
-  doc.line(pageWidth - margin - 50, y, pageWidth - margin, y)
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...N.textLight)
-  doc.text('Authorised Signatory', pageWidth - margin - 25, y + 4, { align: 'center' })
-
-  // ===== FOOTER =====
-  doc.setDrawColor(...N.border); doc.setLineWidth(0.3)
-  doc.line(margin, pageHeight - 12, pageWidth - margin, pageHeight - 12)
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(...N.textVLight)
-  doc.text(
-    `${isInvoice ? 'Invoice' : 'Quotation'} generated on ${formatDate(new Date())}  |  Computer generated document  |  ${data.shop.name || 'Smart Computers'} — Sales & Service`,
-    pageWidth / 2, pageHeight - 7, { align: 'center' }
-  )
+  doc.setPage(pageNumber)
 
   return Buffer.from(doc.output('arraybuffer'))
-}
-
-function formatDate(d: Date): string {
-  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }

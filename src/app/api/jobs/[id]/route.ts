@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRow, updateRow, deleteRow, listRows, createRow, bulkUpdate } from '@/lib/sheets-client'
+import { getRow, updateRow, deleteRow, listRows, createRow, bulkUpdate, completeJobFull } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
 import { sendJobStatusNotification } from '@/lib/notifications'
 
@@ -65,6 +65,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'complete') {
+      const startTime = Date.now()
       const existing = await getRow<any>('Jobs', id)
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -73,125 +74,145 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const paymentMode = String(body?.paymentMode || 'Cash')
       const engineerSharePct = Number(body?.engineerSharePct) || 50
       const warrantyDays = Number(body?.warrantyDays) || Number(existing?.warrantyDays) || 30
-      const deductStock = body?.deductStock !== false // default true
-      const partsProfit = partsUsed.reduce((s: number, p: any) => {
-        return s + ((Number(p?.sellPrice) || 0) - (Number(p?.costPrice) || 0)) * (Number(p?.qty) || 1)
-      }, 0)
-      const partsCostTotal = partsUsed.reduce((s: number, p: any) => {
-        return s + (Number(p?.costPrice) || 0) * (Number(p?.qty) || 1)
-      }, 0)
-      const serviceProfit = Math.max(0, finalAmount - partsCostTotal - partsUsed.reduce((s: number, p: any) => s + (Number(p?.sellPrice || 0)-Number(p?.costPrice||0))*Number(p?.qty||1), 0) + partsProfit)
+      const deductStock = body?.deductStock !== false
 
-      // Recalculate correctly: serviceProfit = serviceCharge, partsProfit as above, but final may include both
+      const partsProfit = partsUsed.reduce((s: number, p: any) => s + ((Number(p?.sellPrice) || 0) - (Number(p?.costPrice) || 0)) * (Number(p?.qty) || 1), 0)
       const svcCharge = Number(body?.serviceCharge) || 0
       const actualServiceProfit = svcCharge
       const engineerShare = Math.round((actualServiceProfit * engineerSharePct / 100) + (partsProfit * engineerSharePct / 100))
       const adminShare = (actualServiceProfit + partsProfit) - engineerShare
-
       const warrantyExpiry = new Date(Date.now() + warrantyDays * 24 * 60 * 60 * 1000).toISOString()
 
-      const updated = await updateRow('Jobs', id, {
-        status: 'Completed',
-        partsUsedJson: JSON.stringify(partsUsed),
-        finalAmount,
-        serviceCharge: svcCharge,
-        paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
-        paymentMode,
+      // Prepare stock updates for ultra fast transaction
+      const stockUpdates: { id: string; deductQty: number }[] = []
+      if (deductStock && partsUsed.length > 0) {
+        const qtyMap = new Map<string, number>()
+        for (const p of partsUsed) {
+          if (p.itemId) {
+            qtyMap.set(p.itemId, (qtyMap.get(p.itemId) || 0) + (Number(p.qty) || 1))
+          }
+        }
+        for (const [itemId, qty] of qtyMap.entries()) {
+          stockUpdates.push({ id: itemId, deductQty: qty })
+        }
+      }
+
+      const advance = Number(existing.advanceAmount) || 0
+      const balanceDue = Math.max(0, finalAmount - advance)
+      const payment = balanceDue > 0 ? {
+        jobId: String(existing.jobId || ''),
+        customerName: String(existing.customerName || ''),
+        amount: balanceDue,
+        mode: paymentMode,
+        type: 'Final',
+        date: new Date().toISOString(),
         engineerShare,
         adminShare,
-        partsProfit,
-        serviceProfit: actualServiceProfit,
-        warrantyDays,
-        warrantyExpiry,
-        completedDate: new Date().toISOString(),
-        diagnosisNotes: String(body?.diagnosisNotes || ''),
-        notes: String(body?.notes || ''),
-      })
+        notes: 'Final payment at job completion',
+      } : null
 
-      // Deduct stock for linked items (v3.0.2 feature)
-      if (deductStock && partsUsed.length > 0) {
-        try {
-          const linkedParts = partsUsed.filter((p: any) => p.itemId)
-          if (linkedParts.length > 0) {
-            const itemIds = [...new Set(linkedParts.map((p: any) => p.itemId))]
+      // ULTRA FAST: Single Apps Script call does job update + stock deduction + payment
+      try {
+        const result = await completeJobFull({
+          id,
+          status: 'Completed',
+          partsUsedJson: JSON.stringify(partsUsed),
+          finalAmount,
+          serviceCharge: svcCharge,
+          paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
+          paymentMode,
+          engineerShare,
+          adminShare,
+          partsProfit,
+          serviceProfit: actualServiceProfit,
+          warrantyDays,
+          warrantyExpiry,
+          completedDate: new Date().toISOString(),
+          diagnosisNotes: String(body?.diagnosisNotes || ''),
+          notes: String(body?.notes || ''),
+          stockUpdates: stockUpdates.length > 0 ? stockUpdates : undefined,
+          payment: payment || undefined,
+        })
+
+        const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', result.data)
+        const elapsed = Date.now() - startTime
+
+        return NextResponse.json({
+          success: true,
+          job: result.data,
+          engineerShare,
+          adminShare,
+          partsProfit,
+          serviceProfit: actualServiceProfit,
+          warrantyExpiry,
+          stockDeducted: deductStock,
+          notification: notifResult,
+          ultraFast: true,
+          elapsedMs: elapsed,
+        }, {
+          headers: {
+            'X-Ultra-Fast': 'true',
+            'X-Elapsed-Ms': elapsed.toString(),
+          }
+        })
+      } catch (err: any) {
+        // Fallback to old multi-call method if ultra fast fails
+        console.error('Ultra fast complete failed, falling back:', err)
+        const updated = await updateRow('Jobs', id, {
+          status: 'Completed',
+          partsUsedJson: JSON.stringify(partsUsed),
+          finalAmount,
+          serviceCharge: svcCharge,
+          paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
+          paymentMode,
+          engineerShare,
+          adminShare,
+          partsProfit,
+          serviceProfit: actualServiceProfit,
+          warrantyDays,
+          warrantyExpiry,
+          completedDate: new Date().toISOString(),
+          diagnosisNotes: String(body?.diagnosisNotes || ''),
+          notes: String(body?.notes || ''),
+        })
+
+        if (deductStock && stockUpdates.length > 0) {
+          try {
+            const itemIds = stockUpdates.map(s => s.id)
             const dbItems = await Promise.all(itemIds.map((itemId: string) => getRow<any>('Items', itemId).catch(() => null)))
-            const stockUpdates: { id: string; data: any }[] = []
-            for (const part of linkedParts) {
-              const dbItem = dbItems.find((d: any) => d && String(d.id) === String(part.itemId))
-              if (dbItem) {
-                const currentQty = Number(dbItem.quantity) || 0
-                const deductQty = Number(part.qty) || 1
-                stockUpdates.push({
-                  id: String(part.itemId),
-                  data: { quantity: Math.max(0, currentQty - deductQty) }
-                })
-              }
-            }
-            // Merge updates for same item (sum quantities)
-            const merged = new Map<string, number>()
-            for (const upd of stockUpdates) {
-              const existing = merged.get(upd.id) || 0
-              // We need to recalc properly - get current from db and sum deductions
-              // For simplicity, we already have individual deductions, sum them
-              merged.set(upd.id, existing + (Number(partsUsed.find((p: any) => p.itemId === upd.id)?.qty) || 0))
-            }
-            // Actually redo with proper grouping
-            const qtyMap = new Map<string, number>()
-            for (const p of linkedParts) {
-              qtyMap.set(p.itemId, (qtyMap.get(p.itemId) || 0) + (Number(p.qty) || 1))
-            }
             const finalUpdates: { id: string; data: any }[] = []
-            for (const [itemId, totalQty] of qtyMap.entries()) {
-              const dbItem = dbItems.find((d: any) => d && String(d.id) === String(itemId))
+            for (const upd of stockUpdates) {
+              const dbItem = dbItems.find((d: any) => d && String(d.id) === String(upd.id))
               if (dbItem) {
                 finalUpdates.push({
-                  id: itemId,
-                  data: { quantity: Math.max(0, (Number(dbItem.quantity) || 0) - totalQty) }
+                  id: upd.id,
+                  data: { quantity: Math.max(0, (Number(dbItem.quantity) || 0) - upd.deductQty) }
                 })
               }
             }
-            if (finalUpdates.length > 0) {
-              await bulkUpdate('Items', finalUpdates).catch(() => {})
-            }
-          }
-        } catch (err) {
-          console.error('Stock deduction failed:', err)
-          // Don't fail the whole complete action if stock deduction fails
+            if (finalUpdates.length > 0) await bulkUpdate('Items', finalUpdates).catch(() => {})
+          } catch {}
         }
-      }
 
-      if (finalAmount > 0) {
-        const job = await getRow<any>('Jobs', id)
-        const advance = Number(job?.advanceAmount) || 0
-        const balanceDue = Math.max(0, finalAmount - advance)
-        if (balanceDue > 0) {
-          await createRow('ServicePayments', {
-            jobId: String(job?.jobId || ''),
-            customerName: String(job?.customerName || ''),
-            amount: balanceDue,
-            mode: paymentMode,
-            type: 'Final',
-            date: new Date().toISOString(),
-            engineerShare,
-            adminShare,
-            notes: 'Final payment at job completion',
-          }).catch(() => {})
+        if (balanceDue > 0 && payment) {
+          await createRow('ServicePayments', payment).catch(() => {})
         }
+
+        const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', updated)
+        return NextResponse.json({
+          success: true,
+          job: updated,
+          engineerShare,
+          adminShare,
+          partsProfit,
+          serviceProfit: actualServiceProfit,
+          warrantyExpiry,
+          stockDeducted: deductStock,
+          notification: notifResult,
+          ultraFast: false,
+          fallback: true,
+        })
       }
-
-      const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', updated)
-
-      return NextResponse.json({
-        success: true,
-        job: updated,
-        engineerShare,
-        adminShare,
-        partsProfit,
-        serviceProfit: actualServiceProfit,
-        warrantyExpiry,
-        stockDeducted: deductStock,
-        notification: notifResult,
-      })
     }
 
     if (action === 'deliver') {

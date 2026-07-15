@@ -20,9 +20,9 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 30 * 1000 // v3.0: increased to 30s for better performance
-const RETRY_ATTEMPTS = 2
-const RETRY_DELAY = 1000
+const STALE_MS = 60 * 1000 // v4.0 ultra: 60s for ultra high speed - fewer Apps Script calls
+const RETRY_ATTEMPTS = 1 // Reduced from 2 to 1 for faster failure feedback
+const RETRY_DELAY = 500 // Reduced from 1000 to 500ms for faster retry
 
 // Offline detection
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
