@@ -85,7 +85,7 @@ export function SetupWizard() {
         </div>
 
         {/* Steps */}
-        <Card className="bg-white/95 backdrop-blur border-0 shadow-2xl">
+        <Card className="bg-card/95 backdrop-blur border border-border shadow-2xl">
           <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-5">
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="w-5 h-5 text-emerald-500 flex-shrink-0" />

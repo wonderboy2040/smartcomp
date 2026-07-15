@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Store, Loader2, Lock, ShieldCheck, CheckCircle2, AlertCircle, Eye, EyeOff, Sun, Moon } from 'lucide-react'
+import { Store, Loader2, Lock, ShieldCheck, CheckCircle2, AlertCircle, Eye, EyeOff, Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from '@/lib/theme-context'
 
 function LoginInner() {
@@ -95,8 +95,11 @@ function LoginInner() {
         onClick={toggleTheme}
         className="absolute top-4 right-4 w-10 h-10 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:shadow-md transition-all"
         aria-label="Toggle theme"
+        title={`Theme: ${theme}`}
       >
-        {theme === 'light' ? <Moon className="w-4 h-4 text-foreground" /> : <Sun className="w-4 h-4 text-amber-400" />}
+        {theme === 'light' && <Moon className="w-4 h-4 text-foreground" />}
+        {theme === 'dark' && <Sun className="w-4 h-4 text-amber-400" />}
+        {theme === 'system' && <Monitor className="w-4 h-4 text-blue-500" />}
       </button>
 
       <div className="relative w-full max-w-sm">

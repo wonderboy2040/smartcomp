@@ -324,8 +324,8 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
           </div>
 
           {/* Items - Upgraded with stock visibility */}
-          <div className="border-2 border-slate-200 rounded-xl overflow-hidden bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-slate-50 to-white px-4 py-3 border-b-2 border-slate-200">
+          <div className="border-2 border-slate-200 dark:border-slate-700/60 rounded-xl overflow-hidden bg-white dark:bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800/50 dark:to-card px-4 py-3 border-b-2 border-slate-200 dark:border-slate-700/60">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center"><Package className="w-4 h-4 text-white" /></div>
                 <div><span className="text-sm font-bold text-slate-900">Items ({items.length})</span><p className="text-[11px] text-slate-500">Stock linked • Profit tracking • GST</p></div>
@@ -373,7 +373,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
               })}
             </div>
 
-            <div className="bg-gradient-to-r from-slate-50 to-white p-3 border-t-2 border-slate-200">
+            <div className="bg-gradient-to-r from-slate-50 to-white dark:from-slate-800/50 dark:to-card p-3 border-t-2 border-slate-200 dark:border-slate-700/60">
               <Label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5 mb-2"><Plus className="w-3.5 h-3.5" />Quick Add Custom Item (Non-stock)</Label>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="flex-1 min-w-[160px]"><Input value={customItem.name} onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })} className="h-10 text-sm bg-white border-slate-200" placeholder="Item name e.g. Service Charge" /></div>

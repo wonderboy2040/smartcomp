@@ -91,6 +91,12 @@
   --sidebar-border: 217 33% 17%;
   --sidebar-ring: 239 84% 67%;
   
+  /* Clay design tokens - Light theme (soft neumorphic surface) */
+  --clay-bg: #eef0f6;
+  --clay-surface: #f5f7fa;
+  --clay-shadow-dark: rgba(163, 177, 198, 0.5);
+  --clay-shadow-light: rgba(255, 255, 255, 0.8);
+  
   color-scheme: light;
 }
 
@@ -139,6 +145,12 @@
   --sidebar-border: 217 33% 17%;
   --sidebar-ring: 239 84% 67%;
   
+  /* Clay design tokens - Dark theme (dark elevated surface) */
+  --clay-bg: #0a0e1a;
+  --clay-surface: #101624;
+  --clay-shadow-dark: rgba(0, 0, 0, 0.6);
+  --clay-shadow-light: rgba(255, 255, 255, 0.04);
+  
   color-scheme: dark;
 }
 
@@ -186,7 +198,7 @@
   
   /* Sidebar - Professional dark always for contrast */
   .clay-sidebar {
-    background: linear-gradient(180deg, hsl(var(--sidebar)) 0%, hsl(222 47% 8%) 100%);
+    background: linear-gradient(180deg, hsl(var(--sidebar)) 0%, hsl(var(--sidebar-accent)) 100%);
     border-right: 1px solid hsl(var(--sidebar-border));
   }
   
@@ -270,34 +282,149 @@ table td {
 /* Ensure badges have high contrast */
 .bg-amber-50 { @apply bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50; }
 .text-amber-700 { @apply text-amber-800 dark:text-amber-300 font-semibold; }
+.text-amber-600 { @apply text-amber-700 dark:text-amber-400 font-medium; }
+.text-amber-500 { @apply text-amber-600 dark:text-amber-400; }
+.text-amber-400 { @apply text-amber-500 dark:text-amber-300; }
+.text-amber-900 { @apply text-amber-900 dark:text-amber-100 font-semibold; }
+.bg-amber-100 { @apply bg-amber-100 dark:bg-amber-900/40; }
+.bg-amber-200 { @apply bg-amber-200 dark:bg-amber-800/50; }
+.border-amber-200 { @apply border-amber-200 dark:border-amber-800/50; }
+.border-amber-300 { @apply border-amber-300 dark:border-amber-700/60; }
 
 .bg-blue-50 { @apply bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800/50; }
 .text-blue-700 { @apply text-blue-800 dark:text-blue-300 font-semibold; }
+.text-blue-600 { @apply text-blue-700 dark:text-blue-400 font-medium; }
+.text-blue-500 { @apply text-blue-600 dark:text-blue-400; }
+.text-blue-400 { @apply text-blue-500 dark:text-blue-300; }
+.text-blue-900 { @apply text-blue-900 dark:text-blue-100 font-semibold; }
+.text-blue-100 { @apply text-blue-100 dark:text-blue-200; }
+.bg-blue-100 { @apply bg-blue-100 dark:bg-blue-900/40; }
+.bg-blue-200 { @apply bg-blue-200 dark:bg-blue-800/50; }
+.border-blue-200 { @apply border-blue-200 dark:border-blue-800/50; }
+.border-blue-300 { @apply border-blue-300 dark:border-blue-700/60; }
 
 .bg-emerald-50 { @apply bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50; }
 .text-emerald-700 { @apply text-emerald-800 dark:text-emerald-300 font-semibold; }
+.text-emerald-600 { @apply text-emerald-700 dark:text-emerald-400 font-medium; }
+.text-emerald-500 { @apply text-emerald-600 dark:text-emerald-400; }
+.text-emerald-400 { @apply text-emerald-500 dark:text-emerald-300; }
+.text-emerald-800 { @apply text-emerald-800 dark:text-emerald-200 font-bold; }
+.text-emerald-900 { @apply text-emerald-900 dark:text-emerald-100 font-semibold; }
+.bg-emerald-100 { @apply bg-emerald-100 dark:bg-emerald-900/40; }
+.bg-emerald-200 { @apply bg-emerald-200 dark:bg-emerald-800/50; }
+.border-emerald-200 { @apply border-emerald-200 dark:border-emerald-800/50; }
+.border-emerald-300 { @apply border-emerald-300 dark:border-emerald-700/60; }
 
 .bg-red-50 { @apply bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50; }
 .text-red-700 { @apply text-red-800 dark:text-red-300 font-semibold; }
+.text-red-600 { @apply text-red-700 dark:text-red-400 font-medium; }
+.text-red-500 { @apply text-red-600 dark:text-red-400; }
+.text-red-400 { @apply text-red-500 dark:text-red-300; }
+.bg-red-100 { @apply bg-red-100 dark:bg-red-900/40; }
+.bg-red-200 { @apply bg-red-200 dark:bg-red-800/50; }
+.border-red-200 { @apply border-red-200 dark:border-red-800/50; }
+.border-red-300 { @apply border-red-300 dark:border-red-700/60; }
 
 .bg-green-50 { @apply bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800/50; }
 .text-green-700 { @apply text-green-800 dark:text-green-300 font-semibold; }
+.text-green-600 { @apply text-green-700 dark:text-green-400 font-medium; }
+.text-green-500 { @apply text-green-600 dark:text-green-400; }
+.bg-green-100 { @apply bg-green-100 dark:bg-green-900/40; }
+.bg-green-600 { @apply bg-green-600 dark:bg-green-500; }
 
 .bg-purple-50 { @apply bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/50; }
 .text-purple-700 { @apply text-purple-800 dark:text-purple-300 font-semibold; }
+.text-purple-600 { @apply text-purple-700 dark:text-purple-400 font-medium; }
+.text-purple-500 { @apply text-purple-600 dark:text-purple-400; }
+.bg-purple-100 { @apply bg-purple-100 dark:bg-purple-900/40; }
 
 .bg-orange-50 { @apply bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/50; }
 .text-orange-700 { @apply text-orange-800 dark:text-orange-300 font-semibold; }
+.text-orange-600 { @apply text-orange-700 dark:text-orange-400 font-medium; }
+.bg-orange-100 { @apply bg-orange-100 dark:bg-orange-900/40; }
 
-.bg-slate-50 { @apply bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/50; }
-.text-slate-700 { @apply text-slate-800 dark:text-slate-200 font-medium; }
-.text-slate-600 { @apply text-slate-700 dark:text-slate-300; }
-.text-slate-500 { @apply text-slate-600 dark:text-slate-400; }
+.bg-indigo-50 { @apply bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800/50; }
+.text-indigo-600 { @apply text-indigo-700 dark:text-indigo-400 font-medium; }
+.text-indigo-500 { @apply text-indigo-600 dark:text-indigo-400; }
+.bg-indigo-100 { @apply bg-indigo-100 dark:bg-indigo-900/40; }
+
+.bg-cyan-50 { @apply bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-800/50; }
+.text-cyan-600 { @apply text-cyan-700 dark:text-cyan-400 font-medium; }
+.bg-cyan-100 { @apply bg-cyan-100 dark:bg-cyan-900/40; }
+
+.bg-pink-50 { @apply bg-pink-50 dark:bg-pink-950/30 border-pink-200 dark:border-pink-800/50; }
+.text-pink-600 { @apply text-pink-700 dark:text-pink-400 font-medium; }
+.bg-pink-100 { @apply bg-pink-100 dark:bg-pink-900/40; }
+
+.bg-violet-50 { @apply bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800/50; }
+.text-violet-600 { @apply text-violet-700 dark:text-violet-400 font-medium; }
+.bg-violet-100 { @apply bg-violet-100 dark:bg-violet-900/40; }
+
+/* Slate / Gray scale - theme aware */
+.bg-slate-50 { @apply bg-slate-50 dark:bg-slate-800/50; }
+.bg-slate-100 { @apply bg-slate-100 dark:bg-slate-800/60; }
+.bg-slate-200 { @apply bg-slate-200 dark:bg-slate-700/60; }
+.bg-slate-300 { @apply bg-slate-300 dark:bg-slate-600; }
+.bg-slate-800 { @apply bg-slate-800 dark:bg-slate-800; }
+.bg-slate-900 { @apply bg-slate-900 dark:bg-slate-900; }
+
 .text-slate-900 { @apply text-slate-900 dark:text-slate-50 font-semibold; }
+.text-slate-800 { @apply text-slate-800 dark:text-slate-100 font-medium; }
+.text-slate-700 { @apply text-slate-700 dark:text-slate-200; }
+.text-slate-600 { @apply text-slate-600 dark:text-slate-300; }
+.text-slate-500 { @apply text-slate-500 dark:text-slate-400; }
+/* Light slate colors (400/300/200/100) are intentionally light in both themes — 
+   used on the always-dark sidebar and on dark cards. No override needed. */
+
+.border-slate-100 { @apply border-slate-100 dark:border-slate-800; }
+.border-slate-200 { @apply border-slate-200 dark:border-slate-700/60; }
+.border-slate-300 { @apply border-slate-300 dark:border-slate-600; }
+.border-slate-400 { @apply border-slate-400 dark:border-slate-500; }
+.border-slate-700 { @apply border-slate-700 dark:border-slate-600; }
+
+/* Hover variants - commonly used but missing in original rescue layer */
+.hover\:bg-slate-50:hover { @apply bg-slate-50 dark:bg-slate-800/60; }
+.hover\:bg-slate-100:hover { @apply bg-slate-100 dark:bg-slate-700/60; }
+.hover\:bg-slate-200:hover { @apply bg-slate-200 dark:bg-slate-700; }
+.hover\:bg-white:hover { @apply bg-white dark:bg-slate-800; }
+.hover\:text-slate-700:hover { @apply text-slate-700 dark:text-slate-200; }
+.hover\:text-slate-900:hover { @apply text-slate-900 dark:text-slate-50; }
+.hover\:border-slate-300:hover { @apply border-slate-300 dark:border-slate-600; }
+
+/* Gray scale (rare but present) */
+.bg-gray-50 { @apply bg-gray-50 dark:bg-gray-800/50; }
+.bg-gray-100 { @apply bg-gray-100 dark:bg-gray-800/60; }
+.text-gray-500 { @apply text-gray-500 dark:text-gray-400; }
+.text-gray-600 { @apply text-gray-600 dark:text-gray-300; }
+.text-gray-700 { @apply text-gray-700 dark:text-gray-200; }
+.text-gray-900 { @apply text-gray-900 dark:text-gray-50 font-semibold; }
+.border-gray-200 { @apply border-gray-200 dark:border-gray-700/60; }
+.border-gray-300 { @apply border-gray-300 dark:border-gray-600; }
+
+/* Zinc / Neutral fallbacks */
+.bg-zinc-50 { @apply bg-zinc-50 dark:bg-zinc-800/50; }
+.bg-zinc-100 { @apply bg-zinc-100 dark:bg-zinc-800/60; }
+.text-zinc-500 { @apply text-zinc-500 dark:text-zinc-400; }
+.text-zinc-600 { @apply text-zinc-600 dark:text-zinc-300; }
+.text-zinc-700 { @apply text-zinc-700 dark:text-zinc-200; }
+.text-zinc-900 { @apply text-zinc-900 dark:text-zinc-50 font-semibold; }
+.border-zinc-200 { @apply border-zinc-200 dark:border-zinc-700/60; }
 
 /* Ensure no white-on-white or dark-on-dark */
 .bg-white { @apply bg-white dark:bg-card; }
+.bg-white\/95 { @apply bg-white/95 dark:bg-card/95; }
+.bg-white\/90 { @apply bg-white/90 dark:bg-card/90; }
+.bg-white\/80 { @apply bg-white/80 dark:bg-card/80; }
 .text-white { @apply text-white dark:text-white; }
+
+/* Force-print paper background (used by invoice preview) */
+.print-paper {
+  background: #ffffff !important;
+  color: #000000 !important;
+}
+.print-paper * {
+  color: inherit;
+}
 
 /* Fix for specific panels that used hardcoded colors */
 .bg-gradient-to-br, .bg-gradient-to-r {

@@ -82,13 +82,14 @@ export default function GlobalError({
           <div style={{
             background: 'var(--clay-surface, #f5f7fa)',
             backdropFilter: 'blur(20px)',
-            border: 'none',
+            border: '1px solid var(--border, rgba(0,0,0,0.08))',
             borderRadius: '24px',
             padding: '32px',
             maxWidth: '480px',
             width: '100%',
             textAlign: 'center',
             boxShadow: '10px 10px 24px var(--clay-shadow-dark, rgba(163,177,198,0.5)), -10px -10px 24px var(--clay-shadow-light, rgba(255,255,255,0.8))',
+            color: 'inherit',
           }}>
             {/* Icon */}
             <div style={{
@@ -105,17 +106,17 @@ export default function GlobalError({
               <AlertTriangle style={{ width: 36, height: 36, color: '#fff' }} />
             </div>
 
-            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: 'inherit' }}>
               Something went wrong
             </h1>
-            <p style={{ fontSize: 14, color: '#94a3b8', marginBottom: 16, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: 'var(--muted-foreground, #64748b)', marginBottom: 16, lineHeight: 1.6 }}>
               The app hit an unexpected error. Don't worry — your data in Google Sheets is safe.
               Try reloading. If the problem persists, click "Clear & Reload".
             </p>
 
             {/* Error details (collapsible) */}
             <details style={{
-              background: 'rgba(255,255,255,0.05)',
+              background: 'rgba(127,127,127,0.08)',
               borderRadius: '12px',
               padding: '12px',
               margin: '16px 0',
@@ -123,15 +124,16 @@ export default function GlobalError({
               fontSize: 11,
               fontFamily: 'monospace',
               color: '#fca5a5',
+              border: '1px solid rgba(127,127,127,0.15)',
             }}>
-              <summary style={{ cursor: 'pointer', color: '#cbd5e1', fontWeight: 600 }}>
+              <summary style={{ cursor: 'pointer', color: 'var(--muted-foreground, #94a3b8)', fontWeight: 600 }}>
                 <Bug style={{ width: 14, height: 14, display: 'inline', marginRight: 6 }} />
                 Error details
               </summary>
               <div style={{ marginTop: 8, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
                 {error?.message || 'Unknown error'}
                 {error?.digest && (
-                  <div style={{ marginTop: 8, color: '#64748b' }}>Ref: {error.digest}</div>
+                  <div style={{ marginTop: 8, color: 'var(--muted-foreground, #64748b)' }}>Ref: {error.digest}</div>
                 )}
               </div>
             </details>
@@ -163,9 +165,9 @@ export default function GlobalError({
             <button
               onClick={handleGoHome}
               style={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#fff',
-                border: '1px solid rgba(255,255,255,0.2)',
+                background: 'rgba(127,127,127,0.12)',
+                color: 'inherit',
+                border: '1px solid var(--border, rgba(127,127,127,0.25))',
                 padding: '14px 28px',
                 borderRadius: 12,
                 fontSize: 15,
@@ -182,7 +184,7 @@ export default function GlobalError({
               Go to Home
             </button>
 
-            <p style={{ fontSize: 11, color: '#64748b', marginTop: 16 }}>
+            <p style={{ fontSize: 11, color: 'var(--muted-foreground, #64748b)', marginTop: 16 }}>
               Smart Computers Panel · Your Google Sheets data is never affected by app errors
             </p>
           </div>

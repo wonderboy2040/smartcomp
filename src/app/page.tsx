@@ -11,7 +11,7 @@ import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Monitor
 } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
@@ -84,7 +84,7 @@ function HomeInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
-  const { theme, toggleTheme } = useTheme()
+  const { theme, resolvedTheme, toggleTheme } = useTheme()
   // Track which panels have been activated at least once — they stay mounted
   // afterwards so switching back is instant, but we don't load all 20 on first paint.
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab]))
@@ -261,18 +261,24 @@ function HomeInner() {
             style={{ background: 'rgba(255,255,255,0.04)' }}
           >
             <span className="flex items-center gap-2">
-              {theme === 'light' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5 text-amber-400" />}
-              {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+              {theme === 'light' && <Moon className="w-3.5 h-3.5" />}
+              {theme === 'dark' && <Sun className="w-3.5 h-3.5 text-amber-400" />}
+              {theme === 'system' && <Monitor className="w-3.5 h-3.5 text-blue-400" />}
+              <span>
+                {theme === 'light' && 'Dark Mode'}
+                {theme === 'dark' && 'System Mode'}
+                {theme === 'system' && `System (${resolvedTheme === 'dark' ? 'Dark' : 'Light'})`}
+              </span>
             </span>
             <span
               className="relative w-10 h-5 rounded-full transition-all flex-shrink-0"
-              style={{ background: theme === 'dark' ? '#6366f1' : 'rgba(255,255,255,0.1)' }}
+              style={{ background: resolvedTheme === 'dark' ? '#6366f1' : 'rgba(255,255,255,0.1)' }}
             >
               <span
                 className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
                 style={{
-                  left: theme === 'dark' ? '22px' : '2px',
-                  background: theme === 'dark' ? '#fff' : '#94a3b8',
+                  left: resolvedTheme === 'dark' ? '22px' : '2px',
+                  background: resolvedTheme === 'dark' ? '#fff' : '#94a3b8',
                 }}
               />
             </span>
@@ -335,8 +341,11 @@ function HomeInner() {
             className="p-2 h-11 w-11 rounded-xl flex items-center justify-center"
             style={{ background: 'var(--clay-surface)', boxShadow: '3px 3px 8px var(--clay-shadow-dark), -3px -3px 8px var(--clay-shadow-light)' }}
             aria-label="Toggle theme"
+            title={`Theme: ${theme}`}
           >
-            {theme === 'light' ? <Moon className="w-5 h-5" style={{ color: 'var(--foreground)' }} /> : <Sun className="w-5 h-5 text-amber-400" />}
+            {theme === 'light' && <Moon className="w-5 h-5" style={{ color: 'var(--foreground)' }} />}
+            {theme === 'dark' && <Sun className="w-5 h-5 text-amber-400" />}
+            {theme === 'system' && <Monitor className="w-5 h-5 text-blue-400" />}
           </button>
         </header>
 

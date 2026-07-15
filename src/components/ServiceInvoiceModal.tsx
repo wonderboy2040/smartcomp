@@ -128,7 +128,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
 
         {/* Invoice Content - Same design as regular invoices */}
         <div className="flex-1 overflow-y-auto p-0">
-          <div id="serviceInvoiceContent" className="bg-white">
+          <div id="serviceInvoiceContent" className="print-paper">
             <div className="print-invoice" style={{ fontFamily: 'Inter, Arial, sans-serif', maxWidth: '210mm', margin: '0 auto', background: '#fff', color: '#000' }}>
               
               {/* Header - Same as regular invoice */}
