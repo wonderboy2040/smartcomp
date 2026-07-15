@@ -56,3 +56,13 @@ WA_VERIFY_TOKEN=...
 - Fixed Tailwind v4 theme tokens so `bg-background`, `bg-card`, `bg-popover`, etc. compile to real HSL colors instead of invalid transparent values.
 - Added global solid-surface rules for dialogs, alert dialogs, sheets, drawers, select menus, popovers, dropdowns and command dialogs.
 - Light theme Add/Edit item modal and all similar site modals now render with an opaque premium card background.
+
+## Deep Recheck + Transparency Hardening Pass
+- Rechecked Tailwind v4 theme compilation and fixed invalid color token output.
+- Hardened all Radix/Dialog primitives with solid card surfaces and blurred overlays.
+- Replaced transparent input/select/textarea bases with `bg-input-background` so form fields stay readable in light and dark themes.
+- Added `input-background` and `switch-background` theme tokens for consistent UI controls.
+- Removed unused Vite/static-shell files and duplicate unused `src/app/components` UI copy.
+- Removed unused heavy dependencies: MUI/Emotion, Popper, motion, DnD, react-router, react-slick, canvas-confetti, date-fns, next-themes, etc.
+- Rebuilt package-lock after cleanup.
+- Final verification: `npm run build` PASS and runtime smoke test PASS.

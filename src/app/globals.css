@@ -23,6 +23,8 @@
   --color-chart-1: hsl(var(--chart-1));
   --color-ring: hsl(var(--ring));
   --color-input: hsl(var(--input));
+  --color-input-background: hsl(var(--input-background));
+  --color-switch-background: hsl(var(--switch-background));
   --color-border: hsl(var(--border));
   --color-destructive: hsl(var(--destructive));
   --color-accent-foreground: hsl(var(--accent-foreground));
@@ -76,6 +78,8 @@
 
   --border: 214 32% 91%;
   --input: 214 32% 91%;
+  --input-background: 210 40% 96%;
+  --switch-background: 214 20% 82%;
   --ring: 239 84% 67%;
 
   --chart-1: 239 84% 67%;
@@ -129,6 +133,8 @@
 
   --border: 217 33% 20%;
   --input: 217 33% 22%;
+  --input-background: 222 47% 8%;
+  --switch-background: 217 33% 26%;
   --ring: 239 84% 72%;
 
   --chart-1: 239 84% 72%;
