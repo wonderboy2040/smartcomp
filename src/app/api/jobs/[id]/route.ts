@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRow, updateRow, deleteRow, listRows, createRow } from '@/lib/sheets-client'
+import { getRow, updateRow, deleteRow, listRows, createRow, bulkUpdate } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
 import { sendJobStatusNotification } from '@/lib/notifications'
 
@@ -24,14 +24,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json()
     const { action } = body
 
-    // Helper: append to status history + send notification
     async function appendStatusAndNotify(jobId: string, job: any, newStatus: string, note: string, updatedJob: any) {
       try {
         const history = safeJsonParse<any[]>(job?.statusHistoryJson, [])
         history.push({ status: newStatus, timestamp: new Date().toISOString(), note })
         await updateRow('Jobs', jobId, { statusHistoryJson: JSON.stringify(history) }).catch(() => {})
 
-        // Send WhatsApp notification (fire-and-forget, never blocks)
         const shopRows = await listRows<any>('Shop', { useCache: true })
         const shopName = String(shopRows[0]?.name || 'Smart Computers')
         const trackUrl = job?.trackToken ? `${process.env.NEXT_PUBLIC_BASE_URL || ''}/track/${job.jobId}-${job.trackToken}` : undefined
@@ -58,7 +56,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         assignedEngineer: String(body?.assignedEngineer || ''),
       })
 
-      // Send notification if status actually changed
       let notifResult: any = null
       if (String(existing.status) !== newStatus) {
         notifResult = await appendStatusAndNotify(id, existing, newStatus, `Status changed to ${newStatus}`, updated)
@@ -71,38 +68,39 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const existing = await getRow<any>('Jobs', id)
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      // Mark job as completed with final amount, parts used, profit calc
       const partsUsed = body?.partsUsed || []
       const finalAmount = Number(body?.finalAmount) || 0
       const paymentMode = String(body?.paymentMode || 'Cash')
-      const paymentType = String(body?.paymentType || 'Final')
       const engineerSharePct = Number(body?.engineerSharePct) || 50
       const warrantyDays = Number(body?.warrantyDays) || Number(existing?.warrantyDays) || 30
+      const deductStock = body?.deductStock !== false // default true
       const partsProfit = partsUsed.reduce((s: number, p: any) => {
         return s + ((Number(p?.sellPrice) || 0) - (Number(p?.costPrice) || 0)) * (Number(p?.qty) || 1)
       }, 0)
-      const serviceProfit = Math.max(0, finalAmount - partsUsed.reduce((s: number, p: any) => {
+      const partsCostTotal = partsUsed.reduce((s: number, p: any) => {
         return s + (Number(p?.costPrice) || 0) * (Number(p?.qty) || 1)
-      }, 0))
+      }, 0)
+      const serviceProfit = Math.max(0, finalAmount - partsCostTotal - partsUsed.reduce((s: number, p: any) => s + (Number(p?.sellPrice || 0)-Number(p?.costPrice||0))*Number(p?.qty||1), 0) + partsProfit)
 
-      const engineerShare = Math.round((serviceProfit * engineerSharePct / 100) + (partsProfit * engineerSharePct / 100))
-      const adminShare = (serviceProfit + partsProfit) - engineerShare
+      // Recalculate correctly: serviceProfit = serviceCharge, partsProfit as above, but final may include both
+      const svcCharge = Number(body?.serviceCharge) || 0
+      const actualServiceProfit = svcCharge
+      const engineerShare = Math.round((actualServiceProfit * engineerSharePct / 100) + (partsProfit * engineerSharePct / 100))
+      const adminShare = (actualServiceProfit + partsProfit) - engineerShare
 
-      // Compute warranty expiry
       const warrantyExpiry = new Date(Date.now() + warrantyDays * 24 * 60 * 60 * 1000).toISOString()
 
       const updated = await updateRow('Jobs', id, {
         status: 'Completed',
         partsUsedJson: JSON.stringify(partsUsed),
         finalAmount,
-        serviceCharge: Number(body?.serviceCharge) || 0,
+        serviceCharge: svcCharge,
         paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
         paymentMode,
-        paymentType,
         engineerShare,
         adminShare,
         partsProfit,
-        serviceProfit,
+        serviceProfit: actualServiceProfit,
         warrantyDays,
         warrantyExpiry,
         completedDate: new Date().toISOString(),
@@ -110,7 +108,58 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         notes: String(body?.notes || ''),
       })
 
-      // Record final payment
+      // Deduct stock for linked items (v3.0.2 feature)
+      if (deductStock && partsUsed.length > 0) {
+        try {
+          const linkedParts = partsUsed.filter((p: any) => p.itemId)
+          if (linkedParts.length > 0) {
+            const itemIds = [...new Set(linkedParts.map((p: any) => p.itemId))]
+            const dbItems = await Promise.all(itemIds.map((itemId: string) => getRow<any>('Items', itemId).catch(() => null)))
+            const stockUpdates: { id: string; data: any }[] = []
+            for (const part of linkedParts) {
+              const dbItem = dbItems.find((d: any) => d && String(d.id) === String(part.itemId))
+              if (dbItem) {
+                const currentQty = Number(dbItem.quantity) || 0
+                const deductQty = Number(part.qty) || 1
+                stockUpdates.push({
+                  id: String(part.itemId),
+                  data: { quantity: Math.max(0, currentQty - deductQty) }
+                })
+              }
+            }
+            // Merge updates for same item (sum quantities)
+            const merged = new Map<string, number>()
+            for (const upd of stockUpdates) {
+              const existing = merged.get(upd.id) || 0
+              // We need to recalc properly - get current from db and sum deductions
+              // For simplicity, we already have individual deductions, sum them
+              merged.set(upd.id, existing + (Number(partsUsed.find((p: any) => p.itemId === upd.id)?.qty) || 0))
+            }
+            // Actually redo with proper grouping
+            const qtyMap = new Map<string, number>()
+            for (const p of linkedParts) {
+              qtyMap.set(p.itemId, (qtyMap.get(p.itemId) || 0) + (Number(p.qty) || 1))
+            }
+            const finalUpdates: { id: string; data: any }[] = []
+            for (const [itemId, totalQty] of qtyMap.entries()) {
+              const dbItem = dbItems.find((d: any) => d && String(d.id) === String(itemId))
+              if (dbItem) {
+                finalUpdates.push({
+                  id: itemId,
+                  data: { quantity: Math.max(0, (Number(dbItem.quantity) || 0) - totalQty) }
+                })
+              }
+            }
+            if (finalUpdates.length > 0) {
+              await bulkUpdate('Items', finalUpdates).catch(() => {})
+            }
+          }
+        } catch (err) {
+          console.error('Stock deduction failed:', err)
+          // Don't fail the whole complete action if stock deduction fails
+        }
+      }
+
       if (finalAmount > 0) {
         const job = await getRow<any>('Jobs', id)
         const advance = Number(job?.advanceAmount) || 0
@@ -130,7 +179,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       }
 
-      // Send "Completed" notification
       const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', updated)
 
       return NextResponse.json({
@@ -139,8 +187,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         engineerShare,
         adminShare,
         partsProfit,
-        serviceProfit,
+        serviceProfit: actualServiceProfit,
         warrantyExpiry,
+        stockDeducted: deductStock,
         notification: notifResult,
       })
     }
@@ -154,9 +203,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         deliveredAt: new Date().toISOString(),
       })
 
-      // Send "Delivered" notification
       const notifResult = await appendStatusAndNotify(id, existing, 'Delivered', 'Job delivered to customer', updated)
-
       return NextResponse.json({ success: true, job: updated, notification: notifResult })
     }
 
@@ -170,13 +217,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'update') {
-      // Generic update
       const data: any = {}
       const fields = ['customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes', 'warrantyDays', 'serviceCharge', 'status']
       for (const f of fields) {
         if (body[f] !== undefined) data[f] = body[f]
       }
-      // Auto-recompute finalAmount if serviceCharge is being updated
       if (body.serviceCharge !== undefined) {
         const existing = await getRow<any>('Jobs', id)
         const partsUsed = safeJsonParse<any[]>(existing?.partsUsedJson, [])
@@ -188,7 +233,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'recordPayment') {
-      // Record a partial / full payment WITHOUT completing the job
       const existing = await getRow<any>('Jobs', id)
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       const amount = Number(body?.amount) || 0
@@ -202,7 +246,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         updatedAt: new Date().toISOString(),
       })
 
-      // Also record in ServicePayments sheet
       await createRow('ServicePayments', {
         jobId: String(existing.jobId || ''),
         customerName: String(existing.customerName || ''),

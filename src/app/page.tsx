@@ -280,7 +280,7 @@ function HomeInner() {
           </button>
           <div className="rounded-xl p-2.5 flex items-center gap-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-            <span className="text-[10px] text-slate-300">v3.0 · Pro Edition</span>
+            <span className="text-[10px] text-slate-300">v3.0.2 · Pro Edition Fixed</span>
             <span className="ml-auto w-2 h-2 bg-emerald-400 rounded-full animate-pulse" title="System healthy" />
           </div>
           <button
