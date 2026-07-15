@@ -109,7 +109,7 @@ export function JobsPanel() {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Wrench className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" />
             <span className="truncate">Service Jobs</span>
-            <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">v3.0.2 Upgraded</span>
+            <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">v3.0.3 Upgraded</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage repairs with stock-linked parts & professional invoices</p>
         </div>
@@ -379,7 +379,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   return (
     <Dialog open={!!job} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
-        <DialogHeader><DialogTitle className="flex items-center gap-2 flex-wrap text-slate-900"><Icon className="w-5 h-5 text-blue-600" /><span className="font-mono text-sm">{job.jobId}</span><Badge variant="outline" className={`${STATUS_COLORS[job.status] || ''} text-[10px] font-semibold`}>{job.status}</Badge>{job.priority && <Badge variant="outline" className={`${PRIORITY_BADGE[job.priority] || ''} text-[9px] font-semibold`}>{job.priority}</Badge>}<span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.2 Stock Linked</span></DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2 flex-wrap text-slate-900"><Icon className="w-5 h-5 text-blue-600" /><span className="font-mono text-sm">{job.jobId}</span><Badge variant="outline" className={`${STATUS_COLORS[job.status] || ''} text-[10px] font-semibold`}>{job.status}</Badge>{job.priority && <Badge variant="outline" className={`${PRIORITY_BADGE[job.priority] || ''} text-[9px] font-semibold`}>{job.priority}</Badge>}<span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.3 Stock Linked</span></DialogTitle></DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -406,10 +406,10 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
             {job.status === 'Completed' && <Button onClick={handleDeliver} disabled={saving} className="bg-purple-600 hover:bg-purple-700 text-white h-10"><Package className="w-4 h-4 mr-1" /> Delivered</Button>}
           </div>
 
-          {/* Parts Used - UPGRADED v3.0.2 with Stock */}
+          {/* Parts Used - UPGRADED v3.0.3 with Stock */}
           <div className="border-2 border-slate-200 rounded-xl p-3 bg-white">
             <div className="flex items-center justify-between mb-3">
-              <Label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Boxes className="w-4 h-4 text-blue-600" />Parts Used - Stock Linked <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">NEW v3.0.2</span></Label>
+              <Label className="text-sm font-bold text-slate-900 flex items-center gap-2"><Boxes className="w-4 h-4 text-blue-600" />Parts Used - Stock Linked <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">NEW v3.0.3</span></Label>
               <div className="text-xs text-slate-600 bg-slate-50 px-2.5 py-1 rounded-full border">
                 Cost: <span className="font-bold text-slate-900">Rs.{partsTotalCost}</span> · Sell: <span className="font-bold text-blue-700">Rs.{partsTotalSell}</span> · Profit: <span className="font-bold text-emerald-600">Rs.{partsProfit}</span>
               </div>

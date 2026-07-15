@@ -8,7 +8,7 @@ export async function GET() {
     
     return NextResponse.json({
       status: 'ok',
-      version: '3.0.2',
+      version: '3.0.3',
       codename: 'SmartComp Pro',
       timestamp: new Date().toISOString(),
       uptime: process.uptime ? process.uptime() : 0,
@@ -33,7 +33,7 @@ export async function GET() {
     return NextResponse.json({
       status: 'error',
       error: e?.message,
-      version: '3.0.2',
+      version: '3.0.3',
     }, { status: 500 })
   }
 }

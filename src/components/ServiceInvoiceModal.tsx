@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Service Invoice Modal - UPGRADED v3.0.2
+ * Service Invoice Modal - UPGRADED v3.0.3
  * 
  * FIXES:
  * - Now matches Invoices & Quotations design exactly (Tally templates)

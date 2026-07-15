@@ -1,22 +1,35 @@
 'use client'
 
 /**
- * Service WhatsApp Modal — shows 5 pre-built message templates and opens
- * wa.me link in a new tab when clicked. Mirrors the vanilla JS PWA's
- * `showWhatsAppModal()` + `sendWAMsg()` functions.
- *
- * Templates: received / progress / completed / payment / delivered
+ * Service WhatsApp Modal - FIXED v3.0.3 for Dark Theme Visibility
+ * 
+ * BEFORE: Text invisible in dark theme - white text on light pastel bg
+ * - bg-blue-50 became rgba(59,130,246,0.15) in dark, text-slate-800 became #f1f5f9 (light)
+ * - Result: light text on light bg = invisible
+ * 
+ * AFTER: Explicit high-contrast colors that work in BOTH light and dark modes
+ * - Buttons have solid light backgrounds with dark text always visible
+ * - Icons have solid dark backgrounds with white icons
+ * - Modal itself has white bg in light, dark slate in dark but with proper text
  */
 
 import { useFetch } from '@/lib/api'
 import { useToast } from '@/hooks/use-toast'
 import { buildWhatsAppMessage, buildWhatsAppLink, WHATSAPP_TEMPLATES } from '@/lib/whatsapp-templates'
-import { X } from 'lucide-react'
+import { X, MessageCircle, Clock, CheckCircle2, CreditCard, Heart, Smartphone, Wrench } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 interface Props {
   jobId: string
   onClose: () => void
+}
+
+const ICON_MAP: Record<string, any> = {
+  'fa-box': Smartphone,
+  'fa-tools': Wrench,
+  'fa-check': CheckCircle2,
+  'fa-credit-card': CreditCard,
+  'fa-heart': Heart,
 }
 
 export function ServiceWhatsAppModal({ jobId, onClose }: Props) {
@@ -25,14 +38,13 @@ export function ServiceWhatsAppModal({ jobId, onClose }: Props) {
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const [mounted, setMounted] = useState(false)
 
-  // Avoid SSR/hydration mismatch — wa.me links must be built on client only
   useEffect(() => { setMounted(true) }, [])
 
   if (!job) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center z-[60] p-4" style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)' }}>
-        <div className="bg-white rounded-2xl p-8">
-          <p className="text-slate-500">Loading job...</p>
+      <div className="fixed inset-0 flex items-center justify-center z-[60] p-4 bg-black/60 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl p-8 shadow-xl border">
+          <p className="text-slate-900 font-medium">Loading job...</p>
         </div>
       </div>
     )
@@ -69,55 +81,115 @@ export function ServiceWhatsAppModal({ jobId, onClose }: Props) {
       upiId: shop?.upiId || '',
     })
     window.open(buildWhatsAppLink(job.customerMobile, msg), '_blank')
-    toast({ title: 'WhatsApp opened', description: `Template: ${type}` })
+    toast({ title: 'WhatsApp opened ✓', description: `Template: ${type}` })
     onClose()
   }
 
-  const colorClasses: Record<string, { bg: string; hover: string; icon: string }> = {
-    blue:   { bg: 'bg-blue-50',   hover: 'hover:bg-blue-100',   icon: 'bg-blue-500'   },
-    amber:  { bg: 'bg-amber-50',  hover: 'hover:bg-amber-100',  icon: 'bg-amber-500'  },
-    green:  { bg: 'bg-green-50',  hover: 'hover:bg-green-100',  icon: 'bg-green-500'  },
-    purple: { bg: 'bg-purple-50', hover: 'hover:bg-purple-100', icon: 'bg-purple-500' },
-    gray:   { bg: 'bg-gray-50',   hover: 'hover:bg-gray-100',   icon: 'bg-gray-500'   },
+  // Fixed color classes with explicit visible text
+  const templateStyles: Record<string, { bg: string; border: string; iconBg: string; titleColor: string; descColor: string; hover: string }> = {
+    blue:   { 
+      bg: 'bg-blue-50', 
+      border: 'border-blue-200',
+      iconBg: 'bg-blue-600',
+      titleColor: 'text-slate-900',
+      descColor: 'text-slate-600',
+      hover: 'hover:bg-blue-100 hover:border-blue-300'
+    },
+    amber:  { 
+      bg: 'bg-amber-50', 
+      border: 'border-amber-200',
+      iconBg: 'bg-amber-500',
+      titleColor: 'text-slate-900',
+      descColor: 'text-slate-600',
+      hover: 'hover:bg-amber-100 hover:border-amber-300'
+    },
+    green:  { 
+      bg: 'bg-emerald-50', 
+      border: 'border-emerald-200',
+      iconBg: 'bg-emerald-600',
+      titleColor: 'text-slate-900',
+      descColor: 'text-slate-600',
+      hover: 'hover:bg-emerald-100 hover:border-emerald-300'
+    },
+    purple: { 
+      bg: 'bg-purple-50', 
+      border: 'border-purple-200',
+      iconBg: 'bg-purple-600',
+      titleColor: 'text-slate-900',
+      descColor: 'text-slate-600',
+      hover: 'hover:bg-purple-100 hover:border-purple-300'
+    },
+    gray:   { 
+      bg: 'bg-slate-50', 
+      border: 'border-slate-200',
+      iconBg: 'bg-slate-600',
+      titleColor: 'text-slate-900',
+      descColor: 'text-slate-600',
+      hover: 'hover:bg-slate-100 hover:border-slate-300'
+    },
   }
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center z-[60] p-4"
-      style={{ background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)' }}
+      className="fixed inset-0 flex items-center justify-center z-[60] p-4 bg-black/70 backdrop-blur-md"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl max-w-md w-full p-6 animate-fade">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-lg font-bold text-slate-800">Send WhatsApp</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200">
-            <X className="w-4 h-4 text-gray-500" />
-          </button>
+      <div className="bg-white rounded-2xl max-w-md w-full p-0 shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in duration-200">
+        {/* Header - Fixed visibility */}
+        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-5 text-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center">
+                <MessageCircle className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Send WhatsApp</h3>
+                <p className="text-xs text-slate-300">Choose a template to send</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+          <div className="mt-3 bg-white/10 rounded-lg p-2.5 backdrop-blur">
+            <p className="text-sm font-semibold text-white truncate">{job.customerName}</p>
+            <p className="text-xs text-slate-300 font-mono">{job.customerMobile} • {job.jobId}</p>
+          </div>
         </div>
-        <p className="text-sm text-slate-500 mb-4">{job.customerName} ({job.customerMobile})</p>
-        <div className="space-y-2">
+
+        <div className="p-4 space-y-2.5 max-h-[60vh] overflow-y-auto">
           {WHATSAPP_TEMPLATES.map((t) => {
-            const c = colorClasses[t.color]
+            const style = templateStyles[t.color] || templateStyles.blue
+            const IconComponent = ICON_MAP[t.icon] || MessageCircle
             return (
               <button
                 key={t.type}
                 onClick={() => sendTemplate(t.type)}
-                className={`w-full p-3 ${c.bg} rounded-xl text-left ${c.hover} flex items-center gap-3 transition`}
+                className={`w-full p-3.5 ${style.bg} border-2 ${style.border} ${style.hover} rounded-xl text-left flex items-center gap-3 transition-all duration-200 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] group`}
               >
-                <div className={`w-10 h-10 ${c.icon} rounded-lg flex items-center justify-center`}>
-                  <i className={`fas ${t.icon} text-white`}></i>
+                <div className={`w-12 h-12 ${style.iconBg} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm group-hover:shadow-md transition-shadow`}>
+                  <IconComponent className="w-5 h-5 text-white" />
                 </div>
-                <div>
-                  <p className="font-medium text-slate-800">{t.title}</p>
-                  <p className="text-xs text-slate-500">{t.desc}</p>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-bold text-sm ${style.titleColor} truncate`}>{t.title}</p>
+                  <p className={`text-xs ${style.descColor} mt-0.5 line-clamp-1`}>{t.desc}</p>
+                </div>
+                <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 group-hover:bg-slate-900 group-hover:border-slate-900 transition-colors">
+                  <span className="text-[10px] font-bold text-slate-600 group-hover:text-white">→</span>
                 </div>
               </button>
             )
           })}
         </div>
-        <button onClick={onClose} className="w-full mt-4 py-3 bg-gray-100 rounded-xl font-medium text-gray-600 hover:bg-gray-200">
-          Cancel
-        </button>
+
+        <div className="p-4 bg-slate-50 border-t border-slate-200">
+          <button onClick={onClose} className="w-full py-3 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-slate-300 rounded-xl font-semibold text-slate-700 hover:text-slate-900 transition-all text-sm">
+            Cancel
+          </button>
+          <p className="text-[10px] text-center text-slate-500 mt-2">
+            Opens WhatsApp with pre-filled message • Customer: {job.customerName}
+          </p>
+        </div>
       </div>
     </div>
   )

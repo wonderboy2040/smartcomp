@@ -208,7 +208,7 @@ export function PosterMakerPanel() {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Palette className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 flex-shrink-0" />
             <span className="truncate">Poster Maker</span>
-            <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.2 Fixed</span>
+            <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.3 Fixed</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">10 premium designs · 3 FHD resolutions · Fixed CORS & HD export</p>
         </div>
@@ -460,7 +460,7 @@ export function PosterMakerPanel() {
             </div>
           </div>
           <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-            <p className="text-[11px] font-medium text-blue-800">💡 Fixed in v3.0.2:</p>
+            <p className="text-[11px] font-medium text-blue-800">💡 Fixed in v3.0.3:</p>
             <ul className="text-[10px] text-blue-700 mt-1 space-y-0.5 list-disc list-inside">
               <li>HD Export @ 2x resolution via offscreen clone (no scale issues)</li>
               <li>Local upload = Base64, no CORS errors</li>
