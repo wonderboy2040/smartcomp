@@ -521,3 +521,20 @@ export function getCacheStats() {
     }
   }
 }
+
+// ===== ULTRA-ULTRA FAST v6.0 - CLIENT-SIDE NUMBER GEN + SINGLE CALL EVERYTHING =====
+export async function createInvoiceUltra(data: any): Promise<any> {
+  const sanitized = sanitizeRowData(data)
+  const res = await callAppsScript({ action: 'createInvoiceUltra', data: sanitized })
+  if (!res.success) throw new Error(res.error || 'Failed to create invoice ultra')
+  invalidateCache()
+  return res
+}
+
+export async function createQuotationUltra(data: any): Promise<any> {
+  const sanitized = sanitizeRowData(data)
+  const res = await callAppsScript({ action: 'createQuotationUltra', data: sanitized })
+  if (!res.success) throw new Error(res.error || 'Failed to create quotation ultra')
+  invalidateCache()
+  return res
+}

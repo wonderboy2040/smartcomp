@@ -211,7 +211,7 @@ function doPost(e) {
     switch (action) {
       case 'create':
         return json(createRow(body.sheet, body.data));
-      case 'createFast': // Ultra fast path - same as create but with cache clear optimized
+      case 'createFast':
         return json(createRow(body.sheet, body.data, true));
       case 'update':
         return json(updateRow(body.sheet, body.id, body.data));
@@ -223,11 +223,15 @@ function doPost(e) {
         return json(bulkCreate(body.sheet, body.data));
       case 'bulkUpdate':
         return json(bulkUpdate(body.sheet, body.updates));
-      case 'createInvoiceFull': // ULTRA FAST - Single call for invoice + stock + customer + payment
+      case 'createInvoiceFull':
         return json(createInvoiceFull(body.data));
-      case 'createQuotationFull': // ULTRA FAST - Single call for quotation
+      case 'createInvoiceUltra': // ULTRA-ULTRA FAST v6.0 - Everything in ONE call including customer fetch + number generation
+        return json(createInvoiceUltra(body.data));
+      case 'createQuotationFull':
         return json(createQuotationFull(body.data));
-      case 'completeJobFull': // ULTRA FAST - Single call for job complete + stock + payment
+      case 'createQuotationUltra': // ULTRA-ULTRA FAST v6.0
+        return json(createQuotationUltra(body.data));
+      case 'completeJobFull':
         return json(completeJobFull(body.data));
       case 'replace':
         return json({ success: false, error: 'replace disabled for data protection' });
@@ -389,7 +393,6 @@ function createQuotationFull(data) {
 function completeJobFull(data) {
   var now = new Date().toISOString();
   try {
-    // 1. Update job
     var jobSheet = getSheetFast('Jobs');
     var jobHeaders = SCHEMAS['Jobs'];
     var jobLastRow = jobSheet.getLastRow();
@@ -414,7 +417,6 @@ function completeJobFull(data) {
     }
     jobSheet.getRange(jobRowIdx, 1, 1, jobHeaders.length).setValues([jobRow]);
     
-    // 2. Deduct stock if needed
     if (data.stockUpdates && data.stockUpdates.length > 0) {
       var itemsSheet = getSheetFast('Items');
       var itemHeaders = SCHEMAS['Items'];
@@ -441,7 +443,6 @@ function completeJobFull(data) {
       }
     }
     
-    // 3. Create service payment if balance
     if (data.payment && Number(data.payment.amount) > 0) {
       var paySheet = getSheetFast('ServicePayments');
       var payHeaders = SCHEMAS['ServicePayments'];
@@ -460,13 +461,272 @@ function completeJobFull(data) {
     
     SpreadsheetApp.flush();
     clearCaches();
-    
-    try {
-      var cache = CacheService.getScriptCache();
-      cache.remove('dashboard_v4');
-    } catch (ignore) {}
-    
+    try { var cache = CacheService.getScriptCache(); cache.remove('dashboard_v4'); } catch (ignore) {}
     return { success: true, data: { id: data.id, ...data, updatedAt: now }, ultraFast: true };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
+// ===== ULTRA-ULTRA FAST v6.0 - CLIENT-SIDE NUMBER GEN + EVERYTHING IN ONE CALL =====
+
+function generateInvoiceNumber() {
+  var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth() + 1;
+  var fyStart = month >= 4 ? year : year - 1;
+  var fyEnd = fyStart + 1;
+  var fyShort = String(fyStart).slice(2) + '-' + String(fyEnd).slice(2);
+  var base = 'SCSS/' + fyShort + '/';
+  
+  var sheet = getSheetFast('Invoices');
+  var lastRow = sheet.getLastRow();
+  var maxNum = 0;
+  if (lastRow >= 2) {
+    var numbers = sheet.getRange(2, 2, lastRow - 1, 1).getValues(); // column B = number
+    for (var i = 0; i < numbers.length; i++) {
+      var num = String(numbers[i][0] || '');
+      if (num.indexOf(base) === 0) {
+        var suffix = parseInt(num.slice(base.length), 10);
+        if (!isNaN(suffix) && suffix > maxNum) maxNum = suffix;
+      }
+    }
+  }
+  return base + String(maxNum + 1).padStart(3, '0');
+}
+
+function generateQuotationNumber() {
+  var base = 'SCSS/QT/';
+  var sheet = getSheetFast('Quotations');
+  var lastRow = sheet.getLastRow();
+  var maxNum = 0;
+  if (lastRow >= 2) {
+    var numbers = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+    for (var i = 0; i < numbers.length; i++) {
+      var num = String(numbers[i][0] || '');
+      if (num.indexOf(base) === 0) {
+        var suffix = parseInt(num.slice(base.length), 10);
+        if (!isNaN(suffix) && suffix > maxNum) maxNum = suffix;
+      }
+    }
+  }
+  return base + String(maxNum + 1).padStart(3, '0');
+}
+
+function createInvoiceUltra(data) {
+  var now = new Date().toISOString();
+  try {
+    // 1. Get customer (if only customerId provided)
+    var customer = null;
+    if (data.customerId && !data.customerName) {
+      customer = getRow('Customers', data.customerId);
+      if (!customer) return { success: false, error: 'Customer not found: ' + data.customerId };
+    }
+    
+    // 2. Generate invoice number if not provided (CLIENT-SIDE NUMBER GEN ELIMINATED - now server-side)
+    var number = data.number;
+    if (!number) {
+      number = generateInvoiceNumber();
+    }
+    
+    // 3. Create invoice
+    var invoiceSheet = getSheetFast('Invoices');
+    var invHeaders = SCHEMAS['Invoices'];
+    var id = data.id || Utilities.getUuid();
+    var invRow = invHeaders.map(function(h) {
+      if (h === 'id') return id;
+      if (h === 'number') return number;
+      if (h === 'customerId') return data.customerId || '';
+      if (h === 'customerName') return data.customerName || (customer ? customer.name : '');
+      if (h === 'customerPhone') return data.customerPhone || (customer ? customer.phone : '');
+      if (h === 'customerGstin') return data.customerGstin || (customer ? customer.gstNumber : '');
+      if (h === 'deleted') return false;
+      if (h === 'createdAt') return now;
+      var v = data[h];
+      if (v === undefined || v === null) {
+        // Fallbacks
+        if (h === 'date') return data.date || now;
+        if (h === 'itemsJson') return data.itemsJson || '[]';
+        if (h === 'paymentType') return data.paymentType || 'cash';
+        if (h === 'paymentStatus') return data.paymentStatus || 'unpaid';
+        return '';
+      }
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
+    });
+    invoiceSheet.appendRow(invRow);
+    
+    var invoiceData = { id: id, number: number };
+    for (var k in data) {
+      if (k !== 'stockUpdates' && k !== 'customerUpdate' && k !== 'payment' && k !== 'customerId') {
+        invoiceData[k] = data[k];
+      }
+    }
+    invoiceData.customerName = data.customerName || (customer ? customer.name : '');
+    invoiceData.customerPhone = data.customerPhone || (customer ? customer.phone : '');
+    invoiceData.customerGstin = data.customerGstin || (customer ? customer.gstNumber : '');
+    invoiceData.createdAt = now;
+    invoiceData.deleted = false;
+    
+    // 4. Deduct stock
+    if (data.stockUpdates && data.stockUpdates.length > 0) {
+      var itemsSheet = getSheetFast('Items');
+      var itemHeaders = SCHEMAS['Items'];
+      var itemsLastRow = itemsSheet.getLastRow();
+      if (itemsLastRow >= 2) {
+        var itemIds = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues();
+        var idToRow = {};
+        for (var i = 0; i < itemIds.length; i++) idToRow[String(itemIds[i][0])] = i + 2;
+        var qtyMap = {};
+        for (var u = 0; u < data.stockUpdates.length; u++) {
+          var upd = data.stockUpdates[u];
+          qtyMap[String(upd.id)] = (qtyMap[String(upd.id)] || 0) + (Number(upd.deductQty) || 0);
+        }
+        for (var itemId in qtyMap) {
+          var rowIdx = idToRow[itemId];
+          if (rowIdx) {
+            var existingRow = itemsSheet.getRange(rowIdx, 1, 1, itemHeaders.length).getValues()[0];
+            var qtyIdx = itemHeaders.indexOf('quantity');
+            var currentQty = Number(existingRow[qtyIdx]) || 0;
+            var newQty = Math.max(0, currentQty - qtyMap[itemId]);
+            var updatedAtIdx = itemHeaders.indexOf('updatedAt');
+            existingRow[qtyIdx] = newQty;
+            if (updatedAtIdx >= 0) existingRow[updatedAtIdx] = now;
+            itemsSheet.getRange(rowIdx, 1, 1, itemHeaders.length).setValues([existingRow]);
+          }
+        }
+      }
+    }
+    
+    // 5. Update customer credit
+    var customerId = data.customerId || (data.customerUpdate ? data.customerUpdate.id : null);
+    var creditToAdd = 0;
+    if (data.amountDue !== undefined) creditToAdd = Number(data.amountDue) || 0;
+    else if (data.customerUpdate && data.customerUpdate.creditBalance !== undefined) {
+      // If customerUpdate provided, we need to get current and add
+      var cust = customer || getRow('Customers', customerId);
+      if (cust) creditToAdd = (Number(cust.creditBalance) || 0) + (Number(data.customerUpdate.creditBalance) - (Number(cust.creditBalance) || 0));
+    }
+    
+    if (customerId && creditToAdd !== 0) {
+      var custSheet = getSheetFast('Customers');
+      var custHeaders = SCHEMAS['Customers'];
+      var custLastRow = custSheet.getLastRow();
+      if (custLastRow >= 2) {
+        var custIds = custSheet.getRange(2, 1, custLastRow - 1, 1).getValues();
+        var custRowIdx = -1;
+        for (var i = 0; i < custIds.length; i++) {
+          if (String(custIds[i][0]) === String(customerId)) { custRowIdx = i + 2; break; }
+        }
+        if (custRowIdx !== -1) {
+          var custRow = custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).getValues()[0];
+          var creditIdx = custHeaders.indexOf('creditBalance');
+          var updatedAtIdx = custHeaders.indexOf('updatedAt');
+          if (creditIdx >= 0) {
+            var currentCredit = Number(custRow[creditIdx]) || 0;
+            custRow[creditIdx] = currentCredit + creditToAdd;
+          }
+          if (updatedAtIdx >= 0) custRow[updatedAtIdx] = now;
+          custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).setValues([custRow]);
+        }
+      }
+    } else if (data.customerUpdate && data.customerUpdate.id) {
+      // Legacy path: direct creditBalance set
+      var custSheet = getSheetFast('Customers');
+      var custHeaders = SCHEMAS['Customers'];
+      var custLastRow = custSheet.getLastRow();
+      if (custLastRow >= 2) {
+        var custIds = custSheet.getRange(2, 1, custLastRow - 1, 1).getValues();
+        var custRowIdx = -1;
+        for (var i = 0; i < custIds.length; i++) {
+          if (String(custIds[i][0]) === String(data.customerUpdate.id)) { custRowIdx = i + 2; break; }
+        }
+        if (custRowIdx !== -1) {
+          var custRow = custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).getValues()[0];
+          var creditIdx = custHeaders.indexOf('creditBalance');
+          var updatedAtIdx = custHeaders.indexOf('updatedAt');
+          if (creditIdx >= 0) custRow[creditIdx] = Number(data.customerUpdate.creditBalance) || 0;
+          if (updatedAtIdx >= 0) custRow[updatedAtIdx] = now;
+          custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).setValues([custRow]);
+        }
+      }
+    }
+    
+    // 6. Create payment
+    var paymentResult = null;
+    if (data.payment && Number(data.payment.amount) > 0) {
+      var paySheet = getSheetFast('Payments');
+      var payHeaders = SCHEMAS['Payments'];
+      var payId = data.payment.id || Utilities.getUuid();
+      var payRow = payHeaders.map(function(h) {
+        if (h === 'id') return payId;
+        if (h === 'invoiceId') return id;
+        if (h === 'invoiceNumber') return number;
+        if (h === 'deleted') return false;
+        if (h === 'createdAt') return now;
+        var v = data.payment[h];
+        if (v === undefined || v === null) {
+          if (h === 'customerName') return invoiceData.customerName || '';
+          return '';
+        }
+        if (typeof v === 'object') return JSON.stringify(v);
+        return v;
+      });
+      paySheet.appendRow(payRow);
+      paymentResult = { id: payId, invoiceId: id, invoiceNumber: number, ...data.payment };
+    }
+    
+    SpreadsheetApp.flush();
+    clearCaches();
+    try { var cache = CacheService.getScriptCache(); cache.remove('dashboard_v4'); } catch (ignore) {}
+    
+    return { success: true, data: invoiceData, payment: paymentResult, ultraFast: true, ultraUltraFast: true, version: '6.0', operations: 1, numberGenerated: number };
+  } catch (err) {
+    return { success: false, error: err.toString(), stack: err.stack };
+  }
+}
+
+function createQuotationUltra(data) {
+  var now = new Date().toISOString();
+  try {
+    var customer = null;
+    if (data.customerId && !data.customerName) {
+      customer = getRow('Customers', data.customerId);
+    }
+    
+    var number = data.number;
+    if (!number) {
+      number = generateQuotationNumber();
+    }
+    
+    var id = data.id || Utilities.getUuid();
+    var sheet = getSheetFast('Quotations');
+    var headers = SCHEMAS['Quotations'];
+    var row = headers.map(function(h) {
+      if (h === 'id') return id;
+      if (h === 'number') return number;
+      if (h === 'customerId') return data.customerId || '';
+      if (h === 'customerName') return data.customerName || (customer ? customer.name : '');
+      if (h === 'customerPhone') return data.customerPhone || (customer ? customer.phone : '');
+      if (h === 'customerGstin') return data.customerGstin || (customer ? customer.gstNumber : '');
+      if (h === 'deleted') return false;
+      if (h === 'createdAt') return now;
+      var v = data[h];
+      if (v === undefined || v === null) {
+        if (h === 'date') return data.date || now;
+        if (h === 'validTill') return data.validTill || new Date(Date.now() + 7*24*60*60*1000).toISOString();
+        if (h === 'status') return 'draft';
+        return '';
+      }
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
+    });
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+    clearCaches();
+    try { var cache = CacheService.getScriptCache(); cache.remove('dashboard_v4'); } catch (ignore) {}
+    
+    return { success: true, data: { id: id, number: number, ...data, customerName: data.customerName || (customer ? customer.name : ''), createdAt: now, deleted: false }, ultraFast: true, ultraUltraFast: true, version: '6.0' };
   } catch (err) {
     return { success: false, error: err.toString() };
   }

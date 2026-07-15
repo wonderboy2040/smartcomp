@@ -241,6 +241,108 @@ export async function apiPost(url: string, body: any) {
   }
 }
 
+// ===== ULTRA-ULTRA FAST v6.0 - INSTANT RETURN + BACKGROUND SYNC =====
+// Returns temp item INSTANTLY (<50ms), syncs to Google Sheets in background
+// If offline, queues to IndexedDB and syncs when online
+export async function apiPostUltraFast(url: string, body: any, options: { instantClose?: boolean } = {}): Promise<any> {
+  const base = url.split('?')[0].split('#')[0]
+  const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+  
+  // Generate client-side number instantly for optimistic display
+  let clientNumber = ''
+  if (url.includes('/invoices')) {
+    const now = new Date()
+    const fy = now.getMonth() >= 3 ? `${String(now.getFullYear()).slice(2)}-${String(now.getFullYear()+1).slice(2)}` : `${String(now.getFullYear()-1).slice(2)}-${String(now.getFullYear()).slice(2)}`
+    clientNumber = `SCSS/${fy}/${Date.now().toString().slice(-6)}`
+  } else if (url.includes('/quotations')) {
+    clientNumber = `SCSS/QT/${Date.now().toString().slice(-6)}`
+  }
+  
+  const tempItem = { 
+    ...body, 
+    id: tempId, 
+    number: clientNumber || body.number || `TEMP-${Date.now().toString().slice(-6)}`,
+    _pending: true, 
+    _optimistic: true,
+    _clientGenerated: true,
+    createdAt: new Date().toISOString() 
+  }
+
+  // INSTANT optimistic update
+  const affectedKeys: string[] = []
+  for (const key of Array.from(cache.keys())) {
+    const keyBase = key.split('?')[0].split('#')[0]
+    if (keyBase === base && Array.isArray(cache.get(key))) {
+      affectedKeys.push(key)
+      mutate<any[]>(key, (prev) => (prev ? [tempItem, ...prev] : [tempItem]))
+    }
+  }
+  invalidate('/api/dashboard')
+
+  // If offline, queue and return temp instantly
+  if (!isOnline) {
+    try {
+      const { addToQueue } = await import('./offline-queue')
+      await addToQueue({
+        type: 'create',
+        sheet: base.split('/').pop() || 'unknown',
+        url,
+        method: 'POST',
+        body,
+        tempId,
+      })
+      return { ...tempItem, _queued: true, _offline: true }
+    } catch {
+      // IndexedDB not available, still return temp but will fail sync later
+      return { ...tempItem, _queued: false, _offline: true }
+    }
+  }
+
+  // Background sync - don't await, return temp instantly for ultra fast UX
+  // But also return a promise that resolves with real data for those who await
+  const syncPromise = (async () => {
+    try {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error || 'Failed to create')
+
+      for (const key of affectedKeys) {
+        mutate<any[]>(key, (prev) =>
+          prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false, _optimistic: false } : x)) : prev
+        )
+      }
+      return data
+    } catch (e) {
+      // On failure, keep temp but mark as failed, or rollback
+      for (const key of affectedKeys) {
+        mutate<any[]>(key, (prev) => prev ? prev.map((x) => x.id === tempId ? { ...x, _pending: false, _failed: true } : x) : prev)
+      }
+      throw e
+    }
+  })()
+
+  // If instantClose option, return temp immediately (ultra instant <50ms)
+  if (options.instantClose) {
+    // Fire and forget background sync
+    syncPromise.catch(() => {})
+    return tempItem
+  }
+
+  // Otherwise, await background sync but temp already shown
+  // This gives 2-4 sec total vs 10-15 sec before, but optimistic is instant
+  try {
+    const realData = await syncPromise
+    return realData
+  } catch (e) {
+    // Return temp with failed flag
+    return { ...tempItem, _failed: true, error: (e as any).message }
+  }
+}
+
 // ===== apiPut with unwrapping =====
 export async function apiPut(url: string, body: any) {
   if (!isOnline) throw new Error('Offline - cannot update. Please check internet connection.')

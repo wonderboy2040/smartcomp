@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listRows, getRow, createQuotationFull } from '@/lib/sheets-client'
-import { computeInvoice, nextQuotationNumber, type LineItem } from '@/lib/calc'
+import { listRows, createQuotationUltra } from '@/lib/sheets-client'
+import { computeInvoice, type LineItem } from '@/lib/calc'
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(result, {
-      headers: { 'X-Ultra-Fast': 'true', 'X-Version': '4.0' }
+      headers: { 'X-Ultra-Fast': 'true', 'X-Version': '6.0' }
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
@@ -42,29 +42,16 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now()
   try {
     const body = await req.json()
-    const { customerId, items, courierCharges, otherCharges, discount, notes, validTill, status, date } = body
+    const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, notes = '', validTill, status = 'draft', date } = body
 
     if (!customerId) return NextResponse.json({ error: 'Customer required' }, { status: 400 })
     if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'Items required' }, { status: 400 })
 
-    const [customer, existing] = await Promise.all([
-      getRow<any>('Customers', customerId),
-      listRows<any>('Quotations', { useCache: true }),
-    ])
-    if (!customer) return NextResponse.json({ error: 'Customer not found' }, { status: 400 })
-
     const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount })
-    const number = await nextQuotationNumber(existing.map((q) => ({ number: q.number })))
 
-    // ULTRA FAST: Single call
-    const result = await createQuotationFull({
-      number,
+    // ULTRA-ULTRA FAST v6.0: Single call - server fetches customer + generates number
+    const result = await createQuotationUltra({
       customerId,
-      customerName: customer.name,
-      customerPhone: customer.phone || '',
-      customerGstin: customer.gstNumber || '',
-      date: date || new Date().toISOString(),
-      validTill: validTill || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       itemsJson: JSON.stringify(calc.items),
       subtotal: calc.subtotal,
       gstAmount: calc.gstAmount,
@@ -73,22 +60,25 @@ export async function POST(req: NextRequest) {
       discount: calc.discount,
       grandTotal: calc.grandTotal,
       notes: notes || '',
-      status: status || 'draft',
-      convertedToInvoiceId: '',
+      date: date || new Date().toISOString(),
+      validTill: validTill || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      status,
     })
 
     const elapsed = Date.now() - startTime
 
     return NextResponse.json({
       ...result.data,
-      customer: { id: customerId, name: customer.name, phone: customer.phone, gstNumber: customer.gstNumber },
       ultraFast: true,
+      ultraUltraFast: true,
+      version: '6.0',
       elapsedMs: elapsed,
     }, {
       headers: {
         'X-Ultra-Fast': 'true',
+        'X-Ultra-Ultra-Fast': 'true',
         'X-Elapsed-Ms': elapsed.toString(),
-        'X-Version': '4.0',
+        'X-Version': '6.0',
       }
     })
   } catch (e: any) {

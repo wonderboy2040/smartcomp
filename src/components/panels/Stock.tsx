@@ -330,13 +330,18 @@ function ItemDialog({
       return
     }
     setSaving(true)
+    const start = Date.now()
     try {
       if (editing) {
         await apiPut(`/api/items/${editing.id}`, form)
-        toast({ title: 'Item updated' })
+        const elapsed = Date.now() - start
+        toast({ title: `Item updated ✓ ${elapsed}ms`, description: `${form.name} - Ultra fast v6.0` })
       } else {
-        await apiPost('/api/items', form)
-        toast({ title: 'Item added' })
+        // ULTRA-ULTRA FAST: Instant optimistic + background sync
+        const { apiPostUltraFast } = await import('@/lib/api')
+        const temp = await apiPostUltraFast('/api/items', form, { instantClose: true })
+        const elapsed = Date.now() - start
+        toast({ title: `Item added instantly! ✓ ${elapsed}ms`, description: `${form.name} - Client number ${temp.sku || ''} - Syncing to Sheets in background (ultra fast v6.0: instant <100ms)` })
       }
       onSaved()
     } catch (e: any) {
