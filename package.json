@@ -6,7 +6,8 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
-    "start": "next start"
+    "start": "next start",
+    "check": "next build"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -76,16 +77,8 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "4.1.12",
-    "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
-    "typescript": "5.8.2",
-    "vite": "6.3.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "6.3.5"
-    }
+    "typescript": "5.8.2"
   },
   "engines": {
     "node": "20.x"

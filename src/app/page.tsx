@@ -2,7 +2,6 @@
 
 import { useState, useEffect, Suspense, lazy, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
 import { SetupWizard } from '@/components/SetupWizard'
@@ -11,7 +10,7 @@ import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Zap, Wifi, ShieldCheck
 } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
@@ -171,6 +170,9 @@ function HomeInner() {
   }, [])
 
   const shopName = useMemo(() => shop?.name || 'Smart Computers', [shop])
+  const activeItem = useMemo(() => NAV_ITEMS.find((item) => item.id === active) || NAV_ITEMS[0], [active])
+  const ActiveIcon = activeItem.icon
+  const todayLabel = useMemo(() => new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date()), [])
   // ============================================================
 
   // Show setup wizard if not configured
@@ -190,12 +192,12 @@ function HomeInner() {
   const pendingEnquiries = dashData?.stats?.pendingEnquiries || 0
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex bg-background premium-app-shell">
       {/* Sidebar */}
       <aside
         className={`${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[280px] sm:w-72 h-[100dvh] safe-top clay-sidebar text-white flex flex-col transition-transform duration-300`}
+        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[280px] sm:w-72 h-[100dvh] safe-top clay-sidebar premium-sidebar text-white flex flex-col transition-transform duration-300`}
       >
         {/* Logo/Header */}
         <div className="p-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -256,7 +258,7 @@ function HomeInner() {
         <div className="p-3 flex-shrink-0 safe-bottom space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="rounded-xl p-2.5 flex items-center gap-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-            <span className="text-[10px] text-slate-300">v6.1.0 · {theme === 'dark' ? 'Premium Dark' : 'Premium Light'}</span>
+            <span className="text-[10px] text-slate-300">v6.2.0 · {theme === 'dark' ? 'Premium Dark' : 'Premium Light'}</span>
             <span className="ml-auto w-2 h-2 bg-emerald-400 rounded-full animate-pulse" title="System healthy" />
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -298,9 +300,9 @@ function HomeInner() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 flex flex-col w-full">
+      <main className="flex-1 min-w-0 flex flex-col w-full premium-main">
         {/* Top bar - mobile only */}
-        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card border-b border-border shadow-sm">
+        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card/90 backdrop-blur-xl border-b border-border shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
@@ -327,7 +329,72 @@ function HomeInner() {
           </button>
         </header>
 
-        <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">
+        {/* Premium desktop command bar */}
+        <header className="hidden lg:block sticky top-0 z-30 border-b border-border/70 bg-background/72 backdrop-blur-2xl">
+          <div className="max-w-7xl mx-auto w-full px-6 py-4">
+            <div className="premium-topbar rounded-[1.75rem] border border-border/70 bg-card/78 px-5 py-4 shadow-sm">
+              <div className="flex items-center justify-between gap-5">
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="premium-icon-orb w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <ActiveIcon className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-bold">{todayLabel} · Live Workspace</p>
+                      <Badge className="premium-soft-badge border-0">v6.2 Premium</Badge>
+                    </div>
+                    <h2 className="text-xl font-black tracking-tight text-foreground truncate">{activeItem.label}</h2>
+                    <p className="text-sm text-muted-foreground truncate">{shopName} business control center</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => handleNavigate('stock')}
+                    className="premium-mini-stat hidden xl:flex"
+                    title="Open stock alerts"
+                  >
+                    <Package className="w-4 h-4 text-amber-500" />
+                    <span>{lowStockCount} Low Stock</span>
+                  </button>
+                  <button
+                    onClick={() => handleNavigate('whatsapp')}
+                    className="premium-mini-stat hidden xl:flex"
+                    title="Open pending enquiries"
+                  >
+                    <MessageSquare className="w-4 h-4 text-emerald-500" />
+                    <span>{pendingEnquiries} Enquiries</span>
+                  </button>
+                  <div className="premium-mini-stat">
+                    <Wifi className="w-4 h-4 text-emerald-500" />
+                    <span>Online</span>
+                  </div>
+                  <button
+                    onClick={toggleTheme}
+                    className="premium-theme-toggle"
+                    aria-label="Toggle light and dark theme"
+                    title="Toggle light/dark theme"
+                  >
+                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                    <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom premium-content">
+          <div className="premium-hero-strip hidden lg:flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <span>Secure PIN, protected APIs, soft-delete data safety enabled</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-500" />
+              <span>Optimized lazy panels + 60s client cache + 90s server cache</span>
+            </div>
+          </div>
           {/* Lazy-mount panels with dynamic imports.
               - Dashboard is eager (it's the default tab).
               - Every other panel is dynamically imported on first activation,
@@ -419,7 +486,7 @@ function PanelBoundary({
 }) {
   if (!mounted) return null
   return (
-    <div className={active === id ? 'block' : 'hidden'}>
+    <div className={active === id ? 'block premium-panel animate-in' : 'hidden'}>
       <Suspense
         fallback={
           <div className="flex items-center justify-center py-16">

@@ -1,0 +1,53 @@
+# SmartComp Premium Design + Optimization Upgrade
+
+## Status
+- Build: PASS (`npm run build`)
+- Runtime smoke test: PASS (`npm run start`, `/`, `/login`, `/api/health`)
+- Main app framework: Next.js App Router
+
+## Major fixes from original repo
+1. Switched deployment from empty Vite shell to full Next.js app.
+2. Added missing runtime dependencies used by panels and API routes.
+3. Added Next middleware bridge for PIN protection.
+4. Restored complete light/dark theme support.
+
+## Premium Design Upgrade v6.2
+- New sticky desktop command bar with active module title, live status, low-stock and enquiry shortcuts.
+- Premium glassmorphism surfaces with soft gradients, ambient glow, and better card shadows.
+- Improved sidebar depth, active navigation treatment, and background lighting.
+- Global card, table, form, button, and loading-state polish across all panels.
+- Dark mode hardcoded-color overrides for legacy panels so the full site theme changes consistently.
+- Mobile top bar made translucent and theme-aware.
+- Reduced-motion accessibility support.
+
+## Optimization Upgrade
+- Removed unused Vite build dependencies from `package.json` for a cleaner Next.js deployment.
+- Kept dynamic imports / lazy panel loading so heavy modules load only when opened.
+- Kept client cache and server cache optimizations already present in the project.
+- Added `engines.node = 20.x` for deployment stability.
+- Added `npm run check` alias for production build verification.
+
+## Deployment
+Use:
+
+```bash
+npm install
+npm run build
+npm run start
+```
+
+Required for live data:
+
+```env
+APPS_SCRIPT_URL=https://script.google.com/macros/s/.../exec
+```
+
+Optional:
+
+```env
+APP_PIN=1234
+WA_TOKEN=...
+WA_PHONE_NUMBER_ID=...
+WA_BUSINESS_NUMBER=...
+WA_VERIFY_TOKEN=...
+```
