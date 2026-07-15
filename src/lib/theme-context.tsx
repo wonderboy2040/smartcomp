@@ -2,14 +2,17 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 
-type Theme = 'light'
+type Theme = 'light' | 'dark'
+type ResolvedTheme = 'light' | 'dark'
 
 interface ThemeContextType {
   theme: Theme
-  resolvedTheme: 'light'
+  resolvedTheme: ResolvedTheme
   toggleTheme: () => void
   setTheme: (t: Theme) => void
 }
+
+const STORAGE_KEY = 'smartcomp-theme'
 
 const ThemeContext = createContext<ThemeContextType>({
   theme: 'light',
@@ -18,50 +21,59 @@ const ThemeContext = createContext<ThemeContextType>({
   setTheme: () => {},
 })
 
-/**
- * PREMIUM LIGHT THEME — site is locked to light mode.
- * Dark theme has been completely removed for a consistent premium look.
- * The theme toggle is a no-op (kept for backward compatibility with existing
- * components that import useTheme, but no UI should expose it).
- */
-function applyLightTheme() {
+function getInitialTheme(): Theme {
+  if (typeof window === 'undefined') return 'light'
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored === 'light' || stored === 'dark') return stored
+  } catch {}
+  return 'light'
+}
+
+function applyTheme(nextTheme: Theme) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  // Ensure dark class is NEVER present
-  root.classList.remove('dark')
-  root.style.colorScheme = 'light'
-  // Update meta theme-color
+  const isDark = nextTheme === 'dark'
+
+  root.classList.toggle('dark', isDark)
+  root.style.colorScheme = isDark ? 'dark' : 'light'
+
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) {
-    meta.setAttribute('content', '#ffffff')
+    meta.setAttribute('content', isDark ? '#020617' : '#f8fafc')
   }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme] = useState<Theme>('light')
-  const [resolvedTheme] = useState<'light'>('light')
+  const [themeState, setThemeState] = useState<Theme>('light')
 
-  // Force light on mount and whenever anything tries to change it
   useEffect(() => {
-    applyLightTheme()
-    // Clear any previously stored dark preference so the layout's inline script
-    // also stays light on next reload.
+    const initialTheme = getInitialTheme()
+    setThemeState(initialTheme)
+    applyTheme(initialTheme)
+  }, [])
+
+  const setTheme = useCallback((nextTheme: Theme) => {
+    setThemeState(nextTheme)
+    applyTheme(nextTheme)
     try {
-      localStorage.setItem('smartcomp-theme', 'light')
+      localStorage.setItem(STORAGE_KEY, nextTheme)
     } catch {}
   }, [])
 
-  // No-op setters — kept so existing imports don't crash
-  const setTheme = useCallback((_t: Theme) => {
-    applyLightTheme()
-  }, [])
-
   const toggleTheme = useCallback(() => {
-    applyLightTheme()
+    setThemeState((currentTheme) => {
+      const nextTheme: Theme = currentTheme === 'dark' ? 'light' : 'dark'
+      applyTheme(nextTheme)
+      try {
+        localStorage.setItem(STORAGE_KEY, nextTheme)
+      } catch {}
+      return nextTheme
+    })
   }, [])
 
   return (
-    <ThemeContext.Provider value={{ theme, resolvedTheme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme: themeState, resolvedTheme: themeState, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   )

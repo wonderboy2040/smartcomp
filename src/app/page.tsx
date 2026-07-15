@@ -6,11 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
 import { SetupWizard } from '@/components/SetupWizard'
+import { useTheme } from '@/lib/theme-context'
 import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon
 } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
@@ -86,6 +87,7 @@ function HomeInner() {
   // Track which panels have been activated at least once — they stay mounted
   // afterwards so switching back is instant, but we don't load all 20 on first paint.
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab]))
+  const { theme, toggleTheme } = useTheme()
 
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
@@ -254,22 +256,34 @@ function HomeInner() {
         <div className="p-3 flex-shrink-0 safe-bottom space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="rounded-xl p-2.5 flex items-center gap-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-            <span className="text-[10px] text-slate-300">v6.0.0 · Premium Light</span>
+            <span className="text-[10px] text-slate-300">v6.1.0 · {theme === 'dark' ? 'Premium Dark' : 'Premium Light'}</span>
             <span className="ml-auto w-2 h-2 bg-emerald-400 rounded-full animate-pulse" title="System healthy" />
           </div>
-          <button
-            onClick={async () => {
-              if (confirm('Logout? You will need to enter PIN again to access the panel.')) {
-                try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
-                window.location.href = '/login'
-              }
-            }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-300 transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Logout
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={toggleTheme}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-300 transition-all hover:text-white"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+              aria-label="Toggle light and dark theme"
+              title="Toggle light/dark theme"
+            >
+              {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              {theme === 'dark' ? 'Light' : 'Dark'}
+            </button>
+            <button
+              onClick={async () => {
+                if (confirm('Logout? You will need to enter PIN again to access the panel.')) {
+                  try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
+                  window.location.href = '/login'
+                }
+              }}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium text-slate-300 transition-all hover:text-white"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -303,8 +317,14 @@ function HomeInner() {
             </div>
             <span className="font-semibold text-sm truncate text-foreground">{shopName}</span>
           </div>
-          {/* Spacer to balance the layout (theme toggle removed — site is locked to light) */}
-          <div className="w-11 h-11" aria-hidden="true" />
+          <button
+            onClick={toggleTheme}
+            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
+            aria-label="Toggle light and dark theme"
+            title="Toggle light/dark theme"
+          >
+            {theme === 'dark' ? <Sun className="w-5 h-5 text-foreground" /> : <Moon className="w-5 h-5 text-foreground" />}
+          </button>
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">

@@ -12,11 +12,11 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: {
-    default: "Smart Computers — Sales & Service Panel v5.0 Secure Pro",
+    default: "Smart Computers — Sales & Service Panel v6.1 Theme Pro",
     template: "%s · Smart Computers",
   },
   description:
-    "Complete shop management panel for computers sales & service with invoicing, quotations, GST, payments, WhatsApp enquiries and Google Sheets sync. Ultra fast v4.0 + Secure v5.0 + Advanced Theme.",
+    "Complete shop management panel for computer sales and service with invoicing, quotations, GST, payments, WhatsApp enquiries, Google Sheets sync, PWA support, and complete light/dark theme support.",
   applicationName: "Smart Computers",
   manifest: "/manifest.json",
   appleWebApp: {
@@ -40,34 +40,32 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: "#ffffff",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
   viewportFit: "cover",
-  colorScheme: "light",
+  colorScheme: "light dark",
 };
 
-// Premium light theme — site is locked to light mode.
-// This inline script runs before React hydrates to prevent any flash of dark
-// theme from a previously stored preference. The .dark class is forcibly
-// removed and color-scheme is set to light.
+// Runs before React hydrates to prevent a light/dark flash. The selected
+// preference is persisted by ThemeProvider in localStorage.
 const themeScript = `
 (function() {
   try {
-    // Always force light theme
-    document.documentElement.classList.remove('dark');
-    document.documentElement.style.colorScheme = 'light';
-    // Persist so the ThemeProvider reads a consistent value
-    try { localStorage.setItem('smartcomp-theme', 'light'); } catch(e) {}
-    // Update theme-color meta
-    var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) {
-      meta.setAttribute('content', '#ffffff');
+    var stored = localStorage.getItem('smartcomp-theme');
+    var theme = stored === 'dark' ? 'dark' : 'light';
+    var root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    } else {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
     }
-  } catch(e) {
-    try {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.style.colorScheme = 'light';
-    } catch(e2) {}
-  }
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#020617' : '#f8fafc');
+  } catch(e) {}
 })();
 `;
 

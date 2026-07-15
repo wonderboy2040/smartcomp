@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -42,43 +44,37 @@
 }
 
 /* ============================================================
-   PREMIUM LIGHT THEME — Single, locked theme for the whole site
-   ============================================================
-   Dark theme has been completely removed. The site is locked to
-   this premium light theme. The `.dark` selector below is kept
-   ONLY as a defensive no-op so any stray `.dark` class on <html>
-   (from cached state, browser extensions, or third-party code)
-   cannot accidentally flip the palette.
+   SMARTCOMP THEME SYSTEM — Complete Light + Dark Support
    ============================================================ */
 :root {
   --radius: 0.75rem;
 
-  /* Premium Light Theme — clean, professional, high-contrast */
-  --background: 210 20% 98%;          /* #f8fafc — soft off-white */
-  --foreground: 222 47% 11%;          /* Slate 900 — max contrast text */
+  /* Premium Light Theme */
+  --background: 210 20% 98%;
+  --foreground: 222 47% 11%;
 
-  --card: 0 0% 100%;                  /* Pure white cards */
+  --card: 0 0% 100%;
   --card-foreground: 222 47% 11%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
 
-  --primary: 239 84% 67%;             /* Indigo 500 — #6366f1 */
+  --primary: 239 84% 67%;
   --primary-foreground: 0 0% 98%;
 
-  --secondary: 210 40% 96%;           /* Slate 100 */
+  --secondary: 210 40% 96%;
   --secondary-foreground: 222 22% 20%;
 
   --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;    /* Slate 500 */
+  --muted-foreground: 215 16% 47%;
 
   --accent: 210 40% 96%;
   --accent-foreground: 222 22% 20%;
 
-  --destructive: 0 84% 60%;           /* Red 500 */
+  --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 214 32% 91%;              /* Slate 200 — visible */
+  --border: 214 32% 91%;
   --input: 214 32% 91%;
   --ring: 239 84% 67%;
 
@@ -88,8 +84,7 @@
   --chart-4: 340 82% 52%;
   --chart-5: 199 89% 48%;
 
-  /* Sidebar — premium light (was dark in old theme) */
-  --sidebar: 222 47% 11%;             /* Deep slate sidebar for premium contrast */
+  --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
   --sidebar-primary: 239 84% 67%;
   --sidebar-primary-foreground: 0 0% 98%;
@@ -98,13 +93,65 @@
   --sidebar-border: 217 33% 17%;
   --sidebar-ring: 239 84% 67%;
 
-  /* Clay design tokens — light theme only */
   --clay-bg: #f8fafc;
   --clay-surface: #ffffff;
   --clay-shadow-dark: rgba(15, 23, 42, 0.08);
   --clay-shadow-light: rgba(255, 255, 255, 0.9);
 
   color-scheme: light;
+}
+
+.dark {
+  /* Premium Dark Theme */
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
+
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 98%;
+
+  --popover: 222 47% 9%;
+  --popover-foreground: 210 40% 98%;
+
+  --primary: 239 84% 72%;
+  --primary-foreground: 222 47% 7%;
+
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 70%;
+
+  --accent: 217 33% 17%;
+  --accent-foreground: 210 40% 98%;
+
+  --destructive: 0 72% 56%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 217 33% 20%;
+  --input: 217 33% 22%;
+  --ring: 239 84% 72%;
+
+  --chart-1: 239 84% 72%;
+  --chart-2: 160 64% 52%;
+  --chart-3: 38 92% 58%;
+  --chart-4: 340 82% 62%;
+  --chart-5: 199 89% 58%;
+
+  --sidebar: 222 47% 5%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 239 84% 72%;
+  --sidebar-primary-foreground: 222 47% 7%;
+  --sidebar-accent: 217 33% 17%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-border: 217 33% 18%;
+  --sidebar-ring: 239 84% 72%;
+
+  --clay-bg: #020617;
+  --clay-surface: #0f172a;
+  --clay-shadow-dark: rgba(0, 0, 0, 0.35);
+  --clay-shadow-light: rgba(148, 163, 184, 0.06);
+
+  color-scheme: dark;
 }
 
 @layer base {
@@ -116,8 +163,7 @@
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
     overflow-x: hidden;
-    /* Force light color-scheme — prevents form controls from rendering dark */
-    color-scheme: light;
+    color-scheme: light dark;
   }
 
   body {
@@ -127,11 +173,18 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     font-feature-settings: "rlig" 1, "calt" 1;
-    /* Subtle premium background — soft gradient + ambient indigo glow */
     background:
-      radial-gradient(ellipse 80% 60% at 50% -20%, hsl(239 84% 67% / 0.06), transparent),
+      radial-gradient(ellipse 80% 60% at 50% -20%, hsl(var(--primary) / 0.07), transparent),
       hsl(var(--background));
     background-attachment: fixed;
+  }
+
+
+  .dark body {
+    background:
+      radial-gradient(ellipse 90% 65% at 50% -20%, hsl(var(--primary) / 0.16), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(199 89% 48% / 0.08), transparent 55%),
+      hsl(var(--background));
   }
 
   .safe-top { padding-top: env(safe-area-inset-top); }
@@ -313,6 +366,90 @@ table td {
 /* Gradients */
 .bg-gradient-to-br, .bg-gradient-to-r {
   /* gradients render at full saturation on light theme */
+}
+
+
+/* ===== DARK MODE HARD-CODED COLOR OVERRIDES =====
+   Many legacy panels used explicit Tailwind light colors (bg-white,
+   bg-slate-50, text-slate-900, etc.). These scoped overrides make the
+   complete site switch cleanly without editing hundreds of JSX classes. */
+.dark .bg-white:not(.print-paper) { background-color: hsl(var(--card)) !important; }
+.dark .bg-slate-50 { background-color: hsl(222 47% 7%) !important; }
+.dark .bg-slate-100 { background-color: hsl(217 33% 14%) !important; }
+.dark .bg-slate-200 { background-color: hsl(217 33% 18%) !important; }
+.dark .bg-slate-800, .dark .bg-slate-900 { background-color: hsl(222 47% 5%) !important; }
+
+.dark .border-slate-100, .dark .border-slate-200, .dark .border-slate-300,
+.dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-300 {
+  border-color: hsl(var(--border)) !important;
+}
+
+.dark .text-slate-900, .dark .text-slate-800, .dark .text-gray-900, .dark .text-gray-800 {
+  color: hsl(210 40% 98%) !important;
+}
+.dark .text-slate-700, .dark .text-gray-700 { color: hsl(214 32% 88%) !important; }
+.dark .text-slate-600, .dark .text-gray-600 { color: hsl(215 25% 78%) !important; }
+.dark .text-slate-500, .dark .text-gray-500 { color: hsl(215 20% 68%) !important; }
+.dark .text-slate-400, .dark .text-gray-400 { color: hsl(215 18% 60%) !important; }
+.dark .text-black { color: hsl(210 40% 98%) !important; }
+
+.dark .shadow-sm, .dark .shadow, .dark .shadow-md, .dark .shadow-lg, .dark .shadow-xl {
+  --tw-shadow-color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Tinted cards / alerts */
+.dark .bg-blue-50 { background-color: hsl(217 91% 18% / 0.55) !important; }
+.dark .border-blue-200 { border-color: hsl(217 91% 38% / 0.55) !important; }
+.dark .text-blue-900, .dark .text-blue-800, .dark .text-blue-700, .dark .text-blue-600, .dark .text-blue-500 { color: hsl(213 94% 76%) !important; }
+
+.dark .bg-emerald-50, .dark .bg-green-50 { background-color: hsl(158 64% 16% / 0.55) !important; }
+.dark .bg-emerald-100, .dark .bg-green-100 { background-color: hsl(158 64% 20% / 0.6) !important; }
+.dark .border-emerald-200, .dark .border-green-200 { border-color: hsl(158 64% 36% / 0.55) !important; }
+.dark .text-emerald-900, .dark .text-emerald-800, .dark .text-emerald-700, .dark .text-emerald-600, .dark .text-emerald-500,
+.dark .text-green-900, .dark .text-green-800, .dark .text-green-700, .dark .text-green-600, .dark .text-green-500 { color: hsl(156 72% 67%) !important; }
+
+.dark .bg-red-50 { background-color: hsl(0 72% 18% / 0.55) !important; }
+.dark .border-red-200 { border-color: hsl(0 72% 40% / 0.55) !important; }
+.dark .text-red-900, .dark .text-red-800, .dark .text-red-700, .dark .text-red-600, .dark .text-red-500, .dark .text-red-400 { color: hsl(0 91% 75%) !important; }
+
+.dark .bg-amber-50, .dark .bg-orange-50 { background-color: hsl(38 92% 17% / 0.6) !important; }
+.dark .border-amber-200, .dark .border-orange-200 { border-color: hsl(38 92% 38% / 0.55) !important; }
+.dark .text-amber-900, .dark .text-amber-800, .dark .text-amber-700, .dark .text-amber-600, .dark .text-amber-500,
+.dark .text-orange-900, .dark .text-orange-800, .dark .text-orange-700, .dark .text-orange-600, .dark .text-orange-500 { color: hsl(43 96% 70%) !important; }
+
+.dark .bg-purple-50, .dark .bg-indigo-50, .dark .bg-violet-50, .dark .bg-pink-50, .dark .bg-cyan-50 {
+  background-color: hsl(239 84% 18% / 0.45) !important;
+}
+.dark .border-purple-200, .dark .border-indigo-200, .dark .border-violet-200, .dark .border-pink-200, .dark .border-cyan-200 {
+  border-color: hsl(239 84% 42% / 0.45) !important;
+}
+.dark .text-purple-900, .dark .text-purple-800, .dark .text-purple-700, .dark .text-purple-600, .dark .text-purple-500,
+.dark .text-indigo-900, .dark .text-indigo-800, .dark .text-indigo-700, .dark .text-indigo-600, .dark .text-indigo-500,
+.dark .text-violet-900, .dark .text-violet-800, .dark .text-violet-700, .dark .text-violet-600, .dark .text-violet-500,
+.dark .text-pink-900, .dark .text-pink-800, .dark .text-pink-700, .dark .text-pink-600, .dark .text-pink-500,
+.dark .text-cyan-900, .dark .text-cyan-800, .dark .text-cyan-700, .dark .text-cyan-600, .dark .text-cyan-500 {
+  color: hsl(239 84% 78%) !important;
+}
+
+.dark input, .dark textarea, .dark select {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--input)) !important;
+}
+
+.dark table th { background-color: hsl(var(--muted) / 0.65) !important; }
+.dark table tr:hover td { background-color: hsl(var(--muted) / 0.35) !important; }
+
+.dark .clay-sidebar {
+  background: linear-gradient(180deg, hsl(222 47% 7%) 0%, hsl(222 47% 4%) 100%);
+  border-right-color: hsl(217 33% 16%);
+  box-shadow: 8px 0 30px rgba(0, 0, 0, 0.35);
+}
+
+.dark .print-paper, .dark .print-paper * {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #e5e7eb !important;
 }
 
 /* Print styles */
