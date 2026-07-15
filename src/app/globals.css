@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -107,12 +105,6 @@
   --clay-shadow-light: rgba(255, 255, 255, 0.9);
 
   color-scheme: light;
-}
-
-/* Defensive no-op: even if something adds `.dark` to <html>, the
-   palette above stays in effect because this block defines nothing. */
-.dark {
-  /* intentionally empty — dark theme is removed */
 }
 
 @layer base {
