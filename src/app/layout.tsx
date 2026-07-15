@@ -7,16 +7,16 @@ import { ThemeProvider } from "@/lib/theme-context";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
-  display: "swap", // Show fallback text immediately, swap to Geist when loaded
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: {
-    default: "Smart Computers — Sales & Service Panel",
+    default: "Smart Computers — Sales & Service Panel v5.0 Secure Pro",
     template: "%s · Smart Computers",
   },
   description:
-    "Complete shop management panel for computers sales & service with invoicing, quotations, GST, payments, WhatsApp enquiries and Google Sheets sync.",
+    "Complete shop management panel for computers sales & service with invoicing, quotations, GST, payments, WhatsApp enquiries and Google Sheets sync. Ultra fast v4.0 + Secure v5.0 + Advanced Theme.",
   applicationName: "Smart Computers",
   manifest: "/manifest.json",
   appleWebApp: {
@@ -33,8 +33,6 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
-  // Performance: preconnect to the Apps Script host if you know it.
-  // (Left empty because APPS_SCRIPT_URL is set at runtime via env var.)
 };
 
 export const viewport: Viewport = {
@@ -43,35 +41,47 @@ export const viewport: Viewport = {
   maximumScale: 5,
   userScalable: true,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#eef0f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#16172a" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0e1a" },
   ],
   viewportFit: "cover",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "SmartComp",
-  },
+  colorScheme: "light dark",
 };
 
-// Inline script to prevent flash-of-wrong-theme (runs before React hydrates)
-// DEFAULT IS DARK — if no stored preference, apply dark mode immediately.
+// Advanced theme script - Prevents flash, respects system preference, secure
 const themeScript = `
 (function() {
   try {
     var stored = localStorage.getItem('smartcomp-theme');
-    // Default to dark if no preference stored
-    if (stored === 'light') {
-      document.documentElement.classList.remove('dark');
-      var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', '#eef0f6');
-    } else {
-      // stored === 'dark' OR no stored preference → dark mode
-      document.documentElement.classList.add('dark');
-      var meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', '#16172a');
+    var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var theme = stored || (systemPrefersDark ? 'dark' : 'light');
+    
+    // For first-time visitors, default to light for better visibility (can be changed to dark if preferred)
+    // But respect system preference if no stored value
+    if (!stored) {
+      theme = systemPrefersDark ? 'dark' : 'light';
     }
-  } catch(e) {}
+    
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
+    }
+    
+    // Update theme-color meta
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', theme === 'dark' ? '#0a0e1a' : '#ffffff');
+    }
+  } catch(e) {
+    // Fallback to light if error
+    try {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
+    } catch(e2) {}
+  }
 })();
 `;
 
@@ -83,14 +93,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* PWA: register service worker (self-destruct version, just cleans up old SWs) */}
         <script src="/sw-register.js" defer />
-        {/* Theme: prevent flash of wrong theme */}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body
-        className={`${geistSans.variable} antialiased min-h-screen`}
-      >
+      <body className={`${geistSans.variable} antialiased min-h-screen bg-background text-foreground`}>
         <ThemeProvider>
           {children}
           <Toaster />
