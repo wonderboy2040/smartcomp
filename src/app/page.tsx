@@ -190,7 +190,7 @@ function HomeInner() {
   const pendingEnquiries = dashData?.stats?.pendingEnquiries || 0
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--clay-bg)' }}>
+    <div className="min-h-screen flex bg-background">
       {/* Sidebar */}
       <aside
         className={`${
@@ -317,14 +317,13 @@ function HomeInner() {
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col w-full">
         {/* Top bar - mobile only */}
-        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top" style={{ background: 'var(--clay-surface)', boxShadow: '0 4px 12px var(--clay-shadow-dark)' }}>
+        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card border-b border-border shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center"
-            style={{ background: 'var(--clay-surface)', boxShadow: '3px 3px 8px var(--clay-shadow-dark), -3px -3px 8px var(--clay-shadow-light)' }}
+            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
             aria-label="Open menu"
           >
-            <Menu className="w-5 h-5" style={{ color: 'var(--foreground)' }} />
+            <Menu className="w-5 h-5 text-foreground" />
           </button>
           <div className="flex items-center gap-2 min-w-0">
             <div
@@ -333,19 +332,18 @@ function HomeInner() {
             >
               <Store className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-sm truncate" style={{ color: 'var(--foreground)' }}>{shopName}</span>
+            <span className="font-semibold text-sm truncate text-foreground">{shopName}</span>
           </div>
           {/* Theme toggle on mobile */}
           <button
             onClick={toggleTheme}
-            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center"
-            style={{ background: 'var(--clay-surface)', boxShadow: '3px 3px 8px var(--clay-shadow-dark), -3px -3px 8px var(--clay-shadow-light)' }}
+            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
             aria-label="Toggle theme"
             title={`Theme: ${theme}`}
           >
-            {theme === 'light' && <Moon className="w-5 h-5" style={{ color: 'var(--foreground)' }} />}
+            {theme === 'light' && <Moon className="w-5 h-5 text-foreground" />}
             {theme === 'dark' && <Sun className="w-5 h-5 text-amber-400" />}
-            {theme === 'system' && <Monitor className="w-5 h-5 text-blue-400" />}
+            {theme === 'system' && <Monitor className="w-5 h-5 text-blue-500" />}
           </button>
         </header>
 
