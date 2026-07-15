@@ -2,13 +2,11 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Store, Loader2, Lock, ShieldCheck, CheckCircle2, AlertCircle, Eye, EyeOff, Sun, Moon, Monitor } from 'lucide-react'
-import { useTheme } from '@/lib/theme-context'
+import { Store, Loader2, Lock, ShieldCheck, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 function LoginInner() {
   const router = useRouter()
   const params = useSearchParams()
-  const { theme, toggleTheme } = useTheme()
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -83,24 +81,12 @@ function LoginInner() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-background text-foreground transition-colors duration-300">
-      {/* Subtle background pattern */}
+      {/* Subtle background ambient — premium light gradient */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full opacity-10 bg-gradient-to-br from-primary to-primary/50 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full opacity-10 bg-gradient-to-br from-emerald-500 to-emerald-300 blur-3xl" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.02] bg-gradient-to-br from-primary via-transparent to-transparent blur-3xl" />
       </div>
-
-      {/* Theme toggle */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-card border border-border shadow-sm flex items-center justify-center hover:shadow-md transition-all"
-        aria-label="Toggle theme"
-        title={`Theme: ${theme}`}
-      >
-        {theme === 'light' && <Moon className="w-4 h-4 text-foreground" />}
-        {theme === 'dark' && <Sun className="w-4 h-4 text-amber-400" />}
-        {theme === 'system' && <Monitor className="w-4 h-4 text-blue-500" />}
-      </button>
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
@@ -183,13 +169,13 @@ function LoginInner() {
               )}
 
               {success && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 px-3.5 py-3 flex items-center gap-2.5 animate-in slide-in-from-top-1">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 flex items-center gap-2.5 animate-in slide-in-from-top-1">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="text-[13px] font-bold text-emerald-800 dark:text-emerald-200">Access Granted</p>
-                    <p className="text-xs text-emerald-700 dark:text-emerald-300">Redirecting to dashboard...</p>
+                    <p className="text-[13px] font-bold text-emerald-800">Access Granted</p>
+                    <p className="text-xs text-emerald-700">Redirecting to dashboard...</p>
                   </div>
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600 dark:text-emerald-400" />
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
                 </div>
               )}
 

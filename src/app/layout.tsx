@@ -40,43 +40,29 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0e1a" },
-  ],
+  themeColor: "#ffffff",
   viewportFit: "cover",
-  colorScheme: "light dark",
+  colorScheme: "light",
 };
 
-// Advanced theme script - Prevents flash, respects system preference, secure
+// Premium light theme — site is locked to light mode.
+// This inline script runs before React hydrates to prevent any flash of dark
+// theme from a previously stored preference. The .dark class is forcibly
+// removed and color-scheme is set to light.
 const themeScript = `
 (function() {
   try {
-    var stored = localStorage.getItem('smartcomp-theme');
-    var systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    var theme = stored || (systemPrefersDark ? 'dark' : 'light');
-    
-    // For first-time visitors, default to light for better visibility (can be changed to dark if preferred)
-    // But respect system preference if no stored value
-    if (!stored) {
-      theme = systemPrefersDark ? 'dark' : 'light';
-    }
-    
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.documentElement.style.colorScheme = 'dark';
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.style.colorScheme = 'light';
-    }
-    
+    // Always force light theme
+    document.documentElement.classList.remove('dark');
+    document.documentElement.style.colorScheme = 'light';
+    // Persist so the ThemeProvider reads a consistent value
+    try { localStorage.setItem('smartcomp-theme', 'light'); } catch(e) {}
     // Update theme-color meta
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
-      meta.setAttribute('content', theme === 'dark' ? '#0a0e1a' : '#ffffff');
+      meta.setAttribute('content', '#ffffff');
     }
   } catch(e) {
-    // Fallback to light if error
     try {
       document.documentElement.classList.remove('dark');
       document.documentElement.style.colorScheme = 'light';

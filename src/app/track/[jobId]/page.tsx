@@ -80,11 +80,11 @@ function TrackInner() {
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800 p-4">
-        <div className="bg-white dark:bg-card rounded-2xl shadow-2xl p-6 max-w-md w-full text-center border border-border">
+        <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full text-center border border-border">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-3" />
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 mb-2">Tracking Error</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-300">{error}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-3">Please contact the shop for assistance.</p>
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Tracking Error</h1>
+          <p className="text-sm text-slate-600">{error}</p>
+          <p className="text-xs text-slate-500 mt-3">Please contact the shop for assistance.</p>
         </div>
       </div>
     )
@@ -97,7 +97,7 @@ function TrackInner() {
   const DeviceIcon = DEVICE_ICONS[job?.deviceType] || Smartphone
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 shadow-lg">
         <div className="max-w-2xl mx-auto">
@@ -111,11 +111,11 @@ function TrackInner() {
 
       <div className="max-w-2xl mx-auto p-4 space-y-4">
         {/* Job ID + Status */}
-        <div className="bg-white dark:bg-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/60 p-5">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">Job ID</p>
-              <p className="font-mono text-lg font-bold text-slate-900 dark:text-slate-50">{job?.jobId}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wide font-medium">Job ID</p>
+              <p className="font-mono text-lg font-bold text-slate-900">{job?.jobId}</p>
             </div>
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${statusCfg.bg}`}>
               <StatusIcon className={`w-4 h-4 ${statusCfg.color} ${job?.status === 'In Progress' ? 'animate-spin' : ''}`} />
@@ -124,30 +124,30 @@ function TrackInner() {
           </div>
 
           {/* Device info */}
-          <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-            <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
-              <DeviceIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+            <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
+              <DeviceIcon className="w-6 h-6 text-blue-600" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-slate-900 dark:text-slate-50">{job?.deviceType}</p>
-              {job?.brandModel && <p className="text-xs text-slate-500 dark:text-slate-400">{job.brandModel}</p>}
+              <p className="font-semibold text-slate-900">{job?.deviceType}</p>
+              {job?.brandModel && <p className="text-xs text-slate-500">{job.brandModel}</p>}
             </div>
           </div>
 
           {/* Problem */}
           {job?.problemDesc && (
             <div className="mt-3">
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-medium mb-1">Issue Reported</p>
-              <p className="text-sm text-slate-700 dark:text-slate-200">{job.problemDesc}</p>
+              <p className="text-[10px] text-slate-500 uppercase font-medium mb-1">Issue Reported</p>
+              <p className="text-sm text-slate-700">{job.problemDesc}</p>
             </div>
           )}
         </div>
 
         {/* Status Timeline */}
         {job?.statusHistory && job.statusHistory.length > 0 && (
-          <div className="bg-white dark:bg-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/60 p-5">
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-3 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <p className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-blue-600" />
               Status Timeline
             </p>
             <div className="space-y-3">
@@ -161,17 +161,17 @@ function TrackInner() {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${cfg.bg} border`}>
                         <HIcon className={`w-4 h-4 ${cfg.color}`} />
                       </div>
-                      {!isLast && <div className="w-0.5 h-6 bg-slate-200 dark:bg-slate-700 mt-1" />}
+                      {!isLast && <div className="w-0.5 h-6 bg-slate-200 mt-1" />}
                     </div>
                     <div className="flex-1 pb-2">
                       <p className={`text-sm font-medium ${cfg.color}`}>{cfg.label}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <p className="text-xs text-slate-500">
                         {h.timestamp ? new Date(h.timestamp).toLocaleString('en-IN', {
                           day: '2-digit', month: 'short', year: 'numeric',
                           hour: '2-digit', minute: '2-digit',
                         }) : ''}
                       </p>
-                      {h.note && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{h.note}</p>}
+                      {h.note && <p className="text-xs text-slate-500 mt-0.5">{h.note}</p>}
                     </div>
                   </div>
                 )
@@ -182,28 +182,28 @@ function TrackInner() {
 
         {/* Amount (only if completed/delivered) */}
         {(job?.status === 'Completed' || job?.status === 'Delivered') && Number(job?.finalAmount) > 0 && (
-          <div className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 rounded-2xl shadow-sm border border-emerald-200 dark:border-emerald-800/50 p-5">
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-2xl shadow-sm border border-emerald-200 p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium uppercase">Total Amount</p>
-                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">Rs.{job.finalAmount}</p>
+                <p className="text-xs text-emerald-700 font-medium uppercase">Total Amount</p>
+                <p className="text-2xl font-bold text-emerald-700">Rs.{job.finalAmount}</p>
               </div>
-              <CheckCircle2 className="w-10 h-10 text-emerald-500 dark:text-emerald-400" />
+              <CheckCircle2 className="w-10 h-10 text-emerald-500" />
             </div>
             {job?.status === 'Completed' && (
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2">Please collect your device and pay at the shop.</p>
+              <p className="text-xs text-emerald-600 mt-2">Please collect your device and pay at the shop.</p>
             )}
           </div>
         )}
 
         {/* Warranty (if delivered) */}
         {job?.status === 'Delivered' && job?.warrantyExpiry && (
-          <div className="bg-blue-50 dark:bg-blue-950/30 rounded-2xl shadow-sm border border-blue-200 dark:border-blue-800/50 p-5">
+          <div className="bg-blue-50 rounded-2xl shadow-sm border border-blue-200 p-5">
             <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">Warranty Active</p>
+              <Shield className="w-5 h-5 text-blue-600" />
+              <p className="text-sm font-semibold text-blue-900">Warranty Active</p>
             </div>
-            <p className="text-xs text-blue-700 dark:text-blue-300">
+            <p className="text-xs text-blue-700">
               {job.warrantyDays}-day repair warranty valid until{' '}
               <strong>{new Date(job.warrantyExpiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}</strong>
             </p>
@@ -212,29 +212,29 @@ function TrackInner() {
 
         {/* Diagnosis notes (if completed) */}
         {job?.diagnosisNotes && (job?.status === 'Completed' || job?.status === 'Delivered') && (
-          <div className="bg-white dark:bg-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/60 p-5">
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-1">Repair Details</p>
-            <p className="text-sm text-slate-600 dark:text-slate-300">{job.diagnosisNotes}</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <p className="text-sm font-semibold text-slate-900 mb-1">Repair Details</p>
+            <p className="text-sm text-slate-600">{job.diagnosisNotes}</p>
           </div>
         )}
 
         {/* Shop contact */}
-        <div className="bg-white dark:bg-card rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700/60 p-5">
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-50 mb-3">Contact Shop</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+          <p className="text-sm font-semibold text-slate-900 mb-3">Contact Shop</p>
           <div className="space-y-2">
             {shop?.phone && (
-              <a href={`tel:${shop.phone}`} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
-                <Phone className="w-4 h-4 text-blue-500 dark:text-blue-400" /> {shop.phone}
+              <a href={`tel:${shop.phone}`} className="flex items-center gap-2 text-sm text-slate-700 hover:text-blue-600">
+                <Phone className="w-4 h-4 text-blue-500" /> {shop.phone}
               </a>
             )}
             {shop?.email && (
-              <a href={`mailto:${shop.email}`} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400">
-                <Mail className="w-4 h-4 text-blue-500 dark:text-blue-400" /> {shop.email}
+              <a href={`mailto:${shop.email}`} className="flex items-center gap-2 text-sm text-slate-700 hover:text-blue-600">
+                <Mail className="w-4 h-4 text-blue-500" /> {shop.email}
               </a>
             )}
             {shop?.address && (
-              <div className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
-                <MapPin className="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" /> {shop.address}
+              <div className="flex items-start gap-2 text-sm text-slate-700">
+                <MapPin className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" /> {shop.address}
               </div>
             )}
           </div>
@@ -252,14 +252,14 @@ function TrackInner() {
 
         {/* Estimated completion (if pending/in-progress) */}
         {(job?.status === 'Pending' || job?.status === 'In Progress') && (
-          <div className="bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800/50 p-4 text-center">
-            <p className="text-xs text-amber-700 dark:text-amber-300">
+          <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-center">
+            <p className="text-xs text-amber-700">
               Your device is being serviced. We'll notify you when it's ready.
             </p>
           </div>
         )}
 
-        <p className="text-center text-[10px] text-slate-500 dark:text-slate-400 pt-2 pb-4">
+        <p className="text-center text-[10px] text-slate-500 pt-2 pb-4">
           Powered by {shop?.name || 'Smart Computers'} · Tracking ID: {job?.jobId}
         </p>
       </div>

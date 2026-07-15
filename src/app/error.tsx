@@ -68,28 +68,28 @@ export default function GlobalError({
 
   return (
     <html lang="en">
-      <body style={{ margin: 0, background: '#0a0e1a', color: '#fff', fontFamily: 'system-ui, sans-serif' }}>
+      <body style={{ margin: 0, background: '#f8fafc', color: '#0f172a', fontFamily: 'system-ui, sans-serif' }}>
         <div style={{
           minHeight: '100vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%)',
-          color: '#fff',
+          background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99, 102, 241, 0.06), transparent), #f8fafc',
+          color: '#0f172a',
           fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           padding: '24px',
         }}>
           <div style={{
-            background: '#101624',
+            background: '#ffffff',
             backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(99, 102, 241, 0.2)',
+            border: '1px solid #e2e8f0',
             borderRadius: '24px',
             padding: '32px',
             maxWidth: '480px',
             width: '100%',
             textAlign: 'center',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-            color: '#fff',
+            boxShadow: '0 20px 60px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04)',
+            color: '#0f172a',
           }}>
             {/* Icon */}
             <div style={{
@@ -106,27 +106,27 @@ export default function GlobalError({
               <AlertTriangle style={{ width: 36, height: 36, color: '#fff' }} />
             </div>
 
-            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: '#fff' }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, color: '#0f172a' }}>
               Something went wrong
             </h1>
-            <p style={{ fontSize: 14, color: '#94a3b8', marginBottom: 16, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 14, color: '#64748b', marginBottom: 16, lineHeight: 1.6 }}>
               The app hit an unexpected error. Don't worry — your data in Google Sheets is safe.
               Try reloading. If the problem persists, click "Clear & Reload".
             </p>
 
             {/* Error details (collapsible) */}
             <details style={{
-              background: 'rgba(127,127,127,0.08)',
+              background: '#f8fafc',
               borderRadius: '12px',
               padding: '12px',
               margin: '16px 0',
               textAlign: 'left',
               fontSize: 11,
               fontFamily: 'monospace',
-              color: '#fca5a5',
-              border: '1px solid rgba(127,127,127,0.15)',
+              color: '#b91c1c',
+              border: '1px solid #e2e8f0',
             }}>
-              <summary style={{ cursor: 'pointer', color: '#cbd5e1', fontWeight: 600 }}>
+              <summary style={{ cursor: 'pointer', color: '#475569', fontWeight: 600 }}>
                 <Bug style={{ width: 14, height: 14, display: 'inline', marginRight: 6 }} />
                 Error details
               </summary>
@@ -156,6 +156,7 @@ export default function GlobalError({
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
+                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)',
               }}
             >
               <RefreshCw style={{ width: 18, height: 18 }} />
@@ -165,9 +166,9 @@ export default function GlobalError({
             <button
               onClick={handleGoHome}
               style={{
-                background: 'rgba(127,127,127,0.15)',
-                color: '#fff',
-                border: '1px solid rgba(127,127,127,0.3)',
+                background: '#ffffff',
+                color: '#0f172a',
+                border: '1px solid #e2e8f0',
                 padding: '14px 28px',
                 borderRadius: 12,
                 fontSize: 15,

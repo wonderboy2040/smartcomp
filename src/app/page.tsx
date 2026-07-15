@@ -5,13 +5,12 @@ import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
-import { useTheme } from '@/lib/theme-context'
 import { SetupWizard } from '@/components/SetupWizard'
 import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Monitor
+  Menu, X, Sparkles, ChevronRight, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette
 } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
@@ -84,7 +83,6 @@ function HomeInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
-  const { theme, resolvedTheme, toggleTheme } = useTheme()
   // Track which panels have been activated at least once — they stay mounted
   // afterwards so switching back is instant, but we don't load all 20 on first paint.
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab]))
@@ -254,38 +252,9 @@ function HomeInner() {
 
         {/* Footer */}
         <div className="p-3 flex-shrink-0 safe-bottom space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {/* Theme toggle */}
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-slate-300 transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
-          >
-            <span className="flex items-center gap-2">
-              {theme === 'light' && <Moon className="w-3.5 h-3.5" />}
-              {theme === 'dark' && <Sun className="w-3.5 h-3.5 text-amber-400" />}
-              {theme === 'system' && <Monitor className="w-3.5 h-3.5 text-blue-400" />}
-              <span>
-                {theme === 'light' && 'Dark Mode'}
-                {theme === 'dark' && 'System Mode'}
-                {theme === 'system' && `System (${resolvedTheme === 'dark' ? 'Dark' : 'Light'})`}
-              </span>
-            </span>
-            <span
-              className="relative w-10 h-5 rounded-full transition-all flex-shrink-0"
-              style={{ background: resolvedTheme === 'dark' ? '#6366f1' : 'rgba(255,255,255,0.1)' }}
-            >
-              <span
-                className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
-                style={{
-                  left: resolvedTheme === 'dark' ? '22px' : '2px',
-                  background: resolvedTheme === 'dark' ? '#fff' : '#94a3b8',
-                }}
-              />
-            </span>
-          </button>
           <div className="rounded-xl p-2.5 flex items-center gap-1.5" style={{ background: 'rgba(255,255,255,0.04)' }}>
             <Sparkles className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-            <span className="text-[10px] text-slate-300">v6.0.0 · Pro Edition Fixed</span>
+            <span className="text-[10px] text-slate-300">v6.0.0 · Premium Light</span>
             <span className="ml-auto w-2 h-2 bg-emerald-400 rounded-full animate-pulse" title="System healthy" />
           </div>
           <button
@@ -334,17 +303,8 @@ function HomeInner() {
             </div>
             <span className="font-semibold text-sm truncate text-foreground">{shopName}</span>
           </div>
-          {/* Theme toggle on mobile */}
-          <button
-            onClick={toggleTheme}
-            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
-            aria-label="Toggle theme"
-            title={`Theme: ${theme}`}
-          >
-            {theme === 'light' && <Moon className="w-5 h-5 text-foreground" />}
-            {theme === 'dark' && <Sun className="w-5 h-5 text-amber-400" />}
-            {theme === 'system' && <Monitor className="w-5 h-5 text-blue-500" />}
-          </button>
+          {/* Spacer to balance the layout (theme toggle removed — site is locked to light) */}
+          <div className="w-11 h-11" aria-hidden="true" />
         </header>
 
         <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom">
