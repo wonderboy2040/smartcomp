@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
     const allSuppliers = await listRows<any>('Suppliers')
     const suppliers = allSuppliers.filter((s) => supplierIds.includes(s.id))
 
-    const results = []
+    const results: any[] = []
     const cloudApiOn = isCloudApiConfigured()
     const itemsListText = items.map((i, idx) => `${idx + 1}. ${String(i?.name || '')}${i?.sku ? ` (SKU: ${i.sku})` : ''}`).join('\n')
 

@@ -162,7 +162,7 @@ export async function nextNumber(prefix: string, existing: { number: string | nu
 }
 
 export function numberToWords(num: number): string {
-  if (num === 0) return 'Zero'
+  if (num === 0) return 'Rupees Zero Only'
   const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
   const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
   const inWords = (n: number): string => {
@@ -175,12 +175,10 @@ export function numberToWords(num: number): string {
   }
   const rupees = Math.floor(num)
   const paise = Math.round((num - rupees) * 100)
-  let words = 'Rs. ' + inWords(rupees) + ' Only'
-  if (paise > 0) words = 'Rs. ' + inWords(rupees) + ' and ' + inWords(paise) + ' Paise Only'
+  let words = 'Rupees ' + inWords(rupees) + ' Only'
+  if (paise > 0) words = 'Rupees ' + inWords(rupees) + ' and ' + inWords(paise) + ' Paise Only'
   return words
 }
-
-// ===== NEW v3.0 CALCULATIONS =====
 
 export function calculateProfitMargin(cost: number, selling: number): number {
   if (selling === 0) return 0
@@ -212,7 +210,6 @@ export function calculateDiscount(original: number, discountPercent: number): { 
   return { discountAmount, final: round2(original - discountAmount) }
 }
 
-// Service profit sharing calculation
 export function calculateServiceProfitShare(serviceCharge: number, partsProfit: number, engineerPercent: number = 50): {
   engineerService: number
   adminService: number
@@ -237,7 +234,6 @@ export function calculateServiceProfitShare(serviceCharge: number, partsProfit: 
   }
 }
 
-// AMC contract helpers
 export function calculateAMCExpiry(startDate: string, durationMonths: number): string {
   const start = new Date(startDate)
   start.setMonth(start.getMonth() + durationMonths)

@@ -20,11 +20,7 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 2 * 60 * 1000 // v5.0 ultra: 2 min client cache — was 60s.
-// Server-side sheets-client already caches for 90s, so client cache of 2 min
-// means at most ONE Apps Script call per endpoint every ~2-3 min even with
-// aggressive tab switching. This was the #1 cause of "site lag" — every panel
-// remount was firing fresh fetches.
+const STALE_MS = 60 * 1000 // v4.0 ultra: 60s for ultra high speed - fewer Apps Script calls
 const RETRY_ATTEMPTS = 1 // Reduced from 2 to 1 for faster failure feedback
 const RETRY_DELAY = 500 // Reduced from 1000 to 500ms for faster retry
 
@@ -233,13 +229,13 @@ export async function apiPost(url: string, body: any) {
 
     for (const key of affectedKeys) {
       mutate<any[]>(key, (prev) =>
-        prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : prev
+        prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : []
       )
     }
     return data
   } catch (e) {
     for (const key of affectedKeys) {
-      mutate<any[]>(key, (prev) => prev ? prev.filter((x) => x.id !== tempId) : prev)
+      mutate<any[]>(key, (prev) => (prev ? prev.filter((x) => x.id !== tempId) : []))
     }
     throw e
   }
@@ -316,14 +312,14 @@ export async function apiPostUltraFast(url: string, body: any, options: { instan
 
       for (const key of affectedKeys) {
         mutate<any[]>(key, (prev) =>
-          prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false, _optimistic: false } : x)) : prev
+          prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false, _optimistic: false } : x)) : []
         )
       }
       return data
     } catch (e) {
       // On failure, keep temp but mark as failed, or rollback
       for (const key of affectedKeys) {
-        mutate<any[]>(key, (prev) => prev ? prev.map((x) => x.id === tempId ? { ...x, _pending: false, _failed: true } : x) : prev)
+        mutate<any[]>(key, (prev) => (prev ? prev.map((x) => x.id === tempId ? { ...x, _pending: false, _failed: true } : x) : []))
       }
       throw e
     }

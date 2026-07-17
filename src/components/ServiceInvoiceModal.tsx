@@ -386,7 +386,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                     <div style={{ background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px' }}>
                       <div style={{ fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, color: '#6b7280', letterSpacing: '0.5px', marginBottom: '6px' }}>Amount in Words</div>
                       <div style={{ fontSize: '12px', color: '#111827', fontWeight: 500, lineHeight: '1.4' }}>
-                        {numberToWords(tot)} Only
+                        {numberToWords(tot)}
                       </div>
                     </div>
                   </div>

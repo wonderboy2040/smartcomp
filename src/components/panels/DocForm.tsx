@@ -113,17 +113,12 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
   }, [stockItems, itemSearch])
 
   // Discount percent handler
-  // BUGFIX (v6.2.1): previously this effect only watched `discountPercent`,
-  // so editing items (which changes `calc.subtotal`) left the discount-Rs
-  // value stale until the user touched the % field again. Now we also react
-  // to `calc.subtotal` so the discount auto-recomputes whenever items change.
   useEffect(() => {
     if (discountPercent > 0) {
       const disc = (calc.subtotal * discountPercent) / 100
       setDiscount(Math.round(disc))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [discountPercent, calc.subtotal])
+  }, [discountPercent])
 
   const addStockItem = (item: any) => {
     if (Number(item.quantity) <= 0) {
