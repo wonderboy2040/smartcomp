@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useFetch, apiPost, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,18 +30,20 @@ export function QuotationsPanel() {
     undefined
   )
 
-  const filtered = (quotations || []).filter((q) => {
-    if (statusFilter !== 'all' && q.status !== statusFilter) return false
-    if (search) {
-      const s = search.toLowerCase()
-      return (
-        q.number.toLowerCase().includes(s) ||
-        String(q?.customer?.name || q?.customerName || '').toLowerCase().includes(s) ||
-        String(q?.customer?.phone || q?.customerPhone || '').includes(s)
-      )
-    }
-    return true
-  })
+  const filtered = useMemo(() => {
+    return (quotations || []).filter((q) => {
+      if (statusFilter !== 'all' && q.status !== statusFilter) return false
+      if (search) {
+        const s = search.toLowerCase()
+        return (
+          q.number.toLowerCase().includes(s) ||
+          String(q?.customer?.name || q?.customerName || '').toLowerCase().includes(s) ||
+          String(q?.customer?.phone || q?.customerPhone || '').includes(s)
+        )
+      }
+      return true
+    })
+  }, [quotations, statusFilter, search])
 
   const handleCreate = () => {
     setEditing(null)

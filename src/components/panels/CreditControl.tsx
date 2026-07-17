@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { useFetch } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -29,6 +30,10 @@ export function CreditControlPanel() {
 
   const customers = data?.customers || []
   const summary = data?.summary || { totalOutstanding: 0, customersWithDues: 0, onHoldCount: 0, bucketCounts: {}, bucketAmounts: {} }
+
+  const dueCustomers = useMemo(() => {
+    return customers.filter((c: any) => c.creditBalance > 0 || c.onHold)
+  }, [customers])
 
   return (
     <div className="space-y-4">
@@ -115,13 +120,13 @@ export function CreditControlPanel() {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">Loading...</TableCell></TableRow>
-                ) : customers.filter((c: any) => c.creditBalance > 0 || c.onHold).length === 0 ? (
+                ) : dueCustomers.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">
                     <ShieldCheck className="w-12 h-12 mx-auto mb-2 text-emerald-300" />
                     No outstanding dues. All customers are clear!
                   </TableCell></TableRow>
                 ) : (
-                  customers.filter((c: any) => c.creditBalance > 0 || c.onHold).map((c: any) => (
+                  dueCustomers.map((c: any) => (
                     <TableRow key={c.id} className={c.onHold ? 'bg-red-50' : ''}>
                       <TableCell>
                         <p className="font-medium text-sm">{c.name}</p>

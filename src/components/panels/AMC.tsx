@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -78,13 +78,16 @@ export function AMCPanel() {
     }
   }
 
-  const stats = {
-    total: (contracts || []).length,
-    active: (contracts || []).filter((c) => c.dynamicStatus === 'active').length,
-    expiring: (contracts || []).filter((c) => c.dynamicStatus === 'expiring').length,
-    expired: (contracts || []).filter((c) => c.dynamicStatus === 'expired').length,
-    totalFee: (contracts || []).filter((c) => c.dynamicStatus === 'active').reduce((s, c) => s + monthlyFee(c), 0),
-  }
+  const stats = useMemo(() => {
+    const list = contracts || []
+    return {
+      total: list.length,
+      active: list.filter((c) => c.dynamicStatus === 'active').length,
+      expiring: list.filter((c) => c.dynamicStatus === 'expiring').length,
+      expired: list.filter((c) => c.dynamicStatus === 'expired').length,
+      totalFee: list.filter((c) => c.dynamicStatus === 'active').reduce((s, c) => s + monthlyFee(c), 0),
+    }
+  }, [contracts])
 
   return (
     <div className="space-y-4">

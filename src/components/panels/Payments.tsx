@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -43,31 +43,44 @@ export function PaymentsPanel() {
     undefined
   )
 
-  const pendingInvoices = (invoices || []).filter(
-    (i) => i.paymentStatus === 'unpaid' || i.paymentStatus === 'partial'
-  )
-
-  const filteredPending = pendingInvoices.filter((i) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return String(i?.number || '').toLowerCase().includes(q) || String(i?.customer?.name || i?.customerName || '').toLowerCase().includes(q)
-  })
-
-  const filteredPayments = (payments || []).filter((p) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      String(p?.invoice?.number || p?.invoiceNumber || '').toLowerCase().includes(q) ||
-      String(p?.invoice?.customer?.name || p?.customerName || '').toLowerCase().includes(q) ||
-      String(p?.type || '').toLowerCase().includes(q)
+  const pendingInvoices = useMemo(() => {
+    return (invoices || []).filter(
+      (i) => i.paymentStatus === 'unpaid' || i.paymentStatus === 'partial'
     )
-  })
+  }, [invoices])
 
-  const totalDue = pendingInvoices.reduce((s, i) => s + i.amountDue, 0)
-  const todayPayments = (payments || []).filter(
-    (p) => new Date(p?.date || Date.now()).toDateString() === new Date().toDateString()
-  )
-  const todayTotal = todayPayments.reduce((s, p) => s + p.amount, 0)
+  const filteredPending = useMemo(() => {
+    return pendingInvoices.filter((i) => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return String(i?.number || '').toLowerCase().includes(q) || String(i?.customer?.name || i?.customerName || '').toLowerCase().includes(q)
+    })
+  }, [pendingInvoices, search])
+
+  const filteredPayments = useMemo(() => {
+    return (payments || []).filter((p) => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (
+        String(p?.invoice?.number || p?.invoiceNumber || '').toLowerCase().includes(q) ||
+        String(p?.invoice?.customer?.name || p?.customerName || '').toLowerCase().includes(q) ||
+        String(p?.type || '').toLowerCase().includes(q)
+      )
+    })
+  }, [payments, search])
+
+  const totalDue = useMemo(() => pendingInvoices.reduce((s, i) => s + (Number(i.amountDue) || 0), 0), [pendingInvoices])
+  
+  const todayPayments = useMemo(() => {
+    const todayStr = new Date().toDateString()
+    return (payments || []).filter(
+      (p) => new Date(p?.date || Date.now()).toDateString() === todayStr
+    )
+  }, [payments])
+
+  const todayTotal = useMemo(() => {
+    return todayPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0)
+  }, [todayPayments])
 
   const handleAddPayment = (invoice: any) => {
     setSelectedInvoice(invoice)

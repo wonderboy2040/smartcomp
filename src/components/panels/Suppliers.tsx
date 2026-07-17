@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,11 +29,13 @@ export function SuppliersPanel() {
     undefined
   )
 
-  const filtered = (suppliers || []).filter((s) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return String(s?.name || '').toLowerCase().includes(q) || String(s?.phone || '').includes(q) || String(s?.company || '').toLowerCase().includes(q)
-  })
+  const filtered = useMemo(() => {
+    return (suppliers || []).filter((s) => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return String(s?.name || '').toLowerCase().includes(q) || String(s?.phone || '').includes(q) || String(s?.company || '').toLowerCase().includes(q)
+    })
+  }, [suppliers, search])
 
   const handleAdd = () => {
     setEditing(null)

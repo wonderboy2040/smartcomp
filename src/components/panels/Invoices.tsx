@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useFetch, apiPost, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,15 +28,17 @@ export function InvoicesPanel() {
 
   const { data: invoices, loading, refetch } = useFetch<any[]>('/api/invoices?limit=200', undefined)
 
-  const filtered = (invoices || []).filter((inv) => {
-    if (statusFilter !== 'all' && inv.paymentStatus !== statusFilter) return false
-    if (typeFilter !== 'all' && inv.paymentType !== typeFilter) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return String(inv?.number || '').toLowerCase().includes(q) || String(inv?.customer?.name || inv?.customerName || '').toLowerCase().includes(q) || String(inv?.customer?.phone || inv?.customerPhone || '').includes(q)
-    }
-    return true
-  })
+  const filtered = useMemo(() => {
+    return (invoices || []).filter((inv) => {
+      if (statusFilter !== 'all' && inv.paymentStatus !== statusFilter) return false
+      if (typeFilter !== 'all' && inv.paymentType !== typeFilter) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return String(inv?.number || '').toLowerCase().includes(q) || String(inv?.customer?.name || inv?.customerName || '').toLowerCase().includes(q) || String(inv?.customer?.phone || inv?.customerPhone || '').includes(q)
+      }
+      return true
+    })
+  }, [invoices, statusFilter, typeFilter, search])
 
   const handleCreate = () => { setEditing(null); setDialogOpen(true) }
   const handleEdit = (invoice: any) => { setEditing(invoice); setDialogOpen(true) }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -41,13 +41,17 @@ export function StockPanel() {
   )
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
 
-  const categories = Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)))
+  const categories = useMemo(() => {
+    return Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)))
+  }, [items])
 
-  const filtered = (items || []).filter((i) => {
-    if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
-    if (showLowOnly && i.quantity > i.minQuantity) return false
-    return true
-  })
+  const filtered = useMemo(() => {
+    return (items || []).filter((i) => {
+      if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
+      if (showLowOnly && Number(i.quantity) > Number(i.minQuantity)) return false
+      return true
+    })
+  }, [items, categoryFilter, showLowOnly])
 
   const handleAdd = () => {
     setEditing(null)

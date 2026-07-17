@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -28,11 +28,17 @@ const STATUS_COLORS: Record<string, string> = {
 export function SerialsPanel() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
 
-  const query = `/api/item-serials${search ? `?search=${encodeURIComponent(search)}` : ''}${statusFilter !== 'all' ? `${search ? '&' : '?'}status=${statusFilter}` : ''}`
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const query = `/api/item-serials${debouncedSearch ? `?search=${encodeURIComponent(debouncedSearch)}` : ''}${statusFilter !== 'all' ? `${debouncedSearch ? '&' : '?'}status=${statusFilter}` : ''}`
   const { data, loading, refetch } = useFetch<any>(query, undefined)
 
   const serials = data?.serials || []

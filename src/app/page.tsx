@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense, lazy, useCallback, useMemo } from 'react'
+import { useState, useEffect, Suspense, lazy, useCallback, useMemo, memo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
@@ -476,7 +476,7 @@ function HomeInner() {
  *   - A Suspense fallback while the panel chunk is loading
  *   - Lazy mounting: only renders children once the panel has ever been activated
  */
-function PanelBoundary({
+const PanelBoundary = memo(function PanelBoundary({
   active,
   id,
   mounted,
@@ -488,8 +488,9 @@ function PanelBoundary({
   children: React.ReactNode
 }) {
   if (!mounted) return null
+  const isSelected = active === id
   return (
-    <div className={active === id ? 'block premium-panel animate-in' : 'hidden'}>
+    <div className={isSelected ? 'block premium-panel animate-in' : 'hidden'}>
       <Suspense
         fallback={
           <div className="flex items-center justify-center py-16">
@@ -501,4 +502,4 @@ function PanelBoundary({
       </Suspense>
     </div>
   )
-}
+})

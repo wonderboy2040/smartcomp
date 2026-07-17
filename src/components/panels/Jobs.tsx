@@ -69,27 +69,32 @@ export function JobsPanel() {
 
   const { data: jobs, loading, refetch } = useFetch<any[]>('/api/jobs', undefined)
 
-  const filtered = (jobs || []).filter((j) => {
-    if (statusFilter !== 'all' && j.status !== statusFilter) return false
-    if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false
-    if (search) {
-      const q = search.toLowerCase()
-      return String(j?.jobId || '').toLowerCase().includes(q) ||
-             String(j?.customerName || '').toLowerCase().includes(q) ||
-             String(j?.customerMobile || '').includes(q) ||
-             String(j?.brandModel || '').toLowerCase().includes(q)
-    }
-    return true
-  })
+  const filtered = useMemo(() => {
+    return (jobs || []).filter((j) => {
+      if (statusFilter !== 'all' && j.status !== statusFilter) return false
+      if (priorityFilter !== 'all' && j.priority !== priorityFilter) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return String(j?.jobId || '').toLowerCase().includes(q) ||
+               String(j?.customerName || '').toLowerCase().includes(q) ||
+               String(j?.customerMobile || '').includes(q) ||
+               String(j?.brandModel || '').toLowerCase().includes(q)
+      }
+      return true
+    })
+  }, [jobs, statusFilter, priorityFilter, search])
 
-  const stats = {
-    total: (jobs || []).length,
-    pending: (jobs || []).filter((j) => j.status === 'Pending').length,
-    progress: (jobs || []).filter((j) => j.status === 'In Progress').length,
-    completed: (jobs || []).filter((j) => j.status === 'Completed').length,
-    delivered: (jobs || []).filter((j) => j.status === 'Delivered').length,
-    highPriority: (jobs || []).filter((j) => j.priority === 'High' && (j.status === 'Pending' || j.status === 'In Progress')).length,
-  }
+  const stats = useMemo(() => {
+    const list = jobs || []
+    return {
+      total: list.length,
+      pending: list.filter((j) => j.status === 'Pending').length,
+      progress: list.filter((j) => j.status === 'In Progress').length,
+      completed: list.filter((j) => j.status === 'Completed').length,
+      delivered: list.filter((j) => j.status === 'Delivered').length,
+      highPriority: list.filter((j) => j.priority === 'High' && (j.status === 'Pending' || j.status === 'In Progress')).length,
+    }
+  }, [jobs])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this job? Job record will be soft-deleted (data safe in Sheets).')) return

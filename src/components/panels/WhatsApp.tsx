@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
 import { safeJsonParse } from '@/lib/utils'
 import { buildEnquiryMessage, generateWhatsAppLink } from '@/lib/whatsapp'
@@ -85,15 +85,16 @@ export function WhatsAppPanel() {
     }
   }, [tab])
 
-  const filteredEnquiries = (enquiries || []).filter((e) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    // Defensive: supplier may be undefined for soft-deleted/old enquiries
-    const supplierName = String(e?.supplier?.name || e?.supplierName || '').toLowerCase()
-    const status = String(e?.status || '').toLowerCase()
-    const supplierPhone = String(e?.supplier?.phone || e?.supplierPhone || '').toLowerCase()
-    return supplierName.includes(q) || status.includes(q) || supplierPhone.includes(q)
-  })
+  const filteredEnquiries = useMemo(() => {
+    return (enquiries || []).filter((e) => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      const supplierName = String(e?.supplier?.name || e?.supplierName || '').toLowerCase()
+      const status = String(e?.status || '').toLowerCase()
+      const supplierPhone = String(e?.supplier?.phone || e?.supplierPhone || '').toLowerCase()
+      return supplierName.includes(q) || status.includes(q) || supplierPhone.includes(q)
+    })
+  }, [enquiries, search])
 
   const handleSendEnquiry = async (payload: {
     supplierIds: string[]
@@ -271,9 +272,9 @@ export function WhatsAppPanel() {
     }
   }
 
-  const sentCount = (enquiries || []).filter((e) => e.status === 'sent').length
-  const respondedCount = (enquiries || []).filter((e) => e.status === 'responded').length
-  const updatedCount = (enquiries || []).filter((e) => e.status === 'rate_updated').length
+  const sentCount = useMemo(() => (enquiries || []).filter((e) => e.status === 'sent').length, [enquiries])
+  const respondedCount = useMemo(() => (enquiries || []).filter((e) => e.status === 'responded').length, [enquiries])
+  const updatedCount = useMemo(() => (enquiries || []).filter((e) => e.status === 'rate_updated').length, [enquiries])
 
   return (
     <div className="space-y-4">
