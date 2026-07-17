@@ -261,7 +261,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                 <div className="border border-slate-300 rounded p-3 bg-slate-50/50 flex flex-col justify-between">
                   <div>
                     <p className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-1">Payment Status</p>
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border ${doc.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : doc.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border ${doc.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : doc.paymentStatus === 'partial' ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-red-100 text-red-800 border-red-300'}`}>
                       {doc.paymentStatus || 'UNPAID'}
                     </span>
                   </div>
@@ -427,8 +427,8 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
             </div>
           </div>
 
-          {/* Bottom Non-Overlapping Signature & Showcase Section */}
-          <div className="mt-8 pt-4 border-t border-slate-300 space-y-4">
+          {/* Bottom Section: Signature + Perfectly Centered Balanced Poster */}
+          <div className="mt-8 pt-4 border-t border-slate-300 space-y-6">
             {/* Authorized Signature Block */}
             <div className="flex justify-end pr-2">
               <div className="text-center min-w-[200px]">
@@ -440,26 +440,28 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             </div>
 
-            {/* Dynamic Large Readable Ad Banner Variants */}
+            {/* Dynamic Centered Poster Showcase */}
             {bannerVariant === 'flyer' ? (
-              <div className="rounded overflow-hidden border border-slate-300 shadow-sm">
+              <div className="flex justify-center w-full">
                 <img
                   src={doc.productImages?.flyer || '/posters/smartcomputers-a4-flyer-landscape.png'}
                   alt="Smart Computers Premium Flyer"
-                  className="w-full h-32 sm:h-36 object-cover block"
+                  className="w-[82%] max-w-[150mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
+                  style={{ aspectRatio: '1376 / 768' }}
                 />
               </div>
             ) : bannerVariant === 'grid' ? (
-              <div className="rounded overflow-hidden border border-slate-300 shadow-sm">
+              <div className="flex justify-center w-full">
                 <img
                   src={doc.productImages?.productgrid || '/posters/smartcomputers-product-grid.png'}
                   alt="Smart Computers Product Grid Poster"
-                  className="w-full h-32 sm:h-36 object-cover block"
+                  className="w-[82%] max-w-[150mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
+                  style={{ aspectRatio: '1408 / 718' }}
                 />
               </div>
             ) : bannerVariant === 'featured' ? (
               <div
-                className="p-3 rounded border flex items-center justify-between gap-3"
+                className="p-3 rounded border flex items-center justify-between gap-3 max-w-[150mm] mx-auto"
                 style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
               >
                 <div>
@@ -483,7 +485,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
             ) : (
               /* Default: 'strip' */
               <div
-                className="p-3 rounded border flex items-center justify-between gap-3 text-xs"
+                className="p-3 rounded border flex items-center justify-between gap-3 text-xs max-w-[150mm] mx-auto"
                 style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
               >
                 <span className="font-bold uppercase text-sm" style={{ color: currentTpl.primary }}>

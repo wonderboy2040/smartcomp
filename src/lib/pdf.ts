@@ -201,8 +201,8 @@ export const PDF_TEMPLATES: PdfTemplate[] = [
 ]
 
 export const AD_BANNER_VARIANTS = [
-  { id: 'flyer', name: 'Premium Flyer', description: 'Large readable A4 promo flyer poster' },
-  { id: 'grid', name: 'Product Grid', description: 'High-res 4x4 product grid poster graphic' },
+  { id: 'flyer', name: 'Premium Flyer', description: 'Centered high-res readable flyer poster' },
+  { id: 'grid', name: 'Product Grid', description: 'Centered high-res 4x4 product grid poster' },
   { id: 'featured', name: 'Featured Mix', description: 'Headline panel + product showcase' },
   { id: 'strip', name: 'Compact Strip', description: 'Minimal image pills + Call/Visit CTA' },
 ] as const
@@ -289,14 +289,34 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const margin = 12
   const usableWidth = pageWidth - margin * 2
 
-  // ===== PAGE GEOMETRY & RESERVED ZONES (Large Readable Poster - Zero Overlap) =====
+  // ===== OPTIMIZED POSTER BANNER & GUARANTEED AUTHORIZED SIGNATURE POSITION =====
+  const variant = data.adBannerVariant || 'flyer'
+
+  // Centered poster dimensions (Clean & readable with ~55mm-62mm height)
+  const posterW = 125 // 125mm width centered in 186mm printable space
+  let posterH = 55
+
+  if (variant === 'flyer') {
+    posterH = posterW / 1.79167 // ~69.8mm
+  } else if (variant === 'grid') {
+    posterH = posterW / 1.961 // ~63.7mm
+  } else if (variant === 'featured') {
+    posterH = 38
+  } else {
+    posterH = 22
+  }
+
   const FOOTER_Y = 289
   const FOOTER_LINE = 286
-  const AD_BAND_BOTTOM = 283
-  const AD_BAND_HEIGHT = 38 // Large 38mm high poster showcase for crystal clear readability
-  const AD_BAND_TOP = AD_BAND_BOTTOM - AD_BAND_HEIGHT // 245mm
-  const SIG_LINE_Y = 237 // Signature line position
-  const CONTENT_LIMIT = 225 // Content stops before 225mm to leave space for Signature + Large Flyer Banner
+  const AD_BAND_BOTTOM = 282
+  const AD_BAND_TOP = AD_BAND_BOTTOM - posterH // Poster top
+  const posterX = margin + (usableWidth - posterW) / 2
+
+  // Authorized Signatory is drawn at FIXED vertical clearance ABOVE poster image!
+  // Signature Line at 192mm, "Authorized Signatory" finishes at 196mm.
+  // Poster starts at ~212mm-218mm -> CLEAR 16mm - 22mm WHITE SPACE GAP ABOVE POSTER IMAGE!
+  const SIG_LINE_Y = Math.min(202, AD_BAND_TOP - 16)
+  const CONTENT_LIMIT = SIG_LINE_Y - 12 // Dynamic table/totals end before signature line
 
   let pageNumber = 1
   const pageEnds: Record<number, number> = {}
@@ -543,9 +563,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     alternateRowStyles: {
       fillColor: N.bgRow,
     },
-    didDrawPage: () => {
-      // Keep track of table position
-    },
+    didDrawPage: () => {},
   })
 
   y = (doc as any).lastAutoTable.finalY + 4
@@ -582,7 +600,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     y = (doc as any).lastAutoTable.finalY + 4
   }
 
-  addPageIfNeeded(30)
+  addPageIfNeeded(28)
 
   // ===== TOTALS & AMOUNT IN WORDS SECTION =====
   const totalsW = 75
@@ -679,7 +697,10 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   y = Math.max(currentTotY + 4, leftY + 4)
 
-  // ===== GUARANTEED SIGNATURE BLOCK POSITIONING =====
+  // Check if content fits before signature block; if not, move to page 2!
+  addPageIfNeeded(35)
+
+  // ===== AUTHORIZED SIGNATURE BLOCK (Positioned STRICTLY ABOVE Poster Banner) =====
   doc.setPage(pageNumber)
   const sigBoxX = pageWidth - margin - 50
   
@@ -697,135 +718,58 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setTextColor(...N.textLight)
   doc.text('Authorized Signatory', sigBoxX + 25, SIG_LINE_Y + 4, { align: 'center' })
 
-  // ===== LARGE HIGH-RESOLUTION PROMO POSTER AD BANNER (38mm High - Best Readability) =====
-  const AD_PRODUCTS = [
-    { key: 'computers', label: 'Computers' },
-    { key: 'laptop', label: 'Laptops' },
-    { key: 'printers', label: 'Printers' },
-    { key: 'accessories', label: 'Accessories' },
-  ]
-
+  // ===== PERFECTLY CENTERED POSTER SHOWCASE AD BANNER =====
   const drawAdBanner = (topY: number, bandH: number) => {
-    const bx = margin
-    const bw = usableWidth
     const by = topY
     const imgs: Record<string, string> = data.productImages || {}
     const phone = data.shop.phone || ''
-    const variant = data.adBannerVariant || 'flyer'
 
-    // Premium Flyer Poster Graphic
+    // Premium Flyer Poster Graphic (Centered)
     if (variant === 'flyer') {
       if (imgs['flyer']) {
         try {
-          doc.addImage(imgs['flyer'], 'PNG', bx, by, bw, bandH)
+          doc.addImage(imgs['flyer'], 'PNG', posterX, by, posterW, bandH)
           return
         } catch {}
       }
     }
 
-    // High-Res Product Grid Poster Graphic
+    // High-Res Product Grid Poster Graphic (Centered)
     if (variant === 'grid') {
       if (imgs['productgrid']) {
         try {
-          doc.addImage(imgs['productgrid'], 'PNG', bx, by, bw, bandH)
+          doc.addImage(imgs['productgrid'], 'PNG', posterX, by, posterW, bandH)
           return
         } catch {}
       }
     }
 
-    // Fallback Background Card
+    // Fallback Card (Centered)
     doc.setFillColor(...mixColor(A, N.white, 0.94))
     doc.setDrawColor(...A)
     doc.setLineWidth(0.3)
-    doc.roundedRect(bx, by, bw, bandH, 1, 1, 'FD')
+    doc.roundedRect(posterX, by, posterW, bandH, 1, 1, 'FD')
 
-    if (variant === 'featured') {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(...A)
-      doc.text('WE ALSO SUPPLY:', bx + 6, by + 16)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(...A)
+    doc.text('SMART COMPUTERS IT SOLUTIONS', posterX + 6, by + 10)
 
-      const startX = bx + 45
-      const tileGap = 3
-      const tileW = (bw - 52 - tileGap * 3) / 4
-      const imgSize = 16
-      const tileH = bandH - 6
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...N.textMid)
+    doc.text('Computers • Laptops • Printers • CCTV • Accessories & Repair Center', posterX + 6, by + 15)
 
-      AD_PRODUCTS.forEach((p, i) => {
-        const tx = startX + i * (tileW + tileGap)
-        const ty = by + 3
-
-        doc.setFillColor(...N.white)
-        doc.setDrawColor(...mixColor(A, N.white, 0.7))
-        doc.setLineWidth(0.2)
-        doc.roundedRect(tx, ty, tileW, tileH, 1, 1, 'FD')
-
-        if (imgs[p.key]) {
-          try {
-            doc.addImage(imgs[p.key], 'PNG', tx + (tileW - imgSize) / 2, ty + 2, imgSize, imgSize)
-          } catch {}
-        }
-
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
-        doc.setTextColor(...N.textDark)
-        doc.text(p.label, tx + tileW / 2, ty + tileH - 2, { align: 'center' })
-      })
-      return
-    }
-
-    if (variant === 'strip') {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(...A)
-      doc.text('SMART COMPUTERS IT SOLUTIONS', bx + 6, by + 18)
-
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.setTextColor(...N.textMid)
-      doc.text('Computers • Laptops • Printers • CCTV • Accessories & Repair Center', bx + 6, by + 26)
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(...N.textDark)
-      doc.text(phone ? `Call / WhatsApp: ${phone}` : 'Authorized Center', bx + bw - 6, by + 20, { align: 'right' })
-      return
-    }
-
-    // Default Fallback: Clean 4 Product Cards
-    const tileGap = 4
-    const totalGap = tileGap * (AD_PRODUCTS.length - 1)
-    const tileW = (bw - 12 - totalGap) / AD_PRODUCTS.length
-    const startX = bx + 6
-    const imgSize = 18
-    const tileH = bandH - 6
-
-    AD_PRODUCTS.forEach((p, i) => {
-      const tx = startX + i * (tileW + tileGap)
-      const ty = by + 3
-
-      doc.setFillColor(...N.white)
-      doc.setDrawColor(...mixColor(A, N.white, 0.7))
-      doc.setLineWidth(0.2)
-      doc.roundedRect(tx, ty, tileW, tileH, 1, 1, 'FD')
-
-      if (imgs[p.key]) {
-        try {
-          doc.addImage(imgs[p.key], 'PNG', tx + (tileW - imgSize) / 2, ty + 2, imgSize, imgSize)
-        } catch {}
-      }
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7.5)
-      doc.setTextColor(...N.textDark)
-      doc.text(p.label, tx + tileW / 2, ty + tileH - 3, { align: 'center' })
-    })
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...N.textDark)
+    doc.text(phone ? `Call / WhatsApp: ${phone}` : 'Authorized Center', posterX + posterW - 6, by + 12, { align: 'right' })
   }
 
   // Draw Ad Banner on all pages
   for (let i = 1; i <= pageNumber; i++) {
     doc.setPage(i)
-    drawAdBanner(AD_BAND_TOP, AD_BAND_HEIGHT)
+    drawAdBanner(AD_BAND_TOP, posterH)
     drawFooter(i, pageNumber)
   }
 
