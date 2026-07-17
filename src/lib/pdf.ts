@@ -839,7 +839,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const bottomSectionY = y
   const remainingSpace = CONTENT_BOTTOM - y // space left above the band
   const colWidth = (usableWidth - 4) / 2
-  const rightX = margin + colWidth + 4
+  const rightColX = margin + colWidth + 4
   let leftY = bottomSectionY
   let rightY = bottomSectionY
 
@@ -885,18 +885,18 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // Terms & Notes (only if there is room)
   if (remainingSpace > 40 && (data.terms || data.notes)) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...A)
-    doc.text(data.notes && data.terms ? 'TERMS & NOTES' : data.terms ? 'TERMS & CONDITIONS' : 'NOTES', rightX, rightY)
+    doc.text(data.notes && data.terms ? 'TERMS & NOTES' : data.terms ? 'TERMS & CONDITIONS' : 'NOTES', rightColX, rightY)
     rightY += 3.5
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(...N.textMid)
     const combinedText = `${data.terms ? data.terms : ''}${data.terms && data.notes ? '\n' : ''}${data.notes ? data.notes : ''}`
     const termLines = doc.splitTextToSize(combinedText, colWidth - 4)
     const limitedLines = termLines.slice(0, 8)
-    doc.text(limitedLines, rightX, rightY)
+    doc.text(limitedLines, rightColX, rightY)
     rightY += limitedLines.length * 2.8 + 2
   } else if (remainingSpace <= 40) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(...N.textLight)
-    doc.text('Thank you for your business!', rightX, rightY)
-    doc.text(`Warranty as per manufacturer | ${data.shop.name}`, rightX, rightY + 3)
+    doc.text('Thank you for your business!', rightColX, rightY)
+    doc.text(`Warranty as per manufacturer | ${data.shop.name}`, rightColX, rightY + 3)
   }
 
   y = Math.max(leftY, rightY) + 4
