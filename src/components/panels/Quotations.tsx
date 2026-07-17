@@ -13,7 +13,6 @@ import {
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import { DocForm } from './DocForm'
-import { PdfPreview } from './Invoices'
 import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2, Edit3 } from 'lucide-react'
 
 export function QuotationsPanel() {
@@ -22,7 +21,7 @@ export function QuotationsPanel() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
-  const [previewId, setPreviewId] = useState<string | null>(null)
+  const { data: shopSettings } = useFetch<any>('/api/shop', undefined)
 
   const { data: quotations, loading, refetch } = useFetch<any[]>(
     `/api/quotations?limit=200`,
@@ -172,7 +171,7 @@ export function QuotationsPanel() {
                           <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setPreviewId(q.id)}>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => window.open(`/api/pdf/${q.id}?type=quotation&template=${encodeURIComponent(shopSettings?.pdfTemplate || 'tally-classic')}&banner=${encodeURIComponent(shopSettings?.adBannerVariant || 'grid')}`, '_blank')}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(q)} title="Edit Quotation">
@@ -272,7 +271,7 @@ export function QuotationsPanel() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setPreviewId(q.id)}
+                              onClick={() => window.open(`/api/pdf/${q.id}?type=quotation&template=${encodeURIComponent(shopSettings?.pdfTemplate || 'tally-classic')}&banner=${encodeURIComponent(shopSettings?.adBannerVariant || 'grid')}`, '_blank')}
                               title="View PDF"
                             >
                               <Eye className="w-3.5 h-3.5" />
@@ -325,12 +324,6 @@ export function QuotationsPanel() {
         }}
       />
 
-      {previewId && (
-        <PdfPreview
-          url={`/api/pdf/${previewId}?type=quotation`}
-          onClose={() => setPreviewId(null)}
-        />
-      )}
     </div>
   )
 }

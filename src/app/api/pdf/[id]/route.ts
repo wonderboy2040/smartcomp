@@ -17,11 +17,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = await params
     const url = new URL(req.url)
     const type = url.searchParams.get('type') || 'invoice'
-    const templateId = url.searchParams.get('template') || 'indigo-clean'
-    const bannerVariant = url.searchParams.get('banner') || 'grid'
 
     const shopRows = await listRows<any>('Shop')
     const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
+
+    const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
+    const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)

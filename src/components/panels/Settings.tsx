@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useFetch, apiPost, apiPut } from '@/lib/api'
+import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,9 +82,24 @@ function ShopSettings() {
   const [saving, setSaving] = useState(false)
 
   const { data: shop, refetch } = useFetch<any>('/api/shop', undefined)
+  const { data: recentInvoices } = useFetch<any[]>('/api/invoices?limit=1', undefined)
+
+  const designTemplate = form.pdfTemplate || 'tally-classic'
+  const designBanner = form.adBannerVariant || 'grid'
+  const previewInvoiceId = (recentInvoices && recentInvoices[0] && recentInvoices[0].id) || null
+  // Debounce the live preview so rapid template/banner toggles don't each
+  // trigger a full (heavy) server-side PDF regeneration + iframe reload.
+  const [debouncedDesign, setDebouncedDesign] = useState({ template: designTemplate, banner: designBanner })
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDesign({ template: designTemplate, banner: designBanner }), 450)
+    return () => clearTimeout(t)
+  }, [designTemplate, designBanner])
+  const previewUrl = previewInvoiceId
+    ? `/api/pdf/${previewInvoiceId}?type=invoice&template=${encodeURIComponent(debouncedDesign.template)}&banner=${encodeURIComponent(debouncedDesign.banner)}`
+    : null
 
   useEffect(() => {
-    if (shop) setForm({ ...shop })
+    if (shop) setForm({ ...shop, pdfTemplate: shop.pdfTemplate || 'tally-classic', adBannerVariant: shop.adBannerVariant || 'grid' })
   }, [shop])
 
   const handleSave = async () => {
@@ -177,6 +193,76 @@ function ShopSettings() {
             <Textarea value={form.termsQuotation || ''} onChange={(e) => setForm({ ...form, termsQuotation: e.target.value })} rows={2} className="mt-1" />
           </div>
         </div>
+        {/* ===== Invoice & Quotation Design (template + banner + live preview) ===== */}
+        <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50 to-white shadow-sm mt-4">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 text-indigo-600" />
+              </div>
+              Invoice &amp; Quotation Design
+            </CardTitle>
+            <CardDescription>Choose the default PDF template &amp; ad banner. Saved to settings and used for every Invoice, Quotation &amp; Service Invoice.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-2">PDF Template</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                {PDF_TEMPLATES.map((tpl) => {
+                  const active = (form.pdfTemplate || 'tally-classic') === tpl.id
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setForm({ ...form, pdfTemplate: tpl.id })}
+                      className={`p-2.5 rounded-xl border-2 text-left transition-all ${active ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="w-4 h-4 rounded" style={{ background: `rgb(${tpl.accent.join(',')})` }} />
+                        <span className="text-[11px] font-bold text-slate-900 truncate">{tpl.name}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-500 line-clamp-2 leading-tight">{tpl.description}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold text-slate-700 mb-2">Ad Banner (bottom showcase)</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {AD_BANNER_VARIANTS.map((v) => {
+                  const active = (form.adBannerVariant || 'grid') === v.id
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setForm({ ...form, adBannerVariant: v.id })}
+                      className={`p-2.5 rounded-xl border-2 text-left transition-all ${active ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                    >
+                      <span className="text-[11px] font-bold text-slate-900">{v.name}</span>
+                      <p className="text-[9px] text-slate-500 line-clamp-2 leading-tight mt-0.5">{v.description}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-700">Live Preview</p>
+                {previewUrl && <a href={previewUrl} download target="_blank" rel="noreferrer"><Button size="sm" variant="outline" className="h-7 text-[11px]">Download PDF</Button></a>}
+              </div>
+              {previewUrl ? (
+                <iframe src={previewUrl} title="Invoice design preview" className="w-full h-[520px] rounded-xl border border-slate-200 bg-white" />
+              ) : (
+                <div className="w-full h-40 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-center text-xs text-slate-500 px-4">
+                  Create at least one invoice to see a live preview here. Your saved template &amp; banner will apply automatically.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
         <Button onClick={handleSave} disabled={saving} className="bg-slate-900 hover:bg-slate-800 mt-2 w-full sm:w-auto">
           {saving ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Saving...</> : 'Save Shop Info'}
         </Button>
