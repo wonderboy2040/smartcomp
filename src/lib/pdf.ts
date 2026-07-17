@@ -51,6 +51,7 @@ export interface PdfDocData {
   bankDetails?: ShopInfo
   productImages?: any
   adBannerVariant?: string
+  copyType?: 'ORIGINAL FOR RECIPIENT' | 'DUPLICATE FOR TRANSPORTER' | 'TRIPLICATE FOR SUPPLIER'
 }
 
 export interface PdfTemplate {
@@ -201,8 +202,8 @@ export const PDF_TEMPLATES: PdfTemplate[] = [
 ]
 
 export const AD_BANNER_VARIANTS = [
-  { id: 'flyer', name: 'Premium Flyer', description: 'Centered high-res readable flyer poster' },
-  { id: 'grid', name: 'Product Grid', description: 'Centered high-res 4x4 product grid poster' },
+  { id: 'flyer', name: 'Premium Flyer', description: '1000x285 px Ultra-Premium Horizontal Flyer' },
+  { id: 'grid', name: 'Product Grid', description: '1000x285 px 4x4 Product Grid Poster Banner' },
   { id: 'featured', name: 'Featured Mix', description: 'Headline panel + product showcase' },
   { id: 'strip', name: 'Compact Strip', description: 'Minimal image pills + Call/Visit CTA' },
 ] as const
@@ -289,34 +290,21 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const margin = 12
   const usableWidth = pageWidth - margin * 2
 
-  // ===== OPTIMIZED POSTER BANNER & GUARANTEED AUTHORIZED SIGNATURE POSITION =====
+  // ===== EXACT 1000px x 285px BANNER GEOMETRY =====
   const variant = data.adBannerVariant || 'flyer'
 
-  // Centered poster dimensions (Clean & readable with ~55mm-62mm height)
-  const posterW = 125 // 125mm width centered in 186mm printable space
-  let posterH = 55
-
-  if (variant === 'flyer') {
-    posterH = posterW / 1.79167 // ~69.8mm
-  } else if (variant === 'grid') {
-    posterH = posterW / 1.961 // ~63.7mm
-  } else if (variant === 'featured') {
-    posterH = 38
-  } else {
-    posterH = 22
-  }
+  const posterW = 180
+  const posterH = posterW / (1000 / 285) // 51.3mm height
+  const posterX = margin + (usableWidth - posterW) / 2 // 15mm
 
   const FOOTER_Y = 289
   const FOOTER_LINE = 286
   const AD_BAND_BOTTOM = 282
-  const AD_BAND_TOP = AD_BAND_BOTTOM - posterH // Poster top
-  const posterX = margin + (usableWidth - posterW) / 2
+  const AD_BAND_TOP = AD_BAND_BOTTOM - posterH // 230.7mm
 
-  // Authorized Signatory is drawn at FIXED vertical clearance ABOVE poster image!
-  // Signature Line at 192mm, "Authorized Signatory" finishes at 196mm.
-  // Poster starts at ~212mm-218mm -> CLEAR 16mm - 22mm WHITE SPACE GAP ABOVE POSTER IMAGE!
-  const SIG_LINE_Y = Math.min(202, AD_BAND_TOP - 16)
-  const CONTENT_LIMIT = SIG_LINE_Y - 12 // Dynamic table/totals end before signature line
+  // Signature block positioned strictly ABOVE top of 1000x285 banner
+  const SIG_LINE_Y = AD_BAND_TOP - 15 // 215.7mm
+  const CONTENT_LIMIT = SIG_LINE_Y - 12
 
   let pageNumber = 1
   const pageEnds: Record<number, number> = {}
@@ -358,29 +346,35 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     return false
   }
 
-  // ===== HEADER CALCULATION & RENDERING =====
-  const shopNameX = margin
+  // ===== HEADER WITH OFFICIAL EMBEDDED METALLIC SHIELD LOGO =====
+  const logoImg = data.productImages?.logo || data.shop?.logoUrl
+  const hasLogo = !!logoImg
+
+  const logoW = 22
+  const logoH = 22
+  const logoX = margin
+  const logoY = 6
+
+  const shopNameX = hasLogo ? margin + logoW + 4 : margin // 38mm if logo present
+  const maxInfoWidth = hasLogo ? 78 : 96
+
   const shopNameText = data.shop.name || 'Smart Computers'
-  const nameFontSize = shopNameText.length > 22 ? 15 : 18
+  const nameFontSize = shopNameText.length > 22 ? 14 : 17
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(nameFontSize)
-  const nameLines = doc.splitTextToSize(shopNameText, 96)
-  
-  let infoY = 7 + 5 + (nameLines.length * 5)
+  const nameLines = doc.splitTextToSize(shopNameText, maxInfoWidth)
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
   let addrLineCount = 0
   if (data.shop.address) {
-    const addrLines = doc.splitTextToSize(data.shop.address, 95)
+    const addrLines = doc.splitTextToSize(data.shop.address, maxInfoWidth)
     addrLineCount = Math.min(addrLines.length, 2)
   }
   
   let contactPresent = !!(data.shop.phone || data.shop.email)
   let gstPresent = !!data.shop.gstNumber
 
-  const calculatedHeaderHeight = Math.max(34, infoY + (addrLineCount * 3.5) + (contactPresent ? 3.5 : 0) + (gstPresent ? 4 : 0) + 4)
+  const calculatedHeaderHeight = Math.max(34, (nameLines.length * 4.5) + (addrLineCount * 3.5) + (contactPresent ? 3.5 : 0) + (gstPresent ? 4 : 0) + 12)
 
   // Draw Header Background
   doc.setFillColor(...HB)
@@ -394,28 +388,35 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     doc.rect(0, calculatedHeaderHeight + 1.2, pageWidth, 0.5, 'F')
   }
 
-  // Draw Shop Name
+  // Draw Official Crest Shield Logo on Top Left
+  if (hasLogo) {
+    try {
+      doc.addImage(logoImg, 'PNG', logoX, logoY, logoW, logoH)
+    } catch {}
+  }
+
+  // Draw Shop Name beside logo
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(nameFontSize)
   doc.setTextColor(...HT)
-  doc.text(nameLines, shopNameX, 12)
+  doc.text(nameLines, shopNameX, 11)
 
-  // Draw Shop Address & Details
-  let currentHeaderY = 12 + (nameLines.length * 5)
+  // Draw Shop Address & Details beside logo
+  let currentHeaderY = 11 + (nameLines.length * 4.5)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
+  doc.setFontSize(7.5)
   doc.setTextColor(...subColor)
 
   if (data.shop.address) {
-    const addrLines = doc.splitTextToSize(data.shop.address, 95)
+    const addrLines = doc.splitTextToSize(data.shop.address, maxInfoWidth)
     doc.text(addrLines.slice(0, 2), shopNameX, currentHeaderY)
-    currentHeaderY += Math.min(addrLines.length, 2) * 3.5
+    currentHeaderY += Math.min(addrLines.length, 2) * 3.2
   }
 
   if (data.shop.state) {
     const stateCode = getStateCode(data.shop.state)
     doc.text(`${data.shop.state}${stateCode ? ` (${stateCode})` : ''}`, shopNameX, currentHeaderY)
-    currentHeaderY += 3.5
+    currentHeaderY += 3.2
   }
 
   let contactLine = ''
@@ -423,7 +424,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   if (data.shop.email) contactLine += `${contactLine ? ' | ' : ''}${data.shop.email}`
   if (contactLine) {
     doc.text(contactLine, shopNameX, currentHeaderY)
-    currentHeaderY += 3.5
+    currentHeaderY += 3.2
   }
 
   if (data.shop.gstNumber) {
@@ -433,31 +434,39 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     doc.text(`GSTIN: ${data.shop.gstNumber}`, shopNameX, currentHeaderY)
   }
 
-  // Right Side Document Title Block
-  const titleBoxX = pageWidth - margin - 55
+  // Right Side Document Title Block - "INVOICE" badge with Copy Type Subtitle
+  const titleBoxX = pageWidth - margin - 58
   doc.setFillColor(...(lightHeader ? LB : A))
-  doc.roundedRect(titleBoxX, 8, 55, 10, 1, 1, 'F')
+  doc.roundedRect(titleBoxX, 7, 58, 11, 1, 1, 'F')
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(11)
   doc.setTextColor(...(lightHeader ? A : N.white))
-  const docTitle = isInvoice ? 'TAX INVOICE' : isService ? 'SERVICE INVOICE' : 'QUOTATION'
-  doc.text(docTitle, titleBoxX + 27.5, 14.5, { align: 'center' })
+  const docTitle = isInvoice ? 'INVOICE' : isService ? 'SERVICE INVOICE' : 'QUOTATION'
+  doc.text(docTitle, titleBoxX + 29, 13, { align: 'center' })
+
+  // Subtitle Copy Type Tag
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(5.5)
+  doc.setTextColor(...(lightHeader ? A : N.white))
+  const copySubtitle = data.copyType || (isInvoice ? 'ORIGINAL FOR RECIPIENT' : 'OFFICIAL DOCUMENT')
+  doc.text(copySubtitle, titleBoxX + 29, 16.5, { align: 'center' })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7.5)
   doc.setTextColor(...subColor)
-  let rightY = 22
-  doc.text(`No: ${data.number}`, titleBoxX + 55, rightY, { align: 'right' })
+  let rightY = 22.5
+  doc.text(`No: ${data.number}`, titleBoxX + 58, rightY, { align: 'right' })
   rightY += 3.5
-  doc.text(`Date: ${formatDate(data.date)}`, titleBoxX + 55, rightY, { align: 'right' })
+  doc.text(`Date: ${formatDate(data.date)}`, titleBoxX + 58, rightY, { align: 'right' })
   rightY += 3.5
 
   if (!isInvoice && !isService && data.validTill) {
-    doc.text(`Valid Till: ${formatDate(data.validTill)}`, titleBoxX + 55, rightY, { align: 'right' })
+    doc.text(`Valid Till: ${formatDate(data.validTill)}`, titleBoxX + 58, rightY, { align: 'right' })
   }
 
-  y = calculatedHeaderHeight + 5
+  // CLEARANCE GAP BEFORE BILL TO SECTION
+  y = calculatedHeaderHeight + 10
 
   // ===== BILL TO / SHIP TO SECTION =====
   const boxW = (usableWidth - 4) / 2
@@ -566,7 +575,8 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     didDrawPage: () => {},
   })
 
-  y = (doc as any).lastAutoTable.finalY + 4
+  // CLEARANCE GAP AFTER TABLE
+  y = (doc as any).lastAutoTable.finalY + 8
 
   // ===== HSN SUMMARY TABLE (If GST applicable) =====
   const hsnSummary = calculateHSNSummary(data.calc.items)
@@ -597,15 +607,19 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
         4: { halign: 'right', cellWidth: 'auto' },
       },
     })
-    y = (doc as any).lastAutoTable.finalY + 4
+    y = (doc as any).lastAutoTable.finalY + 8
   }
 
   addPageIfNeeded(28)
 
-  // ===== TOTALS & AMOUNT IN WORDS SECTION =====
+  // ===== TOTALS & AMOUNT IN WORDS SECTION WITH CGST (9%) & SGST (9%) =====
   const totalsW = 75
   const totalsX = pageWidth - margin - totalsW
   const wordsY = y
+
+  // Compute effective CGST/SGST rate percentage
+  const effectiveGstRate = data.calc.items.find((i) => i.gstApplicable && Number(i.gstRate) > 0)?.gstRate || 18
+  const halfGstRate = effectiveGstRate / 2
 
   // Calculations Box Right Side
   doc.setFillColor(...N.bgRow)
@@ -623,8 +637,8 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   }
 
   drawRow('Sub Total', formatCurrency(data.calc.subtotal))
-  if (data.calc.cgstAmount > 0) drawRow('CGST', formatCurrency(data.calc.cgstAmount))
-  if (data.calc.sgstAmount > 0) drawRow('SGST', formatCurrency(data.calc.sgstAmount))
+  if (data.calc.cgstAmount > 0) drawRow(`CGST (${halfGstRate}%)`, formatCurrency(data.calc.cgstAmount))
+  if (data.calc.sgstAmount > 0) drawRow(`SGST (${halfGstRate}%)`, formatCurrency(data.calc.sgstAmount))
   if (data.calc.courierCharges > 0) drawRow('Courier Charges', formatCurrency(data.calc.courierCharges))
   if (data.calc.discount > 0) drawRow('Discount', `- ${formatCurrency(data.calc.discount)}`, true, N.green)
 
@@ -697,10 +711,10 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   y = Math.max(currentTotY + 4, leftY + 4)
 
-  // Check if content fits before signature block; if not, move to page 2!
+  // Ensure content finishes before signature block
   addPageIfNeeded(35)
 
-  // ===== AUTHORIZED SIGNATURE BLOCK (Positioned STRICTLY ABOVE Poster Banner) =====
+  // ===== AUTHORIZED SIGNATURE BLOCK (Positioned STRICTLY ABOVE 1000x285 Poster) =====
   doc.setPage(pageNumber)
   const sigBoxX = pageWidth - margin - 50
   
@@ -718,13 +732,13 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setTextColor(...N.textLight)
   doc.text('Authorized Signatory', sigBoxX + 25, SIG_LINE_Y + 4, { align: 'center' })
 
-  // ===== PERFECTLY CENTERED POSTER SHOWCASE AD BANNER =====
+  // ===== 1000x285 PX CENTERED HORIZONTAL BANNER BELOW INVOICE =====
   const drawAdBanner = (topY: number, bandH: number) => {
     const by = topY
     const imgs: Record<string, string> = data.productImages || {}
     const phone = data.shop.phone || ''
 
-    // Premium Flyer Poster Graphic (Centered)
+    // Premium Flyer Poster Graphic (Exact 1000x285 px format)
     if (variant === 'flyer') {
       if (imgs['flyer']) {
         try {
@@ -734,7 +748,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       }
     }
 
-    // High-Res Product Grid Poster Graphic (Centered)
+    // High-Res Product Grid Poster Graphic (Exact 1000x285 px format)
     if (variant === 'grid') {
       if (imgs['productgrid']) {
         try {

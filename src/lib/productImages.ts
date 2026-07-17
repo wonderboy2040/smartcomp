@@ -3,11 +3,8 @@ import path from 'node:path'
 
 /**
  * Server-only helper that loads the Smart Computers product showcase
- * images (Computers, Laptops, Printers, Accessories) from /public/ads
+ * images (Computers, Laptops, Printers, Accessories, Flyer, Product Grid, Logo) from /public
  * and returns them as base64 data URLs for embedding into the PDF/HTML.
- *
- * This module must ONLY be imported from server-side code (API routes),
- * never from a client component, because it uses the Node `fs` module.
  */
 
 export interface ProductImageSet {
@@ -17,6 +14,7 @@ export interface ProductImageSet {
   accessories: string
   flyer?: string
   productgrid?: string
+  logo?: string
 }
 
 let CACHE: ProductImageSet | null = null
@@ -41,6 +39,13 @@ export function loadProductImages(): ProductImageSet {
     } catch {
       result[key] = ''
     }
+  }
+
+  try {
+    const logoBuf = fs.readFileSync(path.join(process.cwd(), 'public', 'logo.png'))
+    result.logo = `data:image/png;base64,${logoBuf.toString('base64')}`
+  } catch {
+    result.logo = ''
   }
 
   try {

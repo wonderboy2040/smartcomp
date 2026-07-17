@@ -87,6 +87,13 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
     return Array.from(map.values())
   }, [doc])
 
+  // Effective CGST / SGST rate calculation
+  const halfGstRate = useMemo(() => {
+    if (!doc?.calc?.items) return 9
+    const itemWithGst = doc.calc.items.find((i: any) => i.gstApplicable && Number(i.gstRate) > 0)
+    return itemWithGst ? (Number(itemWithGst.gstRate) / 2) : 9
+  }, [doc])
+
   const handlePrint = () => {
     window.print()
   }
@@ -111,7 +118,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
 
   const isQuotation = doc.docType === 'quotation'
   const isService = doc.docType === 'service'
-  const titleText = isQuotation ? 'QUOTATION' : isService ? 'SERVICE INVOICE' : 'TAX INVOICE'
+  const titleText = isQuotation ? 'QUOTATION' : isService ? 'SERVICE INVOICE' : 'INVOICE'
 
   return (
     <div className="flex flex-col h-full bg-slate-100 text-slate-900 font-sans">
@@ -191,32 +198,39 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
           className="bg-white text-slate-900 shadow-xl border border-slate-300 rounded-none w-full max-w-[210mm] min-h-[297mm] p-6 sm:p-8 flex flex-col justify-between print:shadow-none print:border-none print:w-full print:max-w-none print:min-h-0 print:p-0 font-sans text-[11px] leading-tight select-text"
         >
           {/* Main Top Content */}
-          <div className="space-y-4">
-            {/* Header Box */}
+          <div className="space-y-5">
+            {/* Header Box with Official Crest Shield Logo */}
             <div
-              className="border-b-2 pb-4 flex flex-wrap items-start justify-between gap-4"
+              className="border-b-2 pb-4 flex flex-wrap items-center justify-between gap-4"
               style={{ borderColor: currentTpl.primary }}
             >
-              <div className="flex-1 min-w-[220px]">
-                <h1
-                  className="text-xl sm:text-2xl font-black uppercase tracking-wide leading-snug mb-1"
-                  style={{ color: currentTpl.primary }}
-                >
-                  {doc.shop?.name || 'Smart Computers'}
-                </h1>
-                {doc.shop?.address && (
-                  <p className="text-slate-600 font-medium whitespace-pre-line leading-relaxed text-xs">
-                    {doc.shop.address}
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-600 font-medium text-xs mt-1">
-                  {doc.shop?.phone && <span>Ph: <strong>{doc.shop.phone}</strong></span>}
-                  {doc.shop?.email && <span>Email: {doc.shop.email}</span>}
-                  {doc.shop?.gstNumber && <span className="text-slate-900 font-bold block w-full mt-0.5">GSTIN: {doc.shop.gstNumber}</span>}
+              <div className="flex items-center gap-3.5 flex-1 min-w-[240px]">
+                <img
+                  src={doc.productImages?.logo || '/logo.png'}
+                  alt="SMART COMPUTERS Logo"
+                  className="w-14 h-14 sm:w-16 sm:h-16 object-contain flex-shrink-0"
+                />
+                <div>
+                  <h1
+                    className="text-xl sm:text-2xl font-black uppercase tracking-wide leading-snug mb-0.5"
+                    style={{ color: currentTpl.primary }}
+                  >
+                    {doc.shop?.name || 'Smart Computers'}
+                  </h1>
+                  {doc.shop?.address && (
+                    <p className="text-slate-600 font-medium whitespace-pre-line leading-relaxed text-xs">
+                      {doc.shop.address}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-slate-600 font-medium text-xs mt-1">
+                    {doc.shop?.phone && <span>Ph: <strong>{doc.shop.phone}</strong></span>}
+                    {doc.shop?.email && <span>Email: {doc.shop.email}</span>}
+                    {doc.shop?.gstNumber && <span className="text-slate-900 font-bold block w-full mt-0.5">GSTIN: {doc.shop.gstNumber}</span>}
+                  </div>
                 </div>
               </div>
 
-              {/* Title & Doc Number */}
+              {/* Title Badge ("INVOICE") & Doc Details */}
               <div className="text-right">
                 <div
                   className="inline-block px-3 py-1 font-black text-sm uppercase tracking-wider rounded border mb-2"
@@ -241,8 +255,8 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             </div>
 
-            {/* Bill To & Status Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-2">
+            {/* Bill To & Status Cards - CLEAR GAP BEFORE BILL TO */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-3 pt-1">
               <div className="border border-slate-300 rounded p-3 bg-slate-50/50">
                 <p className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-1">Bill To / Customer Details</p>
                 <p className="font-bold text-sm text-slate-900">{doc.customer?.name || 'Walk-in Customer'}</p>
@@ -345,91 +359,94 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             )}
 
-            {/* Totals, Bank, & Words Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pt-2">
-              <div className="sm:col-span-7 space-y-3">
-                {/* Amount in Words */}
-                <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
-                  <span className="font-bold text-slate-500 block text-[9.5px] uppercase">Amount in Words</span>
-                  <span className="font-bold text-slate-900 text-xs">{numberToWords(doc.calc?.grandTotal || 0)}</span>
-                </div>
+            {/* CLEARANCE GAP AFTER TABLE */}
+            <div className="pt-3">
+              {/* Totals, Bank, & Words Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div className="sm:col-span-7 space-y-3">
+                  {/* Amount in Words */}
+                  <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
+                    <span className="font-bold text-slate-500 block text-[9.5px] uppercase">Amount in Words</span>
+                    <span className="font-bold text-slate-900 text-xs">{numberToWords(doc.calc?.grandTotal || 0)}</span>
+                  </div>
 
-                {/* Bank Details */}
-                {(doc.shop?.bankAccount || doc.shop?.upiId || doc.upiQr) && (
-                  <div className="flex gap-3 p-2.5 rounded border border-slate-200 bg-white">
-                    {doc.upiQr && (
-                      <div className="text-center flex-shrink-0">
-                        <img src={doc.upiQr} alt="UPI QR Code" className="w-16 h-16 border rounded p-0.5" />
-                        <span className="text-[8px] font-bold text-slate-500 block mt-0.5">Scan to Pay</span>
+                  {/* Bank Details */}
+                  {(doc.shop?.bankAccount || doc.shop?.upiId || doc.upiQr) && (
+                    <div className="flex gap-3 p-2.5 rounded border border-slate-200 bg-white">
+                      {doc.upiQr && (
+                        <div className="text-center flex-shrink-0">
+                          <img src={doc.upiQr} alt="UPI QR Code" className="w-16 h-16 border rounded p-0.5" />
+                          <span className="text-[8px] font-bold text-slate-500 block mt-0.5">Scan to Pay</span>
+                        </div>
+                      )}
+                      <div className="space-y-0.5 text-[10px] text-slate-700 flex-1">
+                        <p className="font-bold text-slate-900 uppercase">Bank Details & UPI</p>
+                        {doc.shop?.bankName && <p>Bank: <strong>{doc.shop.bankName}</strong></p>}
+                        {doc.shop?.bankAccount && <p>A/C: <strong>{doc.shop.bankAccount}</strong> | IFSC: <strong>{doc.shop.bankIfsc || '-'}</strong></p>}
+                        {doc.shop?.upiId && <p className="text-blue-700 font-bold mt-1">UPI ID: {doc.shop.upiId}</p>}
                       </div>
-                    )}
-                    <div className="space-y-0.5 text-[10px] text-slate-700 flex-1">
-                      <p className="font-bold text-slate-900 uppercase">Bank Details & UPI</p>
-                      {doc.shop?.bankName && <p>Bank: <strong>{doc.shop.bankName}</strong></p>}
-                      {doc.shop?.bankAccount && <p>A/C: <strong>{doc.shop.bankAccount}</strong> | IFSC: <strong>{doc.shop.bankIfsc || '-'}</strong></p>}
-                      {doc.shop?.upiId && <p className="text-blue-700 font-bold mt-1">UPI ID: {doc.shop.upiId}</p>}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Totals Summary */}
-              <div className="sm:col-span-5 bg-slate-50 border border-slate-300 rounded p-3 space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-700">
-                  <span>Sub Total:</span>
-                  <span className="font-medium">Rs.{doc.calc?.subtotal?.toFixed(2)}</span>
+                  )}
                 </div>
-                {doc.calc?.gstAmount > 0 && (
-                  <>
-                    <div className="flex justify-between text-slate-600">
-                      <span>CGST:</span>
-                      <span>Rs.{doc.calc?.cgstAmount?.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-600">
-                      <span>SGST:</span>
-                      <span>Rs.{doc.calc?.sgstAmount?.toFixed(2)}</span>
-                    </div>
-                  </>
-                )}
-                {doc.calc?.courierCharges > 0 && (
+
+                {/* Totals Summary displaying CGST (9%) and SGST (9%) */}
+                <div className="sm:col-span-5 bg-slate-50 border border-slate-300 rounded p-3 space-y-1.5 text-xs">
                   <div className="flex justify-between text-slate-700">
-                    <span>Courier Charges:</span>
-                    <span>Rs.{doc.calc.courierCharges.toFixed(2)}</span>
+                    <span>Sub Total:</span>
+                    <span className="font-medium">Rs.{doc.calc?.subtotal?.toFixed(2)}</span>
                   </div>
-                )}
-                {doc.calc?.discount > 0 && (
-                  <div className="flex justify-between text-emerald-700 font-semibold">
-                    <span>Discount:</span>
-                    <span>- Rs.{doc.calc.discount.toFixed(2)}</span>
-                  </div>
-                )}
+                  {doc.calc?.gstAmount > 0 && (
+                    <>
+                      <div className="flex justify-between text-slate-600">
+                        <span>CGST ({halfGstRate}%):</span>
+                        <span>Rs.{doc.calc?.cgstAmount?.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>SGST ({halfGstRate}%):</span>
+                        <span>Rs.{doc.calc?.sgstAmount?.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  {doc.calc?.courierCharges > 0 && (
+                    <div className="flex justify-between text-slate-700">
+                      <span>Courier Charges:</span>
+                      <span>Rs.{doc.calc.courierCharges.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {doc.calc?.discount > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-semibold">
+                      <span>Discount:</span>
+                      <span>- Rs.{doc.calc.discount.toFixed(2)}</span>
+                    </div>
+                  )}
 
-                <div className="border-t border-slate-300 my-1 pt-1.5 flex justify-between text-sm font-bold text-slate-900">
-                  <span>Grand Total:</span>
-                  <span className="text-base" style={{ color: currentTpl.primary }}>
-                    {formatCurrency(doc.calc?.grandTotal || 0)}
-                  </span>
+                  <div className="border-t border-slate-300 my-1 pt-1.5 flex justify-between text-sm font-bold text-slate-900">
+                    <span>Grand Total:</span>
+                    <span className="text-base" style={{ color: currentTpl.primary }}>
+                      {formatCurrency(doc.calc?.grandTotal || 0)}
+                    </span>
+                  </div>
+
+                  {doc.amountPaid > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-semibold text-xs pt-1 border-t border-slate-200">
+                      <span>Paid / Advance:</span>
+                      <span>Rs.{doc.amountPaid.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {doc.amountDue > 0 && (
+                    <div className="flex justify-between text-red-700 font-bold text-xs">
+                      <span>Balance Due:</span>
+                      <span>Rs.{doc.amountDue.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
-
-                {doc.amountPaid > 0 && (
-                  <div className="flex justify-between text-emerald-700 font-semibold text-xs pt-1 border-t border-slate-200">
-                    <span>Paid / Advance:</span>
-                    <span>Rs.{doc.amountPaid.toFixed(2)}</span>
-                  </div>
-                )}
-                {doc.amountDue > 0 && (
-                  <div className="flex justify-between text-red-700 font-bold text-xs">
-                    <span>Balance Due:</span>
-                    <span>Rs.{doc.amountDue.toFixed(2)}</span>
-                  </div>
-                )}
               </div>
             </div>
           </div>
 
-          {/* Bottom Section: Signature + Perfectly Centered Balanced Poster */}
+          {/* Bottom Section: Authorized Signatory + 1000x285 Poster Image */}
           <div className="mt-8 pt-4 border-t border-slate-300 space-y-6">
-            {/* Authorized Signature Block */}
+            {/* Authorized Signature Block (Positioned strictly ABOVE 1000x285 Banner) */}
             <div className="flex justify-end pr-2">
               <div className="text-center min-w-[200px]">
                 <p className="font-bold text-xs text-slate-900 mb-8">
@@ -440,14 +457,14 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             </div>
 
-            {/* Dynamic Centered Poster Showcase */}
+            {/* Dynamic 1000px x 285px Poster Showcase */}
             {bannerVariant === 'flyer' ? (
               <div className="flex justify-center w-full">
                 <img
                   src={doc.productImages?.flyer || '/posters/smartcomputers-a4-flyer-landscape.png'}
                   alt="Smart Computers Premium Flyer"
-                  className="w-[82%] max-w-[150mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
-                  style={{ aspectRatio: '1376 / 768' }}
+                  className="w-full max-w-[180mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
+                  style={{ aspectRatio: '1000 / 285' }}
                 />
               </div>
             ) : bannerVariant === 'grid' ? (
@@ -455,13 +472,13 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                 <img
                   src={doc.productImages?.productgrid || '/posters/smartcomputers-product-grid.png'}
                   alt="Smart Computers Product Grid Poster"
-                  className="w-[82%] max-w-[150mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
-                  style={{ aspectRatio: '1408 / 718' }}
+                  className="w-full max-w-[180mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
+                  style={{ aspectRatio: '1000 / 285' }}
                 />
               </div>
             ) : bannerVariant === 'featured' ? (
               <div
-                className="p-3 rounded border flex items-center justify-between gap-3 max-w-[150mm] mx-auto"
+                className="p-3 rounded border flex items-center justify-between gap-3 max-w-[180mm] mx-auto"
                 style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
               >
                 <div>
@@ -485,7 +502,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
             ) : (
               /* Default: 'strip' */
               <div
-                className="p-3 rounded border flex items-center justify-between gap-3 text-xs max-w-[150mm] mx-auto"
+                className="p-3 rounded border flex items-center justify-between gap-3 text-xs max-w-[180mm] mx-auto"
                 style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
               >
                 <span className="font-bold uppercase text-sm" style={{ color: currentTpl.primary }}>
