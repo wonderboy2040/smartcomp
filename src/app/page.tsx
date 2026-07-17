@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { useFetch, prefetch, invalidate } from '@/lib/api'
 import { SetupWizard } from '@/components/SetupWizard'
 import { useTheme } from '@/lib/theme-context'
+import { PdfPreviewProvider } from '@/lib/preview-context'
 import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
@@ -300,7 +301,8 @@ function HomeInner() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 flex flex-col w-full premium-main">
+      <PdfPreviewProvider>
+        <main className="flex-1 min-w-0 flex flex-col w-full premium-main">
         {/* Top bar - mobile only */}
         <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card/90 backdrop-blur-xl border-b border-border shadow-sm">
           <button
@@ -463,6 +465,7 @@ function HomeInner() {
           </PanelBoundary>
         </div>
       </main>
+      </PdfPreviewProvider>
     </div>
   )
 }

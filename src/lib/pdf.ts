@@ -624,7 +624,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     startY: y,
     head: [tableColumns.map(c => c.header)],
     body: tableBody.map(r => tableColumns.map(c => (r as any)[c.dataKey])),
-    margin: { left: margin, right: margin, bottom: AUTO_BOTTOM },
+    margin: { left: margin, right: margin, bottom: pageHeight - CONTENT_BOTTOM },
     styles: {
       fontSize: 10,
       cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
@@ -705,7 +705,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
         formatCurrency(h.sgstAmt).replace('Rs. ', ''),
         formatCurrency(h.total).replace('Rs. ', ''),
       ]),
-      margin: { left: margin, right: margin, bottom: AUTO_BOTTOM },
+      margin: { left: margin, right: margin, bottom: pageHeight - CONTENT_BOTTOM },
       styles: { fontSize: 9, cellPadding: 2.5, halign: 'center' },
       headStyles: { fillColor: N.bgRowAlt, textColor: N.textDark, fontStyle: 'bold', fontSize: 9 },
       columnStyles: {
