@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const existingEnquiries = await listRows<any>('Enquiries')
     const todayStr = today.toISOString().slice(0, 10)
 
-    const created: any[] = []
+    const created = []
     const cloudApiOn = isCloudApiConfigured()
     const itemsListText = items.map((i, idx) => `${idx + 1}. ${String(i?.name || '')}${i?.sku ? ` (SKU: ${i.sku})` : ''}`).join('\n')
 

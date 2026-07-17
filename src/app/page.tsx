@@ -110,13 +110,16 @@ function HomeInner() {
     }
   }, [isConfigured])
 
-  // PERFORMANCE: Background refresh every 2 minutes (matches server cache TTL).
-  // Only refreshes dashboard stats - individual panels refresh when user visits them.
+  // PERFORMANCE: Background refresh every 5 minutes (was 2 min).
+  // 2 min was too aggressive — every refresh fires a cascade of Apps Script
+  // calls and triggers re-renders across every mounted panel that subscribes
+  // to /api/dashboard. 5 min matches the new PDF cache TTL and keeps the
+  // panel snappy while still showing fresh stats.
   useEffect(() => {
     if (!isConfigured) return
     const id = setInterval(() => {
       invalidate('/api/dashboard')
-    }, 120000) // every 2 minutes
+    }, 300000) // every 5 minutes
     return () => clearInterval(id)
   }, [isConfigured])
 

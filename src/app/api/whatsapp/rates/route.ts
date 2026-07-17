@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Build comparison objects
-    const comparisons: any[] = []
+    const comparisons = []
     for (const [itemId, rates] of rateMap.entries()) {
       if (rates.length === 0) continue
 

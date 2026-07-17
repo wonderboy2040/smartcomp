@@ -8,6 +8,38 @@ export const runtime = 'nodejs'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
 
+// ─────────────────────────────────────────────────────────────────────
+// PDF memoization cache — generating a PDF embeds ~8MB of base64 images
+// through jsPDF, which is expensive (CPU + memory). Cache the rendered
+// Buffer for 5 minutes per (id, type, template, banner) combo so the
+// 2nd, 3rd, 10th click of the same invoice is instant.
+// ─────────────────────────────────────────────────────────────────────
+type PdfCacheEntry = { buffer: Buffer; expires: number }
+const PDF_CACHE = new Map<string, PdfCacheEntry>()
+const PDF_CACHE_TTL = 5 * 60 * 1000 // 5 min
+const PDF_CACHE_MAX = 40 // ~40 PDFs * up to 10MB = up to 400MB (acceptable)
+
+function getCachedPdf(key: string): Buffer | null {
+  const e = PDF_CACHE.get(key)
+  if (!e) return null
+  if (e.expires < Date.now()) {
+    PDF_CACHE.delete(key)
+    return null
+  }
+  // Move to end (LRU)
+  PDF_CACHE.delete(key)
+  PDF_CACHE.set(key, e)
+  return e.buffer
+}
+
+function setCachedPdf(key: string, buffer: Buffer) {
+  if (PDF_CACHE.size >= PDF_CACHE_MAX) {
+    const firstKey = PDF_CACHE.keys().next().value
+    if (firstKey) PDF_CACHE.delete(firstKey)
+  }
+  PDF_CACHE.set(key, { buffer, expires: Date.now() + PDF_CACHE_TTL })
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     if (!isConfigured()) {
@@ -23,6 +55,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
     const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
+
+    // ── In-memory PDF cache check ──
+    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}`
+    const cachedPdf = getCachedPdf(cacheKey)
+    if (cachedPdf) {
+      const filename =
+        type === 'quotation' ? `Quotation-${id}.pdf` : `Invoice-${id}.pdf`
+      return new NextResponse(cachedPdf, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${filename}"`,
+          // Browser/proxy cache: 5 min fresh, 10 min stale-while-revalidate
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+          'X-PDF-Cache': 'HIT',
+        },
+      })
+    }
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
@@ -72,11 +121,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         adBannerVariant: bannerVariant,
       })
 
+      setCachedPdf(cacheKey, pdfBuffer)
+
       return new NextResponse(pdfBuffer, {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="Invoice-${invoice.number}.pdf"`,
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+          'X-PDF-Cache': 'MISS',
         },
       })
     } else if (type === 'quotation') {
@@ -124,11 +176,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         adBannerVariant: bannerVariant,
       })
 
+      setCachedPdf(cacheKey, pdfBuffer)
+
       return new NextResponse(pdfBuffer, {
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="Quotation-${q.number}.pdf"`,
-          'Cache-Control': 'no-cache',
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+          'X-PDF-Cache': 'MISS',
         },
       })
     }

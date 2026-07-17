@@ -477,8 +477,6 @@ export async function completeJobFull(data: {
   warrantyDays?: number
   warrantyExpiry?: string
   completedDate?: string
-  diagnosisNotes?: string
-  notes?: string
   stockUpdates?: { id: string; deductQty: number }[]
   payment?: any
 }): Promise<any> {

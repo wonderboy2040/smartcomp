@@ -8,6 +8,28 @@ export const runtime = 'nodejs'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
 
+// In-memory LRU cache (5 min) — service invoices embed ~8MB of base64 images.
+type PdfCacheEntry = { buffer: Buffer; expires: number }
+const PDF_CACHE = new Map<string, PdfCacheEntry>()
+const PDF_CACHE_TTL = 5 * 60 * 1000
+const PDF_CACHE_MAX = 30
+
+function getCachedPdf(key: string): Buffer | null {
+  const e = PDF_CACHE.get(key)
+  if (!e) return null
+  if (e.expires < Date.now()) { PDF_CACHE.delete(key); return null }
+  PDF_CACHE.delete(key); PDF_CACHE.set(key, e)
+  return e.buffer
+}
+
+function setCachedPdf(key: string, buffer: Buffer) {
+  if (PDF_CACHE.size >= PDF_CACHE_MAX) {
+    const firstKey = PDF_CACHE.keys().next().value
+    if (firstKey) PDF_CACHE.delete(firstKey)
+  }
+  PDF_CACHE.set(key, { buffer, expires: Date.now() + PDF_CACHE_TTL })
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     if (!isConfigured()) {
@@ -22,6 +44,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
     const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
+
+    const cacheKey = `svc:${id}:${templateId}:${bannerVariant}`
+    const cachedPdf = getCachedPdf(cacheKey)
+    if (cachedPdf) {
+      return new NextResponse(cachedPdf, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="Service-Invoice-${id}.pdf"`,
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+          'X-PDF-Cache': 'HIT',
+        },
+      })
+    }
 
     const job = await getRow<any>('Jobs', id)
     if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
@@ -107,11 +142,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       adBannerVariant: bannerVariant,
     })
 
+    setCachedPdf(cacheKey, pdfBuffer)
+
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename="Service-Invoice-${job.jobId || id}.pdf"`,
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+        'X-PDF-Cache': 'MISS',
       },
     })
   } catch (e: any) {

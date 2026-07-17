@@ -50,7 +50,7 @@ export interface PdfDocData {
   roundOff?: number
   bankDetails?: ShopInfo
   // Base64 product images for the bottom advertising showcase banner
-  productImages?: any
+  productImages?: Record<string, string>
   // Advertising banner style: 'grid' | 'featured' | 'strip'
   adBannerVariant?: string
 }
@@ -694,7 +694,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // @ts-ignore
   y = (doc as any).lastAutoTable.finalY + 4
   // autoTable adds its own pages internally — keep our page counter in sync
-  pageNumber = Math.max(pageNumber, doc.getNumberOfPages())
+  pageNumber = doc.getNumberOfPages()
 
   // ===== HSN SUMMARY (GST Compliance) - A4 Fit =====
   const hsnSummary = calculateHSNSummary(data.calc.items)
@@ -739,7 +739,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     y = (doc as any).lastAutoTable.finalY + 4
   }
   // autoTable may have added pages for the HSN summary too
-  pageNumber = Math.max(pageNumber, doc.getNumberOfPages())
+  pageNumber = doc.getNumberOfPages()
 
   // ===== TOTALS - A4 Perfect Fit - Right Aligned =====
   const totalsWidth = 72
@@ -1090,8 +1090,12 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   }
 
   // ===== SIGNATURE (last page only) — placed just above the ad band =====
+  // Clamp signature Y so it never overlaps the totals / content above it.
   const lastBand = computeBand(lastContentEnd)
-  const sigY = lastBand.top - 2 // 2mm gap above the band
+  const sigY = Math.max(
+    lastContentEnd + 8,                 // 8mm gap above the last content
+    lastBand.top - SIG_H - 2,           // 2mm gap above the band, room for signature
+  )
 
   doc.setPage(pageNumber)
   doc.setDrawColor(...N.textVLight)

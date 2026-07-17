@@ -136,6 +136,6 @@ export const serialSchema = z.object({
 export function validate<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: T } | { success: false; error: string } {
   const result = schema.safeParse(data)
   if (result.success) return { success: true, data: result.data }
-  const firstError = result.error.issues[0]
+  const firstError = result.error.errors[0]
   return { success: false, error: firstError ? `${firstError.path.join('.')}: ${firstError.message}` : 'Validation failed' }
 }
