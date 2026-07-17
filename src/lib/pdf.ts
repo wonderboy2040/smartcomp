@@ -314,21 +314,35 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   let pageNumber = 1
   const pageEnds: Record<number, number> = {} // per-page content-end Y (for the responsive band)
 
-  // ===== Responsive advertising band (product showcase) =====
-  // Drawn BELOW the signature on EVERY printed page so each sheet promotes
-  // the shop. The band HEIGHT is RESPONSIVE: it grows to fill the bottom
-  // white space when an invoice/quotation has few line items, and shrinks
-  // (auto-resizing the product images inside it) when many items push the
-  // content down close to the page bottom.
-  const FOOTER_TOP = pageHeight - 9 // banner ends here, just above the page footer
-  const AD_BAND_MIN = 24 // smallest band (content is long / many items)
-  const AD_BAND_MAX = 56 // largest band (content is short / lots of white space)
-  const AD_GAP = 6 // gap between content and the band
-  const SIG_GAP = 4 // gap between the signature line and the band top
-  // autoTable bottom margin: stop the table this far above the footer so there
-  // is always room for at least the MIN band + footer.
-  const AUTO_BOTTOM = FOOTER_TOP - AD_BAND_MIN - AD_GAP // 258mm
-  const CONTENT_BOTTOM = pageHeight - 65 // 232mm — used for pre-table page-break checks
+  // ===== A4 PAGE LAYOUT ZONES (all values in mm from page top) =====
+  //
+  //  0mm ┌─────────────────────────┐
+  //      │       HEADER (34mm)     │
+  //      ├─────────────────────────┤  ~40mm
+  //      │    Bill-To / Ship-To    │
+  //      ├─────────────────────────┤  ~80mm
+  //      │      ITEMS TABLE        │
+  //      │   (auto-paginated)      │
+  //      ├─────────────────────────┤  ← CONTENT_LIMIT (242mm)
+  //      │  Totals / Bank / Terms  │
+  //      │  Signature              │
+  //      ├─────────────────────────┤  ← BAND_BOTTOM - band height
+  //      │   AD BANNER (24-48mm)   │
+  //      ├─────────────────────────┤  ← BAND_BOTTOM (282mm)
+  //      │   FOOTER (15mm)         │
+  //      └─────────────────────────┘ 297mm
+  //
+  const FOOTER_Y     = pageHeight - 8   // 289mm — footer text baseline
+  const FOOTER_LINE  = pageHeight - 10  // 287mm — footer separator line
+  const BAND_BOTTOM  = FOOTER_LINE - 2  // 285mm — ad banner must end above this
+  const AD_BAND_MIN  = 24               // smallest possible ad band
+  const AD_BAND_MAX  = 48               // largest possible ad band
+  const AD_GAP       = 4                // gap between content end and ad band top
+  const SIG_H        = 14               // space reserved for signature block
+  // Content must stop here so there is room for signature + minimum ad band + footer
+  const CONTENT_LIMIT = BAND_BOTTOM - AD_BAND_MIN - SIG_H - AD_GAP // ~235mm
+  // autoTable bottom margin (distance from page bottom where table triggers a page break)
+  const TABLE_BOTTOM_MARGIN = pageHeight - CONTENT_LIMIT // ~62mm
 
   const isInvoice = data.docType === 'invoice'
   const isService = data.docType === 'service'
@@ -345,16 +359,16 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const drawFooter = (pageNum: number, totalPages: number = 1) => {
     doc.setDrawColor(...N.border)
     doc.setLineWidth(0.15)
-    doc.line(margin, pageHeight - 6, pageWidth - margin, pageHeight - 6)
+    doc.line(margin, FOOTER_LINE, pageWidth - margin, FOOTER_LINE)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
+    doc.setFontSize(7)
     doc.setTextColor(...N.textVLight)
-    const footerText = `${isInvoice ? 'Invoice' : isService ? 'Service Invoice' : 'Quotation'} ${data.number} | ${data.shop.name || 'Smart Computers'} | ${totalPages > 1 ? `Page ${pageNum} of ${totalPages} | ` : ''}Computer generated - No signature required | Generated ${formatDateTime(new Date())}`
-    doc.text(footerText, pageWidth / 2, pageHeight - 2.5, { align: 'center', maxWidth: usableWidth })
+    const footerText = `${isInvoice ? 'Invoice' : isService ? 'Service Invoice' : 'Quotation'} ${data.number} | ${data.shop.name || 'Smart Computers'} | ${totalPages > 1 ? `Page ${pageNum} of ${totalPages} | ` : ''}Computer generated | ${formatDateTime(new Date())}`
+    doc.text(footerText, pageWidth / 2, FOOTER_Y, { align: 'center', maxWidth: usableWidth })
   }
 
   const addPageIfNeeded = (requiredSpace: number): boolean => {
-    if (y + requiredSpace > CONTENT_BOTTOM) {
+    if (y + requiredSpace > CONTENT_LIMIT) {
       drawFooter(pageNumber, 1)
       doc.addPage()
       pageNumber++
@@ -624,7 +638,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     startY: y,
     head: [tableColumns.map(c => c.header)],
     body: tableBody.map(r => tableColumns.map(c => (r as any)[c.dataKey])),
-    margin: { left: margin, right: margin, bottom: pageHeight - CONTENT_BOTTOM },
+    margin: { left: margin, right: margin, bottom: TABLE_BOTTOM_MARGIN },
     styles: {
       fontSize: 10,
       cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
@@ -705,7 +719,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
         formatCurrency(h.sgstAmt).replace('Rs. ', ''),
         formatCurrency(h.total).replace('Rs. ', ''),
       ]),
-      margin: { left: margin, right: margin, bottom: pageHeight - CONTENT_BOTTOM },
+      margin: { left: margin, right: margin, bottom: TABLE_BOTTOM_MARGIN },
       styles: { fontSize: 9, cellPadding: 2.5, halign: 'center' },
       headStyles: { fillColor: N.bgRowAlt, textColor: N.textDark, fontStyle: 'bold', fontSize: 9 },
       columnStyles: {
@@ -734,7 +748,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const rowHeight = 5.5
 
   // Check if totals need new page (keep together, above the band)
-  if (y + 50 > CONTENT_BOTTOM) {
+  if (y + 50 > CONTENT_LIMIT) {
     doc.addPage()
     pageNumber++
     y = margin + 5
@@ -786,21 +800,17 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   if (data.calc.otherCharges > 0) drawTotalsRow('Other Charges', formatCurrency(data.calc.otherCharges))
   if (data.roundOff) drawTotalsRow('Round Off', formatCurrency(data.roundOff))
 
-  // Grand Total - Highlighted
+  // Grand Total - Highlighted (single clean draw)
   totalsY += 1
-  drawTotalsRow('GRAND TOTAL', formatCurrency(data.calc.grandTotal), { 
-    bold: true, 
-    bg: A, 
-    textColor: isLightBg(A) ? N.textDark : N.white,
-    line: false
-  })
+  const gtRowH = 7 // slightly taller for emphasis
   doc.setFillColor(...A)
-  doc.rect(totalsX, totalsY - rowHeight, totalsWidth, rowHeight, 'F')
+  doc.rect(totalsX, totalsY, totalsWidth, gtRowH, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12.5)
+  doc.setFontSize(12)
   doc.setTextColor(...(isLightBg(A) ? N.textDark : N.white))
-  doc.text('GRAND TOTAL', totalsX + 3, totalsY - 1.5)
-  doc.text(formatCurrency(data.calc.grandTotal), totalsX + totalsWidth - 3, totalsY - 1.5, { align: 'right' })
+  doc.text('GRAND TOTAL', totalsX + 3, totalsY + 5)
+  doc.text(formatCurrency(data.calc.grandTotal), totalsX + totalsWidth - 3, totalsY + 5, { align: 'right' })
+  totalsY += gtRowH
 
   // Paid/Due
   if (isInvoice || isService) {
@@ -837,7 +847,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   // ===== BANK + QR + TERMS - A4 Fit =====
   const bottomSectionY = y
-  const remainingSpace = CONTENT_BOTTOM - y // space left above the band
+  const remainingSpace = CONTENT_LIMIT - y // space left above the band
   const colWidth = (usableWidth - 4) / 2
   const rightColX = margin + colWidth + 4
   let leftY = bottomSectionY
@@ -1066,52 +1076,50 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   }
 
   // ===== Responsive ad band — drawn on EVERY page, sized to the white space =====
-  // The band height is computed per page: it fills the bottom white space when
-  // an invoice/quotation is short (few items) and shrinks (auto-resizing the
-  // product images) when many items push content toward the page bottom.
   const adVariant = data.adBannerVariant || 'grid'
-  // Content end on the final page (after totals / amount-in-words / bank / terms)
   const lastContentEnd = y
-  // Responsive band geometry: grow with white space, shrink when content is long.
-  const computeBand = (pageEnd: number) => {
-    let top = Math.max(pageEnd + AD_GAP, FOOTER_TOP - AD_BAND_MAX)
-    let h = FOOTER_TOP - top
-    if (h < AD_BAND_MIN) { h = AD_BAND_MIN; top = FOOTER_TOP - AD_BAND_MIN }
+
+  // Compute band geometry: fills bottom white space, clamped to [AD_BAND_MIN, AD_BAND_MAX]
+  const computeBand = (contentEnd: number) => {
+    // Band top = content end + gap, but never higher than BAND_BOTTOM - AD_BAND_MAX
+    let top = Math.max(contentEnd + AD_GAP, BAND_BOTTOM - AD_BAND_MAX)
+    let h = BAND_BOTTOM - top
+    if (h < AD_BAND_MIN) { h = AD_BAND_MIN; top = BAND_BOTTOM - h }
+    if (h > AD_BAND_MAX) { h = AD_BAND_MAX; top = BAND_BOTTOM - h }
     return { top, h }
   }
+
+  // ===== SIGNATURE (last page only) — placed just above the ad band =====
+  const lastBand = computeBand(lastContentEnd)
+  const sigY = lastBand.top - 2 // 2mm gap above the band
+
+  doc.setPage(pageNumber)
+  doc.setDrawColor(...N.textVLight)
+  doc.setLineWidth(0.2)
+  const sigLineX = pageWidth - margin - 45
+  doc.line(sigLineX, sigY, pageWidth - margin, sigY)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...N.textDark)
+  doc.text(`For ${data.shop.name || 'Smart Computers'}:`, sigLineX + 22.5, sigY - 3, { align: 'center' })
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...N.textLight)
+  doc.text('Authorized Signatory', sigLineX + 22.5, sigY + 4, { align: 'center' })
+
+  // Draw ad banners on every page
   for (let i = 1; i <= pageNumber; i++) {
     doc.setPage(i)
     const pe = i < pageNumber ? (pageEnds[i] ?? margin + 10) : lastContentEnd
     const { top, h } = computeBand(pe)
     drawAdBanner(adVariant, top, h)
   }
-  doc.setPage(pageNumber)
-
-  // ===== SIGNATURE (last page only) — placed just ABOVE the ad band with a clear gap =====
-  const lastBand = computeBand(lastContentEnd)
-  const sigY = lastBand.top - SIG_GAP
-
-  doc.setDrawColor(...N.textVLight)
-  doc.setLineWidth(0.2)
-  const sigLineX = pageWidth - margin - 45
-  doc.line(sigLineX, sigY, pageWidth - margin, sigY)
-  
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(...N.textDark)
-  doc.text(`For ${data.shop.name || 'Smart Computers'}:`, sigLineX + 22.5, sigY - 3, { align: 'center' })
-  
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(...N.textLight)
-  doc.text('Authorized Signatory', sigLineX + 22.5, sigY + 4, { align: 'center' })
 
   // Draw all footers
   for (let i = 1; i <= pageNumber; i++) {
-    if (i > 1) {
-      // For multi-page, we need to set page
-      doc.setPage(i)
-    }
+    doc.setPage(i)
     drawFooter(i, pageNumber)
   }
   doc.setPage(pageNumber)
