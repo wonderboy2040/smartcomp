@@ -721,7 +721,13 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     doc.roundedRect(bx, by, bw, bandH, 1, 1, 'FD')
 
     if (variant === 'flyer') {
-      // Premium Flyer Card
+      if (imgs['flyer']) {
+        try {
+          doc.addImage(imgs['flyer'], 'PNG', bx + 1, by + 1, bw - 2, bandH - 2)
+          return
+        } catch {}
+      }
+      // Premium Flyer Card Fallback
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(8.5)
       doc.setTextColor(...A)

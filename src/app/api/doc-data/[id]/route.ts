@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRow, listRows, isConfigured } from '@/lib/sheets-client'
+import { getRow, listRows } from '@/lib/sheets-client'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
+import { loadProductImages } from '@/lib/productImages'
 import QRCode from 'qrcode'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
 
     let docData: any = null
+    const productImages = loadProductImages()
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
@@ -36,6 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: 'invoice',
         templateId,
         bannerVariant,
+        productImages,
         shop: {
           name: String(shop.name || 'Smart Computers'),
           owner: String(shop.owner || ''),
@@ -85,6 +88,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: 'quotation',
         templateId,
         bannerVariant,
+        productImages,
         shop: {
           name: String(shop.name || 'Smart Computers'),
           owner: String(shop.owner || ''),
@@ -144,6 +148,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         docType: 'service',
         templateId,
         bannerVariant,
+        productImages,
         jobId: job.jobId || job.id,
         deviceType: job.deviceType,
         brandModel: job.brandModel,
@@ -184,7 +189,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Invalid document type' }, { status: 400 })
     }
 
-    // Generate UPI QR code data URI if upiId exists
     if (docData.shop.upiId) {
       try {
         const qrAmount = docData.amountDue > 0 ? docData.amountDue : docData.calc.grandTotal

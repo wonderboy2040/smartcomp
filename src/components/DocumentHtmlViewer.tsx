@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Printer, Download, X, Eye, RefreshCw, FileText } from 'lucide-react'
 import { formatCurrency, numberToWords } from '@/lib/calc'
+import { AD_BANNER_VARIANTS } from '@/lib/pdf'
 
 export interface DocumentHtmlViewerProps {
   docId?: string
@@ -29,12 +30,14 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
   const [loading, setLoading] = useState<boolean>(!data && !!docId)
   const [error, setError] = useState<string | null>(null)
   const [templateId, setTemplateId] = useState<string>('tally-classic')
+  const [bannerVariant, setBannerVariant] = useState<string>('grid')
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (data) {
       setDoc(data)
       if (data.templateId) setTemplateId(data.templateId)
+      if (data.bannerVariant || data.adBannerVariant) setBannerVariant(data.bannerVariant || data.adBannerVariant)
       setLoading(false)
       return
     }
@@ -51,6 +54,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
       .then((d) => {
         setDoc(d)
         if (d.templateId) setTemplateId(d.templateId)
+        if (d.bannerVariant || d.adBannerVariant) setBannerVariant(d.bannerVariant || d.adBannerVariant)
         setLoading(false)
       })
       .catch((err) => {
@@ -121,19 +125,36 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-slate-300 hidden sm:inline">Theme:</label>
-          <select
-            value={templateId}
-            onChange={(e) => setTemplateId(e.target.value)}
-            className="bg-slate-800 border border-slate-700 text-white text-xs rounded px-2.5 py-1.5 font-medium outline-none cursor-pointer"
-          >
-            {TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} ({t.badge})
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <label className="text-xs font-medium text-slate-300 hidden sm:inline">Theme:</label>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="bg-slate-800 border border-slate-700 text-white text-xs rounded px-2.5 py-1.5 font-medium outline-none cursor-pointer"
+            >
+              {TEMPLATES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <label className="text-xs font-medium text-slate-300 hidden sm:inline">Banner:</label>
+            <select
+              value={bannerVariant}
+              onChange={(e) => setBannerVariant(e.target.value)}
+              className="bg-slate-800 border border-slate-700 text-white text-xs rounded px-2.5 py-1.5 font-medium outline-none cursor-pointer"
+            >
+              {AD_BANNER_VARIANTS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <button
             onClick={handlePrint}
@@ -144,7 +165,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
           </button>
 
           <a
-            href={`/api/pdf/${doc.id || doc.number}?type=${doc.docType}`}
+            href={`/api/pdf/${doc.id || doc.number}?type=${doc.docType}&template=${templateId}&banner=${bannerVariant}`}
             download={`Document-${doc.number}.pdf`}
             className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium px-3 py-1.5 rounded transition"
           >
@@ -419,29 +440,76 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             </div>
 
-            {/* Clean Products Showcase Card Strip */}
-            <div
-              className="p-3 rounded border flex flex-wrap items-center justify-between gap-2"
-              style={{
-                backgroundColor: currentTpl.bgLight,
-                borderColor: currentTpl.accent,
-              }}
-            >
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-                <div className="bg-white border border-slate-200 rounded p-2 text-center">
-                  <p className="font-bold text-xs text-slate-800">Computers</p>
+            {/* Dynamic Ad Banner Variants */}
+            {bannerVariant === 'flyer' ? (
+              <div className="rounded overflow-hidden border border-slate-300 shadow-sm">
+                <img
+                  src={doc.productImages?.flyer || '/posters/smartcomputers-a4-flyer-landscape.png'}
+                  alt="Smart Computers Premium Flyer"
+                  className="w-full h-24 sm:h-28 object-cover block"
+                />
+              </div>
+            ) : bannerVariant === 'featured' ? (
+              <div
+                className="p-3 rounded border flex items-center justify-between gap-3"
+                style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
+              >
+                <div>
+                  <p className="font-black text-xs uppercase tracking-wider" style={{ color: currentTpl.primary }}>
+                    WE ALSO SUPPLY
+                  </p>
+                  <p className="text-[10px] text-slate-600 font-semibold">{doc.shop?.name || 'Smart Computers'}</p>
+                  {doc.shop?.phone && <p className="text-[10px] text-slate-500">Call: {doc.shop.phone}</p>}
                 </div>
-                <div className="bg-white border border-slate-200 rounded p-2 text-center">
-                  <p className="font-bold text-xs text-slate-800">Laptops</p>
-                </div>
-                <div className="bg-white border border-slate-200 rounded p-2 text-center">
-                  <p className="font-bold text-xs text-slate-800">Printers</p>
-                </div>
-                <div className="bg-white border border-slate-200 rounded p-2 text-center">
-                  <p className="font-bold text-xs text-slate-800">Accessories</p>
+                <div className="grid grid-cols-4 gap-2 flex-1 max-w-md">
+                  {['computers', 'laptop', 'printers', 'accessories'].map((key) => (
+                    <div key={key} className="bg-white border border-slate-200 rounded p-1 text-center">
+                      {doc.productImages?.[key] && (
+                        <img src={doc.productImages[key]} alt={key} className="w-8 h-8 object-contain mx-auto" />
+                      )}
+                      <p className="text-[9px] font-bold text-slate-800 capitalize mt-0.5">{key}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            ) : bannerVariant === 'strip' ? (
+              <div
+                className="p-2.5 rounded border flex items-center justify-between gap-3 text-xs"
+                style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
+              >
+                <span className="font-bold uppercase" style={{ color: currentTpl.primary }}>
+                  SMART COMPUTERS IT SOLUTIONS
+                </span>
+                <span className="text-[10px] text-slate-600 hidden sm:inline">
+                  Computers • Laptops • Printers • CCTV • Accessories & Repairing
+                </span>
+                <span className="font-bold text-slate-900 text-xs">
+                  {doc.shop?.phone ? `Call: ${doc.shop.phone}` : 'Visit Store'}
+                </span>
+              </div>
+            ) : (
+              /* Default: 'grid' */
+              <div
+                className="p-2.5 rounded border"
+                style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
+              >
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
+                  {[
+                    { key: 'computers', label: 'Computers' },
+                    { key: 'laptop', label: 'Laptops' },
+                    { key: 'printers', label: 'Printers' },
+                    { key: 'accessories', label: 'Accessories' },
+                  ].map((p) => (
+                    <div key={p.key} className="bg-white border border-slate-200 rounded p-1.5 flex items-center gap-2">
+                      {doc.productImages?.[p.key] && (
+                        <img src={doc.productImages[p.key]} alt={p.label} className="w-7 h-7 object-contain flex-shrink-0" />
+                      )}
+                      <p className="font-bold text-xs text-slate-800 truncate">{p.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Document Footer Line */}
             <div className="flex justify-between items-center text-[9px] text-slate-400 border-t border-slate-200 pt-2">
