@@ -201,10 +201,10 @@ export const PDF_TEMPLATES: PdfTemplate[] = [
 ]
 
 export const AD_BANNER_VARIANTS = [
-  { id: 'grid', name: 'Product Grid', description: 'Clean 4-product showcase cards' },
+  { id: 'flyer', name: 'Premium Flyer', description: 'Large readable A4 promo flyer poster' },
+  { id: 'grid', name: 'Product Grid', description: 'High-res 4x4 product grid poster graphic' },
   { id: 'featured', name: 'Featured Mix', description: 'Headline panel + product showcase' },
   { id: 'strip', name: 'Compact Strip', description: 'Minimal image pills + Call/Visit CTA' },
-  { id: 'flyer', name: 'Premium Flyer', description: 'Full premium A4 flyer promo card' },
 ] as const
 
 const N = {
@@ -289,14 +289,14 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const margin = 12
   const usableWidth = pageWidth - margin * 2
 
-  // ===== PAGE GEOMETRY & RESERVED ZONES (Strict Zero Overlap) =====
+  // ===== PAGE GEOMETRY & RESERVED ZONES (Large Readable Poster - Zero Overlap) =====
   const FOOTER_Y = 289
   const FOOTER_LINE = 286
-  const AD_BAND_BOTTOM = 282
-  const AD_BAND_HEIGHT = 22 // Clean 22mm strip
-  const AD_BAND_TOP = AD_BAND_BOTTOM - AD_BAND_HEIGHT // 260mm
-  const SIG_LINE_Y = 248 // Signature line position
-  const CONTENT_LIMIT = 238 // Dynamic content stops before 238mm to leave clear space for Signature + Ad Band
+  const AD_BAND_BOTTOM = 283
+  const AD_BAND_HEIGHT = 38 // Large 38mm high poster showcase for crystal clear readability
+  const AD_BAND_TOP = AD_BAND_BOTTOM - AD_BAND_HEIGHT // 245mm
+  const SIG_LINE_Y = 237 // Signature line position
+  const CONTENT_LIMIT = 225 // Content stops before 225mm to leave space for Signature + Large Flyer Banner
 
   let pageNumber = 1
   const pageEnds: Record<number, number> = {}
@@ -582,7 +582,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     y = (doc as any).lastAutoTable.finalY + 4
   }
 
-  addPageIfNeeded(35)
+  addPageIfNeeded(30)
 
   // ===== TOTALS & AMOUNT IN WORDS SECTION =====
   const totalsW = 75
@@ -680,7 +680,6 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   y = Math.max(currentTotY + 4, leftY + 4)
 
   // ===== GUARANTEED SIGNATURE BLOCK POSITIONING =====
-  // Draw signature strictly above the Ad Banner box
   doc.setPage(pageNumber)
   const sigBoxX = pageWidth - margin - 50
   
@@ -698,7 +697,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setTextColor(...N.textLight)
   doc.text('Authorized Signatory', sigBoxX + 25, SIG_LINE_Y + 4, { align: 'center' })
 
-  // ===== PRODUCT SHOWCASE AD BANNER (22mm High Strip, Zero Overlap) =====
+  // ===== LARGE HIGH-RESOLUTION PROMO POSTER AD BANNER (38mm High - Best Readability) =====
   const AD_PRODUCTS = [
     { key: 'computers', label: 'Computers' },
     { key: 'laptop', label: 'Laptops' },
@@ -712,54 +711,49 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     const by = topY
     const imgs: Record<string, string> = data.productImages || {}
     const phone = data.shop.phone || ''
-    const variant = data.adBannerVariant || 'grid'
+    const variant = data.adBannerVariant || 'flyer'
 
-    // Shared band background
+    // Premium Flyer Poster Graphic
+    if (variant === 'flyer') {
+      if (imgs['flyer']) {
+        try {
+          doc.addImage(imgs['flyer'], 'PNG', bx, by, bw, bandH)
+          return
+        } catch {}
+      }
+    }
+
+    // High-Res Product Grid Poster Graphic
+    if (variant === 'grid') {
+      if (imgs['productgrid']) {
+        try {
+          doc.addImage(imgs['productgrid'], 'PNG', bx, by, bw, bandH)
+          return
+        } catch {}
+      }
+    }
+
+    // Fallback Background Card
     doc.setFillColor(...mixColor(A, N.white, 0.94))
     doc.setDrawColor(...A)
     doc.setLineWidth(0.3)
     doc.roundedRect(bx, by, bw, bandH, 1, 1, 'FD')
 
-    if (variant === 'flyer') {
-      if (imgs['flyer']) {
-        try {
-          doc.addImage(imgs['flyer'], 'PNG', bx + 1, by + 1, bw - 2, bandH - 2)
-          return
-        } catch {}
-      }
-      // Premium Flyer Card Fallback
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8.5)
-      doc.setTextColor(...A)
-      doc.text(`CHECK OUT OUR LATEST OFFERS!`, bx + 6, by + 8)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
-      doc.setTextColor(...N.textMid)
-      doc.text(`Computers • Laptops • Printers • CCTV • IT Accessories & Repair Services`, bx + 6, by + 14)
-
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(...N.textDark)
-      doc.text(phone ? `Call / WhatsApp: ${phone}` : 'Visit Store Today!', bx + bw - 6, by + 11, { align: 'right' })
-      return
-    }
-
     if (variant === 'featured') {
-      // Featured Mix Headline + Tiles
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
+      doc.setFontSize(9)
       doc.setTextColor(...A)
-      doc.text('WE ALSO SUPPLY:', bx + 6, by + 12)
+      doc.text('WE ALSO SUPPLY:', bx + 6, by + 16)
 
-      const startX = bx + 42
-      const tileGap = 2
-      const tileW = (bw - 48 - tileGap * 3) / 4
-      const imgSize = 9
-      const tileH = bandH - 4
+      const startX = bx + 45
+      const tileGap = 3
+      const tileW = (bw - 52 - tileGap * 3) / 4
+      const imgSize = 16
+      const tileH = bandH - 6
 
       AD_PRODUCTS.forEach((p, i) => {
         const tx = startX + i * (tileW + tileGap)
-        const ty = by + 2
+        const ty = by + 3
 
         doc.setFillColor(...N.white)
         doc.setDrawColor(...mixColor(A, N.white, 0.7))
@@ -768,48 +762,47 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
         if (imgs[p.key]) {
           try {
-            doc.addImage(imgs[p.key], 'PNG', tx + 1.5, ty + 1, imgSize, imgSize)
+            doc.addImage(imgs[p.key], 'PNG', tx + (tileW - imgSize) / 2, ty + 2, imgSize, imgSize)
           } catch {}
         }
 
         doc.setFont('helvetica', 'bold')
-        doc.setFontSize(6)
+        doc.setFontSize(7)
         doc.setTextColor(...N.textDark)
-        doc.text(p.label, tx + imgSize + 2, ty + tileH / 2 + 1)
+        doc.text(p.label, tx + tileW / 2, ty + tileH - 2, { align: 'center' })
       })
       return
     }
 
     if (variant === 'strip') {
-      // Compact Strip
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7.5)
+      doc.setFontSize(9)
       doc.setTextColor(...A)
-      doc.text('SMART COMPUTERS IT SOLUTIONS', bx + 6, by + 12)
+      doc.text('SMART COMPUTERS IT SOLUTIONS', bx + 6, by + 18)
 
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFontSize(8)
       doc.setTextColor(...N.textMid)
-      doc.text('Computers • Laptops • Printers • CCTV • Accessories', bx + 65, by + 12)
+      doc.text('Computers • Laptops • Printers • CCTV • Accessories & Repair Center', bx + 6, by + 26)
 
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(7.5)
+      doc.setFontSize(9)
       doc.setTextColor(...N.textDark)
-      doc.text(phone ? `Call: ${phone}` : 'Authorized Center', bx + bw - 6, by + 12, { align: 'right' })
+      doc.text(phone ? `Call / WhatsApp: ${phone}` : 'Authorized Center', bx + bw - 6, by + 20, { align: 'right' })
       return
     }
 
-    // Default Variant: 'grid' (Clean 4 Product Cards)
-    const tileGap = 3
+    // Default Fallback: Clean 4 Product Cards
+    const tileGap = 4
     const totalGap = tileGap * (AD_PRODUCTS.length - 1)
     const tileW = (bw - 12 - totalGap) / AD_PRODUCTS.length
     const startX = bx + 6
-    const imgSize = 10
-    const tileH = bandH - 4
+    const imgSize = 18
+    const tileH = bandH - 6
 
     AD_PRODUCTS.forEach((p, i) => {
       const tx = startX + i * (tileW + tileGap)
-      const ty = by + 2
+      const ty = by + 3
 
       doc.setFillColor(...N.white)
       doc.setDrawColor(...mixColor(A, N.white, 0.7))
@@ -818,14 +811,14 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
       if (imgs[p.key]) {
         try {
-          doc.addImage(imgs[p.key], 'PNG', tx + 2, ty + 1, imgSize, imgSize)
+          doc.addImage(imgs[p.key], 'PNG', tx + (tileW - imgSize) / 2, ty + 2, imgSize, imgSize)
         } catch {}
       }
 
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
+      doc.setFontSize(7.5)
       doc.setTextColor(...N.textDark)
-      doc.text(p.label, tx + imgSize + 3, ty + tileH / 2 + 1)
+      doc.text(p.label, tx + tileW / 2, ty + tileH - 3, { align: 'center' })
     })
   }
 

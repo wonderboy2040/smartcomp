@@ -30,7 +30,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
   const [loading, setLoading] = useState<boolean>(!data && !!docId)
   const [error, setError] = useState<string | null>(null)
   const [templateId, setTemplateId] = useState<string>('tally-classic')
-  const [bannerVariant, setBannerVariant] = useState<string>('grid')
+  const [bannerVariant, setBannerVariant] = useState<string>('flyer')
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -440,13 +440,21 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             </div>
 
-            {/* Dynamic Ad Banner Variants */}
+            {/* Dynamic Large Readable Ad Banner Variants */}
             {bannerVariant === 'flyer' ? (
               <div className="rounded overflow-hidden border border-slate-300 shadow-sm">
                 <img
                   src={doc.productImages?.flyer || '/posters/smartcomputers-a4-flyer-landscape.png'}
                   alt="Smart Computers Premium Flyer"
-                  className="w-full h-24 sm:h-28 object-cover block"
+                  className="w-full h-32 sm:h-36 object-cover block"
+                />
+              </div>
+            ) : bannerVariant === 'grid' ? (
+              <div className="rounded overflow-hidden border border-slate-300 shadow-sm">
+                <img
+                  src={doc.productImages?.productgrid || '/posters/smartcomputers-product-grid.png'}
+                  alt="Smart Computers Product Grid Poster"
+                  className="w-full h-32 sm:h-36 object-cover block"
                 />
               </div>
             ) : bannerVariant === 'featured' ? (
@@ -463,51 +471,30 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                 </div>
                 <div className="grid grid-cols-4 gap-2 flex-1 max-w-md">
                   {['computers', 'laptop', 'printers', 'accessories'].map((key) => (
-                    <div key={key} className="bg-white border border-slate-200 rounded p-1 text-center">
+                    <div key={key} className="bg-white border border-slate-200 rounded p-1.5 text-center">
                       {doc.productImages?.[key] && (
-                        <img src={doc.productImages[key]} alt={key} className="w-8 h-8 object-contain mx-auto" />
+                        <img src={doc.productImages[key]} alt={key} className="w-10 h-10 object-contain mx-auto" />
                       )}
                       <p className="text-[9px] font-bold text-slate-800 capitalize mt-0.5">{key}</p>
                     </div>
                   ))}
                 </div>
               </div>
-            ) : bannerVariant === 'strip' ? (
+            ) : (
+              /* Default: 'strip' */
               <div
-                className="p-2.5 rounded border flex items-center justify-between gap-3 text-xs"
+                className="p-3 rounded border flex items-center justify-between gap-3 text-xs"
                 style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
               >
-                <span className="font-bold uppercase" style={{ color: currentTpl.primary }}>
+                <span className="font-bold uppercase text-sm" style={{ color: currentTpl.primary }}>
                   SMART COMPUTERS IT SOLUTIONS
                 </span>
-                <span className="text-[10px] text-slate-600 hidden sm:inline">
+                <span className="text-[11px] text-slate-600 hidden sm:inline font-medium">
                   Computers • Laptops • Printers • CCTV • Accessories & Repairing
                 </span>
                 <span className="font-bold text-slate-900 text-xs">
                   {doc.shop?.phone ? `Call: ${doc.shop.phone}` : 'Visit Store'}
                 </span>
-              </div>
-            ) : (
-              /* Default: 'grid' */
-              <div
-                className="p-2.5 rounded border"
-                style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
-              >
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-                  {[
-                    { key: 'computers', label: 'Computers' },
-                    { key: 'laptop', label: 'Laptops' },
-                    { key: 'printers', label: 'Printers' },
-                    { key: 'accessories', label: 'Accessories' },
-                  ].map((p) => (
-                    <div key={p.key} className="bg-white border border-slate-200 rounded p-1.5 flex items-center gap-2">
-                      {doc.productImages?.[p.key] && (
-                        <img src={doc.productImages[p.key]} alt={p.label} className="w-7 h-7 object-contain flex-shrink-0" />
-                      )}
-                      <p className="font-bold text-xs text-slate-800 truncate">{p.label}</p>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
 
