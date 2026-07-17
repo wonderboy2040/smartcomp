@@ -229,13 +229,13 @@ export async function apiPost(url: string, body: any) {
 
     for (const key of affectedKeys) {
       mutate<any[]>(key, (prev) =>
-        prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : prev
+        prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : []
       )
     }
     return data
   } catch (e) {
     for (const key of affectedKeys) {
-      mutate<any[]>(key, (prev) => prev ? prev.filter((x) => x.id !== tempId) : prev)
+      mutate<any[]>(key, (prev) => (prev ? prev.filter((x) => x.id !== tempId) : []))
     }
     throw e
   }
@@ -312,14 +312,14 @@ export async function apiPostUltraFast(url: string, body: any, options: { instan
 
       for (const key of affectedKeys) {
         mutate<any[]>(key, (prev) =>
-          prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false, _optimistic: false } : x)) : prev
+          prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false, _optimistic: false } : x)) : []
         )
       }
       return data
     } catch (e) {
       // On failure, keep temp but mark as failed, or rollback
       for (const key of affectedKeys) {
-        mutate<any[]>(key, (prev) => prev ? prev.map((x) => x.id === tempId ? { ...x, _pending: false, _failed: true } : x) : prev)
+        mutate<any[]>(key, (prev) => (prev ? prev.map((x) => x.id === tempId ? { ...x, _pending: false, _failed: true } : x) : []))
       }
       throw e
     }

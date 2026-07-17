@@ -50,7 +50,7 @@ export interface PdfDocData {
   roundOff?: number
   bankDetails?: ShopInfo
   // Base64 product images for the bottom advertising showcase banner
-  productImages?: Record<string, string>
+  productImages?: any
   // Advertising banner style: 'grid' | 'featured' | 'strip'
   adBannerVariant?: string
 }

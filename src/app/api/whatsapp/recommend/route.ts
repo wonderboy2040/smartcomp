@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const recommendations = []
+    const recommendations: any[] = []
     for (const item of items) {
       const itemId = String(item.id)
       const rates = rateMap.get(itemId) || []
