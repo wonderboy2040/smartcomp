@@ -204,6 +204,7 @@ export const AD_BANNER_VARIANTS = [
   { id: 'grid', name: 'Product Grid', description: 'Clean 4-product showcase cards' },
   { id: 'featured', name: 'Featured Mix', description: 'Headline panel + product showcase' },
   { id: 'strip', name: 'Compact Strip', description: 'Minimal image pills + Call/Visit CTA' },
+  { id: 'flyer', name: 'Premium Flyer', description: 'Full premium A4 flyer promo card' },
 ] as const
 
 const N = {
@@ -697,7 +698,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setTextColor(...N.textLight)
   doc.text('Authorized Signatory', sigBoxX + 25, SIG_LINE_Y + 4, { align: 'center' })
 
-  // ===== CLEAN PRODUCT SHOWCASE AD BANNER (22mm High Strip, Zero Overlap) =====
+  // ===== PRODUCT SHOWCASE AD BANNER (22mm High Strip, Zero Overlap) =====
   const AD_PRODUCTS = [
     { key: 'computers', label: 'Computers' },
     { key: 'laptop', label: 'Laptops' },
@@ -711,6 +712,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     const by = topY
     const imgs: Record<string, string> = data.productImages || {}
     const phone = data.shop.phone || ''
+    const variant = data.adBannerVariant || 'grid'
 
     // Shared band background
     doc.setFillColor(...mixColor(A, N.white, 0.94))
@@ -718,7 +720,80 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     doc.setLineWidth(0.3)
     doc.roundedRect(bx, by, bw, bandH, 1, 1, 'FD')
 
-    // Clean 4 Product Cards
+    if (variant === 'flyer') {
+      // Premium Flyer Card
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...A)
+      doc.text(`CHECK OUT OUR LATEST OFFERS!`, bx + 6, by + 8)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...N.textMid)
+      doc.text(`Computers • Laptops • Printers • CCTV • IT Accessories & Repair Services`, bx + 6, by + 14)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...N.textDark)
+      doc.text(phone ? `Call / WhatsApp: ${phone}` : 'Visit Store Today!', bx + bw - 6, by + 11, { align: 'right' })
+      return
+    }
+
+    if (variant === 'featured') {
+      // Featured Mix Headline + Tiles
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...A)
+      doc.text('WE ALSO SUPPLY:', bx + 6, by + 12)
+
+      const startX = bx + 42
+      const tileGap = 2
+      const tileW = (bw - 48 - tileGap * 3) / 4
+      const imgSize = 9
+      const tileH = bandH - 4
+
+      AD_PRODUCTS.forEach((p, i) => {
+        const tx = startX + i * (tileW + tileGap)
+        const ty = by + 2
+
+        doc.setFillColor(...N.white)
+        doc.setDrawColor(...mixColor(A, N.white, 0.7))
+        doc.setLineWidth(0.2)
+        doc.roundedRect(tx, ty, tileW, tileH, 1, 1, 'FD')
+
+        if (imgs[p.key]) {
+          try {
+            doc.addImage(imgs[p.key], 'PNG', tx + 1.5, ty + 1, imgSize, imgSize)
+          } catch {}
+        }
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6)
+        doc.setTextColor(...N.textDark)
+        doc.text(p.label, tx + imgSize + 2, ty + tileH / 2 + 1)
+      })
+      return
+    }
+
+    if (variant === 'strip') {
+      // Compact Strip
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...A)
+      doc.text('SMART COMPUTERS IT SOLUTIONS', bx + 6, by + 12)
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...N.textMid)
+      doc.text('Computers • Laptops • Printers • CCTV • Accessories', bx + 65, by + 12)
+
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...N.textDark)
+      doc.text(phone ? `Call: ${phone}` : 'Authorized Center', bx + bw - 6, by + 12, { align: 'right' })
+      return
+    }
+
+    // Default Variant: 'grid' (Clean 4 Product Cards)
     const tileGap = 3
     const totalGap = tileGap * (AD_PRODUCTS.length - 1)
     const tileW = (bw - 12 - totalGap) / AD_PRODUCTS.length
