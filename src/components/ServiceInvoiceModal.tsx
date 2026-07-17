@@ -96,68 +96,72 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
     { src: '/ads/accessories.png', label: 'Accessories' },
   ]
   const renderAdBanner = (style: string) => {
-    const band = {
-      border: `1px solid ${accent}`,
-      borderRadius: '10px',
-      background: `linear-gradient(135deg, ${accent}0d, ${accent}1f)`,
-    }
-    if (style === 'strip') {
+    // Full-width "merged" band: spans the content width (no side margins) so
+    // it reads as one continuous advertising strip — exactly like the jsPDF
+    // engine's placeCover(). Images use object-fit: cover to fill the box.
+    const fullBleed = { marginLeft: '-20px', marginRight: '-20px' }
+    const caption = (
+      <>
+        <div style={{ textAlign: 'center', fontSize: '13px', fontWeight: 800, color: accent, marginTop: '7px', letterSpacing: '0.4px' }}>
+          CHECK OUT OUR LATEST OFFERS!
+        </div>
+        <div style={{ textAlign: 'center', fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+          {shop?.phone ? `Call ${shop.phone}  •  Computers • Laptops • Printers • Accessories` : 'Computers • Laptops • Printers • Accessories'}
+        </div>
+      </>
+    )
+    if (style === 'flyer' || style === 'grid') {
+      const poster = style === 'flyer'
+        ? '/posters/smartcomputers-a4-flyer-landscape.png'
+        : '/posters/smartcomputers-product-grid.png'
       return (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '20px', padding: '8px 12px', ...band }}>
-          <div style={{ fontSize: '11px', fontWeight: 800, color: accent, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>We Also Supply</div>
-          <div style={{ display: 'flex', gap: '12px', flex: 1, justifyContent: 'space-between' }}>
-            {AD_IMGS.map((p) => (
-              <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.src} alt={p.label} style={{ height: '32px', width: '32px', objectFit: 'contain' }} />
-                <span style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a' }}>{p.label}</span>
-              </div>
-            ))}
+        <div style={{ ...fullBleed, marginTop: '22px' }}>
+          <div style={{ borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, background: '#fff', lineHeight: 0 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={poster} alt="Smart Computers latest offers" style={{ width: '100%', height: '150px', objectFit: 'cover', display: 'block' }} />
           </div>
-          <div style={{ fontSize: '10px', fontWeight: 800, color: accent, whiteSpace: 'nowrap' }}>{shop?.phone ? `Call: ${shop.phone}` : bn}</div>
+          {caption}
         </div>
       )
     }
     if (style === 'featured') {
       return (
-        <div style={{ display: 'flex', gap: '12px', marginTop: '20px', padding: '10px 12px', ...band }}>
-          <div style={{ flexShrink: 0, width: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ fontSize: '15px', fontWeight: 800, color: accent, lineHeight: 1.05 }}>WE<br />ALSO<br />SUPPLY</div>
-            <div style={{ fontSize: '9px', color: '#475569', marginTop: '4px', fontWeight: 600 }}>{bn}</div>
-            {shop?.phone && <div style={{ fontSize: '9px', color: '#64748b', marginTop: '2px' }}>Call: {shop.phone}</div>}
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
-            {AD_IMGS.map((p) => (
-              <div key={p.label} style={{ flex: 1, textAlign: 'center' }}>
-                <div style={{ background: '#fff', border: `1px solid ${accent}40`, borderRadius: '8px', padding: '4px', height: '58px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.src} alt={p.label} style={{ maxHeight: '50px', maxWidth: '100%', objectFit: 'contain' }} />
+        <div style={{ ...fullBleed, marginTop: '22px', padding: '12px 14px', borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, background: `linear-gradient(135deg, ${accent}08, ${accent}15)` }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ flexShrink: 0, width: '150px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: accent, lineHeight: 1.05 }}>WE<br />ALSO<br />SUPPLY</div>
+              <div style={{ fontSize: '10px', color: '#475569', marginTop: '4px', fontWeight: 600 }}>{bn}</div>
+              {shop?.phone && <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>Call: {shop.phone}</div>}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', flex: 1 }}>
+              {AD_IMGS.map((p) => (
+                <div key={p.label} style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ background: '#fff', border: `1px solid ${accent}40`, borderRadius: '8px', padding: '4px', height: '84px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.src} alt={p.label} style={{ maxHeight: '74px', maxWidth: '100%', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{p.label}</div>
                 </div>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{p.label}</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )
     }
+    // strip
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px', padding: '10px 12px', ...band }}>
-        <div style={{ flexShrink: 0, width: '140px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 800, color: accent, textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1.2 }}>We Also Supply</div>
-          <div style={{ fontSize: '10px', color: '#475569', marginTop: '3px', fontWeight: 600 }}>{bn}</div>
-          {shop?.phone && <div style={{ fontSize: '9px', color: '#64748b', marginTop: '2px' }}>Call: {shop.phone}</div>}
-        </div>
-        <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+      <div style={{ ...fullBleed, marginTop: '22px', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: '12px', borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, background: `linear-gradient(135deg, ${accent}08, ${accent}15)` }}>
+        <div style={{ fontSize: '13px', fontWeight: 800, color: accent, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>We Also Supply</div>
+        <div style={{ display: 'flex', gap: '16px', flex: 1, justifyContent: 'space-between' }}>
           {AD_IMGS.map((p) => (
-            <div key={p.label} style={{ flex: 1, textAlign: 'center' }}>
-              <div style={{ background: '#fff', border: `1px solid ${accent}40`, borderRadius: '8px', padding: '4px', height: '58px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.src} alt={p.label} style={{ maxHeight: '50px', maxWidth: '100%', objectFit: 'contain' }} />
-              </div>
-              <div style={{ fontSize: '10px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{p.label}</div>
+            <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.src} alt={p.label} style={{ height: '34px', width: '34px', objectFit: 'contain' }} />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a' }}>{p.label}</span>
             </div>
           ))}
         </div>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: accent, whiteSpace: 'nowrap' }}>{shop?.phone ? `Call: ${shop.phone}` : bn}</div>
       </div>
     )
   }
@@ -226,7 +230,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
               <div style={{ background: headerBg, padding: '16px 20px', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <div style={{ fontSize: '20px', fontWeight: 800, color: headerText, letterSpacing: '-0.5px' }}>{bn}</div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, color: headerText, letterSpacing: '-0.5px' }}>{bn}</div>
                     <div style={{ fontSize: '11px', color: headerBg.startsWith('rgb(255') ? '#4b5563' : '#d1d5db', marginTop: '4px', maxWidth: '300px' }}>
                       {shop?.address || 'Computer, Laptop & Printer Service Center'}
                       {shop?.state ? `, ${shop.state}` : ''}
@@ -244,7 +248,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ 
-                      fontSize: '18px', 
+                      fontSize: '20px', 
                       fontWeight: 800, 
                       color: accent,
                       border: `2px solid ${accent}`,
@@ -333,7 +337,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        <th style={{ background: tableHead, color: '#fff', padding: '10px 12px', textAlign: 'left', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', width: '40px' }}>#</th>
+                        <th style={{ background: tableHead, color: '#fff', padding: '10px 12px', textAlign: 'left', fontSize: '12px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px', width: '40px' }}>#</th>
                         <th style={{ background: tableHead, color: '#fff', padding: '10px 12px', textAlign: 'left', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Item Description</th>
                         <th style={{ background: tableHead, color: '#fff', padding: '10px 12px', textAlign: 'center', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, width: '60px' }}>Qty</th>
                         <th style={{ background: tableHead, color: '#fff', padding: '10px 12px', textAlign: 'right', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, width: '90px' }}>Rate</th>
@@ -349,7 +353,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                           <tr key={i} style={{ background: i % 2 === 0 ? '#ffffff' : '#f9fafb' }}>
                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>{i + 1}</td>
                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6' }}>
-                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#111827' }}>{p.name}</div>
+                              <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{p.name}</div>
                               {p.sku && <div style={{ fontSize: '10px', color: '#6b7280' }}>{p.sku}</div>}
                               {p.itemId && <div style={{ fontSize: '9px', color: '#9ca3af' }}>Stock ID: {p.itemId.slice(0,8)}</div>}
                             </td>
@@ -398,7 +402,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: accent, color: '#ffffff' }}>
                         <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Grand Total</span>
-                        <span style={{ fontSize: '13px', fontWeight: 800 }}>Rs.{tot.toFixed(2)}</span>
+                        <span style={{ fontSize: '14px', fontWeight: 800 }}>Rs.{tot.toFixed(2)}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderTop: '1px solid #f3f4f6', background: '#ffffff' }}>
                         <span style={{ fontSize: '11px', color: '#6b7280' }}>Advance / Paid</span>
@@ -443,6 +447,17 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                     <div style={{ fontSize: '10px', color: '#6b7280' }}>{bn}</div>
                   </div>
                 </div>
+
+                {/* Bank Details — always shown (wired from shop settings) */}
+                {(shop?.bankName || shop?.bankAccount) && (
+                  <div style={{ marginTop: '16px', border: `1px solid ${accent}`, borderRadius: '8px', padding: '10px 14px', background: 'linear-gradient(135deg, #f8fafc, #ffffff)' }}>
+                    <div style={{ fontSize: '10px', fontWeight: 800, color: accent, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Bank Details</div>
+                    <div style={{ fontSize: '11px', color: '#334155', lineHeight: 1.6 }}>
+                      {shop?.bankName && <div><span style={{ fontWeight: 700 }}>Bank:</span> {shop.bankName}{shop?.bankBranch ? `, ${shop.bankBranch}` : ''}</div>}
+                      {shop?.bankAccount && <div><span style={{ fontWeight: 700 }}>A/c:</span> {shop.bankAccount}{shop?.bankIfsc ? `  |  IFSC: ${shop.bankIfsc}` : ''}</div>}
+                    </div>
+                  </div>
+                )}
 
                 {renderAdBanner(bannerStyle)}
 

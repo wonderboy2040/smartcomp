@@ -214,9 +214,10 @@ export const PDF_TEMPLATES: PdfTemplate[] = [
 
 // Advertising banner style variants shown on every printed sheet
 export const AD_BANNER_VARIANTS = [
-  { id: 'grid', name: 'Product Grid', description: '4 image tiles with labels' },
+  { id: 'grid', name: 'Product Grid', description: 'Premium 4x4 product-grid flyer image' },
   { id: 'featured', name: 'Featured Mix', description: 'Headline panel + product showcase' },
   { id: 'strip', name: 'Compact Strip', description: 'Minimal image pills + Call/Visit CTA' },
+  { id: 'flyer', name: 'Premium Flyer', description: 'Full premium A4 flyer promo card' },
 ] as const
 
 const N = {
@@ -311,11 +312,23 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const usableWidth = pageWidth - 2 * margin
   let y = 0
   let pageNumber = 1
+  const pageEnds: Record<number, number> = {} // per-page content-end Y (for the responsive band)
 
-  // Bottom advertising band (product showcase) — reserved on EVERY page
-  const BANNER_H = 26
-  const BANNER_TOP = pageHeight - 58 // 239mm — top of the advertising band
-  const CONTENT_BOTTOM = BANNER_TOP - 3 // 236mm — content must stop above the band
+  // ===== Responsive advertising band (product showcase) =====
+  // Drawn BELOW the signature on EVERY printed page so each sheet promotes
+  // the shop. The band HEIGHT is RESPONSIVE: it grows to fill the bottom
+  // white space when an invoice/quotation has few line items, and shrinks
+  // (auto-resizing the product images inside it) when many items push the
+  // content down close to the page bottom.
+  const FOOTER_TOP = pageHeight - 9 // banner ends here, just above the page footer
+  const AD_BAND_MIN = 24 // smallest band (content is long / many items)
+  const AD_BAND_MAX = 56 // largest band (content is short / lots of white space)
+  const AD_GAP = 6 // gap between content and the band
+  const SIG_GAP = 4 // gap between the signature line and the band top
+  // autoTable bottom margin: stop the table this far above the footer so there
+  // is always room for at least the MIN band + footer.
+  const AUTO_BOTTOM = FOOTER_TOP - AD_BAND_MIN - AD_GAP // 258mm
+  const CONTENT_BOTTOM = pageHeight - 65 // 232mm — used for pre-table page-break checks
 
   const isInvoice = data.docType === 'invoice'
   const isService = data.docType === 'service'
@@ -332,12 +345,12 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const drawFooter = (pageNum: number, totalPages: number = 1) => {
     doc.setDrawColor(...N.border)
     doc.setLineWidth(0.15)
-    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10)
+    doc.line(margin, pageHeight - 6, pageWidth - margin, pageHeight - 6)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
+    doc.setFontSize(8)
     doc.setTextColor(...N.textVLight)
     const footerText = `${isInvoice ? 'Invoice' : isService ? 'Service Invoice' : 'Quotation'} ${data.number} | ${data.shop.name || 'Smart Computers'} | ${totalPages > 1 ? `Page ${pageNum} of ${totalPages} | ` : ''}Computer generated - No signature required | Generated ${formatDateTime(new Date())}`
-    doc.text(footerText, pageWidth / 2, pageHeight - 6, { align: 'center', maxWidth: usableWidth })
+    doc.text(footerText, pageWidth / 2, pageHeight - 2.5, { align: 'center', maxWidth: usableWidth })
   }
 
   const addPageIfNeeded = (requiredSpace: number): boolean => {
@@ -352,7 +365,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   }
 
   // ===== HEADER - A4 Perfect Fit =====
-  const headerHeight = 32
+  const headerHeight = 34
   doc.setFillColor(...HB)
   doc.rect(0, 0, pageWidth, headerHeight, 'F')
   
@@ -386,16 +399,16 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   // Shop name - Large, Bold
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
+  doc.setFontSize(20)
   doc.setTextColor(...HT)
   const shopNameX = margin + logoOffset
-  doc.text(data.shop.name || 'Smart Computers', shopNameX, y + 5, { maxWidth: 90 })
+  doc.text(data.shop.name || 'Smart Computers', shopNameX, y + 6, { maxWidth: 96 })
 
   // Shop details - Compact, A4 optimized
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
+  doc.setFontSize(8.5)
   doc.setTextColor(...subColor)
-  let infoY = y + 10
+  let infoY = y + 11
   const maxShopInfoWidth = 95
   
   if (data.shop.address) {
@@ -425,16 +438,16 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // Document Title & Meta - Right side, A4 optimized
   const rightX = pageWidth - margin
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
+  doc.setFontSize(18)
   doc.setTextColor(...A)
   let docTitle = isInvoice ? 'TAX INVOICE' : isService ? 'SERVICE INVOICE' : 'QUOTATION'
   if (tpl.id === 'gst-vibrant-bold') docTitle = `★ ${docTitle} ★`
   doc.text(docTitle, rightX, y + 2, { align: 'right' })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
+  doc.setFontSize(8.5)
   doc.setTextColor(...subColor)
-  let metaY = y + 7
+  let metaY = y + 8
   doc.setFont('helvetica', 'bold')
   doc.text(`No: ${data.number}`, rightX, metaY, { align: 'right' })
   doc.setFont('helvetica', 'normal')
@@ -462,7 +475,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   y = headerHeight + 6
 
   // ===== BILL TO & SHIP TO - Compact A4 Fit =====
-  const boxHeight = 32
+  const boxHeight = 34
   const halfWidth = (usableWidth - 4) / 2
 
   // Bill To
@@ -472,7 +485,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.roundedRect(margin, y, halfWidth, boxHeight, 1.5, 1.5, 'FD')
   
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7)
+  doc.setFontSize(8.5)
   doc.setTextColor(...A)
   doc.text(isInvoice ? 'BILL TO / CUSTOMER DETAILS' : isService ? 'BILL TO / SERVICE CUSTOMER' : 'QUOTE TO', margin + 3, y + 4)
   
@@ -481,14 +494,14 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.line(margin + 3, y + 5.5, margin + 30, y + 5.5)
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(13)
   doc.setTextColor(...N.textDark)
-  doc.text(data.customer.name || 'Walk-in Customer', margin + 3, y + 10, { maxWidth: halfWidth - 6 })
+  doc.text(data.customer.name || 'Walk-in Customer', margin + 3, y + 11, { maxWidth: halfWidth - 6 })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
+  doc.setFontSize(8.5)
   doc.setTextColor(...N.textMid)
-  let by = y + 14
+  let by = y + 15
   if (data.customer.address) {
     const addrLines = doc.splitTextToSize(data.customer.address, halfWidth - 6)
     doc.text(addrLines.slice(0, 2), margin + 3, by)
@@ -517,7 +530,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   if (isInvoice || isService) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(8.5)
     doc.setTextColor(...A)
     doc.text('PAYMENT & SHIPPING DETAILS', rightBoxX + 3, y + 4)
     doc.setDrawColor(...A)
@@ -565,7 +578,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     }
   } else {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
+    doc.setFontSize(8.5)
     doc.setTextColor(...A)
     doc.text('QUOTATION DETAILS', rightBoxX + 3, y + 4)
     doc.setFont('helvetica', 'normal')
@@ -582,27 +595,25 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // Column widths optimized for 186mm usable A4 width
   const tableColumns = [
     { header: '#', dataKey: 'no' },
-    { header: 'Item Description (HSN/SKU)', dataKey: 'desc' },
-    { header: 'HSN', dataKey: 'hsn' },
+    { header: 'Item name', dataKey: 'name' },
+    { header: 'HSN/ SAC', dataKey: 'hsn' },
     { header: 'Qty', dataKey: 'qty' },
-    { header: 'Rate', dataKey: 'rate' },
-    { header: 'Disc', dataKey: 'disc' },
+    { header: 'Unit', dataKey: 'unit' },
+    { header: 'GST (Rs.)', dataKey: 'gst' },
     { header: 'Taxable', dataKey: 'taxable' },
-    { header: 'GST%', dataKey: 'gstp' },
-    { header: 'GST Amt', dataKey: 'gsta' },
-    { header: 'Total', dataKey: 'total' },
+    { header: 'Rate (Rs.)', dataKey: 'rate' },
+    { header: 'Amount (Rs.)', dataKey: 'total' },
   ]
 
   const tableBody = data.calc.items.map((item, i) => ({
     no: String(i + 1),
-    desc: `${item.name}${item.sku ? `\nSKU: ${item.sku}` : ''}${(item as any).description ? `\n${(item as any).description}` : ''}`,
+    name: item.name,
     hsn: item.hsnCode || '-',
-    qty: `${item.quantity} ${ (item as any).unit || ''}`.trim(),
-    rate: formatCurrency(item.rate).replace('Rs. ', ''),
-    disc: item.discount ? formatCurrency(item.discount).replace('Rs. ', '') : '-',
+    qty: String(item.quantity),
+    unit: (item as any).unit || 'Nos',
+    gst: item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') : '-',
     taxable: formatCurrency(item.amount).replace('Rs. ', ''),
-    gstp: item.gstApplicable ? `${item.gstRate}%` : '-',
-    gsta: item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') : '-',
+    rate: formatCurrency(item.rate).replace('Rs. ', ''),
     total: formatCurrency(item.total).replace('Rs. ', ''),
   }))
 
@@ -613,10 +624,10 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     startY: y,
     head: [tableColumns.map(c => c.header)],
     body: tableBody.map(r => tableColumns.map(c => (r as any)[c.dataKey])),
-    margin: { left: margin, right: margin, bottom: pageHeight - CONTENT_BOTTOM },
+    margin: { left: margin, right: margin, bottom: AUTO_BOTTOM },
     styles: {
-      fontSize: 7.5,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      fontSize: 10,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
       lineColor: N.border,
       lineWidth: 0.12,
       textColor: N.textDark,
@@ -629,39 +640,40 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       textColor: isLightBg(TH) ? N.textDark : N.white,
       fontStyle: 'bold',
       halign: 'center',
-      fontSize: 7.5,
-      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+      fontSize: 10,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 2, right: 2 },
       lineColor: TH,
       lineWidth: 0,
-      minCellHeight: 8,
+      minCellHeight: 9,
     },
     bodyStyles: {
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
-      fontSize: 7.5,
-      minCellHeight: 7,
+      cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+      fontSize: 10,
+      minCellHeight: 8,
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 7, fontSize: 7 },
+      0: { halign: 'center', cellWidth: 8, fontSize: 9 },
       1: { cellWidth: 'auto', fontStyle: 'bold', halign: 'left' },
-      2: { halign: 'center', cellWidth: 13, fontSize: 6.5 },
-      3: { halign: 'center', cellWidth: 14, fontSize: 7 },
-      4: { halign: 'right', cellWidth: 17, fontSize: 7 },
-      5: { halign: 'right', cellWidth: 14, fontSize: 6.5 },
-      6: { halign: 'right', cellWidth: 18, fontSize: 7 },
-      7: { halign: 'center', cellWidth: 11, fontSize: 6.5 },
-      8: { halign: 'right', cellWidth: 17, fontSize: 7 },
-      9: { halign: 'right', cellWidth: 20, fontStyle: 'bold', fontSize: 7.5 },
+      2: { halign: 'center', cellWidth: 16, fontSize: 9 },
+      3: { halign: 'center', cellWidth: 12, fontSize: 9 },
+      4: { halign: 'center', cellWidth: 12, fontSize: 9 },
+      5: { halign: 'right', cellWidth: 20, fontSize: 9 },
+      6: { halign: 'right', cellWidth: 20, fontSize: 9 },
+      7: { halign: 'right', cellWidth: 20, fontSize: 9 },
+      8: { halign: 'right', cellWidth: 22, fontStyle: 'bold', fontSize: 10 },
     },
     alternateRowStyles: { fillColor: N.bgRow },
     didParseCell: (data: any) => {
       // Bold total column
-      if (data.column.index === 9 && data.section === 'body') {
+      if (data.column.index === 8 && data.section === 'body') {
         data.cell.styles.fontStyle = 'bold'
       }
     },
     didDrawPage: (data: any) => {
-      // Repeat header on new pages is handled by autoTable
+      // Record where this page's table content ended so the ad band can be
+      // sized responsively (and keep our y cursor in sync).
       y = data.cursor.y
+      pageEnds[data.pageNumber] = data.cursor.y
     },
   })
 
@@ -683,7 +695,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
     autoTable(doc, {
       startY: y,
-      head: [['HSN/SAC', 'Taxable', 'CGST Rate', 'CGST Amt', 'SGST Rate', 'SGST Amt', 'Total']],
+      head: [['HSN/ SAC', 'Taxable amount (Rs.)', 'CGST Rate', 'CGST Amt (Rs.)', 'SGST Rate', 'SGST Amt (Rs.)', 'Total Tax (Rs.)']],
       body: hsnSummary.map(h => [
         h.hsn,
         formatCurrency(h.taxable).replace('Rs. ', ''),
@@ -693,9 +705,9 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
         formatCurrency(h.sgstAmt).replace('Rs. ', ''),
         formatCurrency(h.total).replace('Rs. ', ''),
       ]),
-      margin: { left: margin, right: margin, bottom: pageHeight - CONTENT_BOTTOM },
-      styles: { fontSize: 6.5, cellPadding: 2, halign: 'center' },
-      headStyles: { fillColor: N.bgRowAlt, textColor: N.textDark, fontStyle: 'bold', fontSize: 6.5 },
+      margin: { left: margin, right: margin, bottom: AUTO_BOTTOM },
+      styles: { fontSize: 9, cellPadding: 2.5, halign: 'center' },
+      headStyles: { fillColor: N.bgRowAlt, textColor: N.textDark, fontStyle: 'bold', fontSize: 9 },
       columnStyles: {
         0: { cellWidth: 20 },
         1: { cellWidth: 25, halign: 'right' },
@@ -704,6 +716,9 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
         4: { cellWidth: 20 },
         5: { cellWidth: 25, halign: 'right' },
         6: { cellWidth: 30, halign: 'right', fontStyle: 'bold' },
+      },
+      didDrawPage: (data: any) => {
+        pageEnds[data.pageNumber] = data.cursor.y
       },
     })
     // @ts-ignore
@@ -738,10 +753,10 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       doc.line(totalsX, totalsY + rowHeight, totalsX + totalsWidth, totalsY + rowHeight)
     }
     doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setFontSize(bold ? 8 : 7.5)
+    doc.setFontSize(bold ? 11 : 10)
     doc.setTextColor(...(textColor || N.textMid))
-    doc.text(label, totalsX + 3, totalsY + 3.5)
-    doc.text(value, totalsX + totalsWidth - 3, totalsY + 3.5, { align: 'right' })
+    doc.text(label, totalsX + 3, totalsY + 4)
+    doc.text(value, totalsX + totalsWidth - 3, totalsY + 4, { align: 'right' })
     totalsY += rowHeight
   }
 
@@ -749,7 +764,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setDrawColor(...N.border)
   doc.setLineWidth(0.15)
   
-  drawTotalsRow('Subtotal', formatCurrency(data.calc.subtotal), { bold: false })
+  drawTotalsRow('Sub Total', formatCurrency(data.calc.subtotal), { bold: false })
   if (data.calc.discount > 0) {
     drawTotalsRow('Discount', `- ${formatCurrency(data.calc.discount)}`, { textColor: N.red })
   }
@@ -782,10 +797,10 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setFillColor(...A)
   doc.rect(totalsX, totalsY - rowHeight, totalsWidth, rowHeight, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
+  doc.setFontSize(12.5)
   doc.setTextColor(...(isLightBg(A) ? N.textDark : N.white))
-  doc.text('GRAND TOTAL', totalsX + 3, totalsY - 2)
-  doc.text(formatCurrency(data.calc.grandTotal), totalsX + totalsWidth - 3, totalsY - 2, { align: 'right' })
+  doc.text('GRAND TOTAL', totalsX + 3, totalsY - 1.5)
+  doc.text(formatCurrency(data.calc.grandTotal), totalsX + totalsWidth - 3, totalsY - 1.5, { align: 'right' })
 
   // Paid/Due
   if (isInvoice || isService) {
@@ -807,12 +822,12 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // Amount in Words - Left side, A4 fit
   const wordsY = y
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(6.5)
+  doc.setFontSize(9)
   doc.setTextColor(...N.textVLight)
   doc.text('AMOUNT IN WORDS', margin, wordsY + 2)
   
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
+  doc.setFontSize(11)
   doc.setTextColor(...N.textDark)
   const wordsText = `${numberToWords(data.calc.grandTotal)} Only`
   const wordsLines = doc.splitTextToSize(wordsText, totalsX - margin - 6)
@@ -823,83 +838,68 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // ===== BANK + QR + TERMS - A4 Fit =====
   const bottomSectionY = y
   const remainingSpace = CONTENT_BOTTOM - y // space left above the band
+  const colWidth = (usableWidth - 4) / 2
+  const rightX = margin + colWidth + 4
+  let leftY = bottomSectionY
+  let rightY = bottomSectionY
 
-  if (remainingSpace > 60) {
-    const colWidth = (usableWidth - 4) / 2
-    
-    // Left: Bank + QR
-    let leftY = bottomSectionY
-    
-    // UPI QR if available and amount due > 0
+  // Bank details — ALWAYS shown (wired from Smart Computers settings)
+  if (data.shop.bankName || data.shop.bankAccount) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...A)
+    doc.text('BANK DETAILS', margin, leftY)
+    leftY += 3.5
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6)
+    doc.setTextColor(...N.textMid)
+    if (data.shop.bankName) {
+      doc.text(`Bank: ${data.shop.bankName}${data.shop.bankBranch ? `, ${data.shop.bankBranch}` : ''}`, margin, leftY)
+      leftY += 3
+    }
+    if (data.shop.bankAccount) {
+      doc.text(`A/c: ${data.shop.bankAccount}${data.shop.bankIfsc ? ` | IFSC: ${data.shop.bankIfsc}` : ''}`, margin, leftY)
+      leftY += 3
+    }
+  }
+
+  // UPI QR (only if there is room)
+  if (remainingSpace > 40 && data.shop.upiId) {
     const qrAmount = isInvoice ? (Number(data.amountDue) || 0) : data.calc.grandTotal
-    if (data.shop.upiId && qrAmount > 0) {
+    if (qrAmount > 0) {
       try {
         const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.number || '')}`
         const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 180, margin: 1 })
         const qrSize = 22
         doc.addImage(qrDataUrl, 'PNG', margin, leftY, qrSize, qrSize)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(7)
-        doc.setTextColor(...A)
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...A)
         doc.text('Scan & Pay', margin + qrSize + 3, leftY + 4)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(6)
-        doc.setTextColor(...N.textMid)
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(...N.textMid)
         doc.text(`Rs.${qrAmount.toFixed(2)} via UPI`, margin + qrSize + 3, leftY + 8)
         doc.text(`${data.shop.upiId}`, margin + qrSize + 3, leftY + 11)
         leftY += qrSize + 4
       } catch {}
     }
-
-    // Bank details
-    if (data.shop.bankName || data.shop.bankAccount) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
-      doc.setTextColor(...A)
-      doc.text('BANK DETAILS', margin, leftY)
-      leftY += 3.5
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
-      doc.setTextColor(...N.textMid)
-      if (data.shop.bankName) {
-        doc.text(`Bank: ${data.shop.bankName}${data.shop.bankBranch ? `, ${data.shop.bankBranch}` : ''}`, margin, leftY)
-        leftY += 3
-      }
-      if (data.shop.bankAccount) {
-        doc.text(`A/c: ${data.shop.bankAccount}${data.shop.bankIfsc ? ` | IFSC: ${data.shop.bankIfsc}` : ''}`, margin, leftY)
-        leftY += 3
-      }
-    }
-
-    // Right: Terms & Notes
-    let rightY = bottomSectionY
-    const rightX = margin + colWidth + 4
-    
-    if (data.terms || data.notes) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
-      doc.setTextColor(...A)
-      doc.text(data.notes && data.terms ? 'TERMS & NOTES' : data.terms ? 'TERMS & CONDITIONS' : 'NOTES', rightX, rightY)
-      rightY += 3.5
-      
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
-      doc.setTextColor(...N.textMid)
-      const combinedText = `${data.terms ? data.terms : ''}${data.terms && data.notes ? '\n' : ''}${data.notes ? data.notes : ''}`
-      const termLines = doc.splitTextToSize(combinedText, colWidth - 4)
-      const limitedLines = termLines.slice(0, 8) // Max 8 lines for A4 fit
-      doc.text(limitedLines, rightX, rightY)
-      rightY += limitedLines.length * 2.8 + 2
-    } else {
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
-      doc.setTextColor(...N.textLight)
-      doc.text('Thank you for your business!', rightX, rightY)
-      doc.text(`Warranty as per manufacturer | ${data.shop.name}`, rightX, rightY + 3)
-    }
-
-    y = Math.max(leftY, rightY) + 4
   }
+
+  // Terms & Notes (only if there is room)
+  if (remainingSpace > 40 && (data.terms || data.notes)) {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setTextColor(...A)
+    doc.text(data.notes && data.terms ? 'TERMS & NOTES' : data.terms ? 'TERMS & CONDITIONS' : 'NOTES', rightX, rightY)
+    rightY += 3.5
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(...N.textMid)
+    const combinedText = `${data.terms ? data.terms : ''}${data.terms && data.notes ? '\n' : ''}${data.notes ? data.notes : ''}`
+    const termLines = doc.splitTextToSize(combinedText, colWidth - 4)
+    const limitedLines = termLines.slice(0, 8)
+    doc.text(limitedLines, rightX, rightY)
+    rightY += limitedLines.length * 2.8 + 2
+  } else if (remainingSpace <= 40) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(...N.textLight)
+    doc.text('Thank you for your business!', rightX, rightY)
+    doc.text(`Warranty as per manufacturer | ${data.shop.name}`, rightX, rightY + 3)
+  }
+
+  y = Math.max(leftY, rightY) + 4
 
   // ===== PRODUCT SHOWCASE AD BANNER (advertise on EVERY page) =====
   // Premium branded strip with product images (Computers, Laptops,
@@ -918,137 +918,178 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     const bw = usableWidth
     const by = topY
     const imgs: Record<string, string> = data.productImages || {}
+    const phone = data.shop.phone || ''
+    const shopName = data.shop.name || 'Smart Computers'
 
     // Shared band background (very light accent tint) + accent border
     doc.setFillColor(...mixColor(A, N.white, 0.94))
     doc.setDrawColor(...A)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(bx, by, bw, bandH, 1.5, 1.5, 'FD')
+    doc.setLineWidth(0.4)
+    doc.roundedRect(bx, by, bw, bandH, 1.8, 1.8, 'FD')
 
-    // ---- Variant: compact strip ----
-    if (variant === 'strip') {
+    // Place an image to COVER the given box (fill fully, no side margins,
+    // crop overflow) so the banner reads as one merged full-width visual.
+    const placeCover = (key: string, x: number, y: number, w: number, h: number) => {
+      const im = imgs[key]
+      if (!im) return
+      let ar = 1.78
+      try { const p = (doc as any).getImageProperties(im); ar = p.width / p.height } catch {}
+      let dw = w, dh = w / ar
+      if (dh < h) { dh = h; dw = h * ar }
+      const dx = x + (w - dw) / 2
+      const dy = y + (h - dh) / 2
+      try { doc.addImage(im, 'PNG', dx, dy, dw, dh) } catch {}
+    }
+
+    // ---- Variant: premium A4 flyer (landscape, full) + product tiles, text below ----
+    if (variant === 'flyer') {
+      const pad = 2
+      const imgX = bx + pad
+      const imgY = by + pad
+      const imgW = bw - pad * 2
+      const imgH = bandH - 12 // room for the centered caption below
+      placeCover('flyer', imgX, imgY, imgW, imgH)
+      const capY = imgY + imgH + 3.5
       doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...A)
+      doc.text('CHECK OUT OUR LATEST OFFERS!', bx + bw / 2, capY, { align: 'center' })
+      doc.setFont('helvetica', 'normal')
       doc.setFontSize(7)
-      doc.setTextColor(...A)
-      doc.text('WE ALSO SUPPLY', bx + 3, by + bandH / 2 + 1)
-      const startX = bx + 44
-      const endX = bx + bw - 50
-      const pillW = (endX - startX) / AD_PRODUCTS.length
-      AD_PRODUCTS.forEach((p, i) => {
-        const px = startX + i * pillW
-        if (imgs[p.key]) {
-          try { doc.addImage(imgs[p.key], 'PNG', px + 1, by + (bandH - 13) / 2, 13, 13) } catch {}
-        }
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(6)
-        doc.setTextColor(...N.textDark)
-        doc.text(p.label, px + 16, by + bandH / 2 + 1)
-      })
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.5)
-      doc.setTextColor(...A)
-      const cta = data.shop.phone ? `Call: ${data.shop.phone}` : (data.shop.name || 'Smart Computers')
-      doc.text(cta, bx + bw - 3, by + bandH / 2 + 1, { align: 'right' })
+      doc.setTextColor(...N.textMid)
+      const cap2 = phone ? `Call ${phone}  •  Computers • Laptops • Printers • Accessories` : `Computers • Laptops • Printers • Accessories`
+      doc.text(cap2, bx + bw / 2, capY + 4.5, { align: 'center' })
       return
     }
 
-    // ---- Variant: featured (headline panel + product tiles) ----
-    if (variant === 'featured') {
-      const leftW = 50
+    // ---- Variant: product grid — premium 4x4 grid image, centered & resizable ----
+    if (variant === 'grid') {
+      const pad = 2
+      const imgX = bx + pad
+      const imgY = by + pad
+      const imgW = bw - pad * 2
+      const imgH = bandH - 12
+      if (imgs['productgrid']) {
+        placeCover('productgrid', imgX, imgY, imgW, imgH)
+      } else {
+        // Fallback: 4 clean product tiles
+        const gap = 8
+        const tileW = (usableWidth - gap * (AD_PRODUCTS.length - 1)) / AD_PRODUCTS.length
+        const imgSize = Math.min(tileW - 6, imgH - 4)
+        const totalW = tileW * AD_PRODUCTS.length + gap * (AD_PRODUCTS.length - 1)
+        const startX = bx + (usableWidth - totalW) / 2
+        AD_PRODUCTS.forEach((p, i) => {
+          const tx = startX + i * (tileW + gap)
+          doc.setFillColor(...N.white)
+          doc.setDrawColor(...mixColor(A, N.white, 0.65))
+          doc.setLineWidth(0.3)
+          doc.roundedRect(tx, imgY, tileW, imgH, 1.5, 1.5, 'FD')
+          if (imgs[p.key]) { try { doc.addImage(imgs[p.key], 'PNG', tx + (tileW - imgSize) / 2, imgY + 2, imgSize, imgSize) } catch {} }
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...N.textDark)
+          doc.text(p.label, tx + tileW / 2, imgY + imgH - 1, { align: 'center' })
+        })
+      }
+      const capY = imgY + imgH + 3.5
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
+      doc.setFontSize(8.5)
       doc.setTextColor(...A)
-      doc.text('WE ALSO', bx + 3, by + 8)
-      doc.text('SUPPLY', bx + 3, by + 14)
+      doc.text('CHECK OUT OUR LATEST OFFERS!', bx + bw / 2, capY, { align: 'center' })
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
+      doc.setFontSize(7)
       doc.setTextColor(...N.textMid)
-      doc.text(data.shop.name || 'Smart Computers', bx + 3, by + 19)
-      if (data.shop.phone) doc.text(`Call: ${data.shop.phone}`, bx + 3, by + 23)
-
-      const tilesX = bx + leftW + 5
-      const tilesW = bw - leftW - 5
-      const gap = 4
+      const cap2 = phone ? `Call ${phone}  •  Computers • Laptops • Printers • Accessories` : `Computers • Laptops • Printers • Accessories`
+      doc.text(cap2, bx + bw / 2, capY + 4.5, { align: 'center' })
+      return
+    }    // ---- Variant: featured (headline panel + product tiles) ----
+    if (variant === 'featured') {
+      const leftW = 56
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(12)
+      doc.setTextColor(...A)
+      doc.text('WE ALSO', bx + 4, by + 10)
+      doc.text('SUPPLY', bx + 4, by + 18)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...N.textMid)
+      doc.text(shopName, bx + 4, by + 23)
+      if (phone) doc.text(`Call: ${phone}`, bx + 4, by + 27)
+      const tilesX = bx + leftW + 6
+      const tilesW = bw - leftW - 6
+      const gap = 5
       const tileW = (tilesW - gap * (AD_PRODUCTS.length - 1)) / AD_PRODUCTS.length
-      const tileTop = by + 3
-      const imgSize = 14
-      const tileH = bandH - 6
+      const tileTop = by + 4
+      const imgSize = 22
+      const tileH = bandH - 8
       AD_PRODUCTS.forEach((p, i) => {
         const tx = tilesX + i * (tileW + gap)
         doc.setFillColor(...N.white)
         doc.setDrawColor(...mixColor(A, N.white, 0.6))
-        doc.setLineWidth(0.2)
-        doc.roundedRect(tx, tileTop, tileW, tileH, 1, 1, 'FD')
+        doc.setLineWidth(0.25)
+        doc.roundedRect(tx, tileTop, tileW, tileH, 1.2, 1.2, 'FD')
         if (imgs[p.key]) {
-          try {
-            const ix = tx + (tileW - imgSize) / 2
-            doc.addImage(imgs[p.key], 'PNG', ix, tileTop + 1, imgSize, imgSize)
-          } catch {}
+          try { doc.addImage(imgs[p.key], 'PNG', tx + (tileW - imgSize) / 2, tileTop + 2, imgSize, imgSize) } catch {}
         }
         doc.setFont('helvetica', 'bold')
-        doc.setFontSize(5.5)
+        doc.setFontSize(7)
         doc.setTextColor(...N.textDark)
-        doc.text(p.label, tx + tileW / 2, tileTop + tileH - 1.5, { align: 'center' })
+        doc.text(p.label, tx + tileW / 2, tileTop + tileH - 2, { align: 'center' })
       })
       return
     }
 
-    // ---- Variant: grid (default) ----
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...A)
-    doc.text('WE ALSO SUPPLY', bx + 3, by + 4)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...N.textMid)
-    const rightTxt = data.shop.phone
-      ? `Call: ${data.shop.phone}  |  ${data.shop.name || 'Smart Computers'}`
-      : (data.shop.name || 'Smart Computers')
-    doc.text(rightTxt, bx + bw - 3, by + 4, { align: 'right' })
-
-    const tilesTop = by + 6
-    const imageSize = 12
-    const gap = 4
-    const tilesAreaX = bx + 3
-    const tilesAreaW = bw - 6
-    const tileW = (tilesAreaW - gap * (AD_PRODUCTS.length - 1)) / AD_PRODUCTS.length
-    const tileH = 15
-
-    AD_PRODUCTS.forEach((p, i) => {
-      const tx = tilesAreaX + i * (tileW + gap)
-      doc.setFillColor(...N.white)
-      doc.setDrawColor(...mixColor(A, N.white, 0.65))
-      doc.setLineWidth(0.2)
-      doc.roundedRect(tx, tilesTop, tileW, tileH, 1, 1, 'FD')
-      const img = imgs[p.key]
-      if (img) {
-        try {
-          const imgX = tx + (tileW - imageSize) / 2
-          const imgY = tilesTop + (tileH - imageSize - 2.5) / 2
-          doc.addImage(img, 'PNG', imgX, imgY, imageSize, imageSize)
-        } catch {}
-      }
+    // ---- Variant: compact strip ----
+    if (variant === 'strip') {
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6)
-      doc.setTextColor(...N.textDark)
-      doc.text(p.label, tx + tileW / 2, tilesTop + tileH - 2.2, { align: 'center' })
-    })
+      doc.setFontSize(9)
+      doc.setTextColor(...A)
+      doc.text('WE ALSO SUPPLY', bx + 4, by + bandH / 2 + 1.5)
+      const startX = bx + 52
+      const endX = bx + bw - 56
+      const pillW = (endX - startX) / AD_PRODUCTS.length
+      AD_PRODUCTS.forEach((p, i) => {
+        const px = startX + i * pillW
+        if (imgs[p.key]) {
+          try { doc.addImage(imgs[p.key], 'PNG', px + 1, by + (bandH - 16) / 2, 16, 16) } catch {}
+        }
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7.5)
+        doc.setTextColor(...N.textDark)
+        doc.text(p.label, px + 19, by + bandH / 2 + 1.5)
+      })
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...A)
+      const cta = phone ? `Call: ${phone}` : shopName
+      doc.text(cta, bx + bw - 4, by + bandH / 2 + 1.5, { align: 'right' })
+      return
+    }
   }
 
-  // Drawn as a fixed band in the bottom white space of each page so the
-  // shop is promoted on every printed sheet. Pagination above (incl. the
-  // autoTable bottom margin) keeps all content above CONTENT_BOTTOM, so
-  // the band never overlaps anything.
+  // ===== Responsive ad band — drawn on EVERY page, sized to the white space =====
+  // The band height is computed per page: it fills the bottom white space when
+  // an invoice/quotation is short (few items) and shrinks (auto-resizing the
+  // product images) when many items push content toward the page bottom.
   const adVariant = data.adBannerVariant || 'grid'
+  // Content end on the final page (after totals / amount-in-words / bank / terms)
+  const lastContentEnd = y
+  // Responsive band geometry: grow with white space, shrink when content is long.
+  const computeBand = (pageEnd: number) => {
+    let top = Math.max(pageEnd + AD_GAP, FOOTER_TOP - AD_BAND_MAX)
+    let h = FOOTER_TOP - top
+    if (h < AD_BAND_MIN) { h = AD_BAND_MIN; top = FOOTER_TOP - AD_BAND_MIN }
+    return { top, h }
+  }
   for (let i = 1; i <= pageNumber; i++) {
     doc.setPage(i)
-    drawAdBanner(adVariant, BANNER_TOP, BANNER_H)
+    const pe = i < pageNumber ? (pageEnds[i] ?? margin + 10) : lastContentEnd
+    const { top, h } = computeBand(pe)
+    drawAdBanner(adVariant, top, h)
   }
   doc.setPage(pageNumber)
 
-  // ===== SIGNATURE - A4 Bottom Fixed (last page only) =====
-  const sigY = pageHeight - 28
-  if (y < sigY - 10) y = sigY - 10
+  // ===== SIGNATURE (last page only) — placed just ABOVE the ad band with a clear gap =====
+  const lastBand = computeBand(lastContentEnd)
+  const sigY = lastBand.top - SIG_GAP
 
   doc.setDrawColor(...N.textVLight)
   doc.setLineWidth(0.2)
@@ -1058,12 +1099,12 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...N.textDark)
-  doc.text(data.shop.name || 'Smart Computers', sigLineX + 22.5, sigY - 3, { align: 'center' })
+  doc.text(`For ${data.shop.name || 'Smart Computers'}:`, sigLineX + 22.5, sigY - 3, { align: 'center' })
   
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
   doc.setTextColor(...N.textLight)
-  doc.text('Authorised Signatory', sigLineX + 22.5, sigY + 4, { align: 'center' })
+  doc.text('Authorized Signatory', sigLineX + 22.5, sigY + 4, { align: 'center' })
 
   // Draw all footers
   for (let i = 1; i <= pageNumber; i++) {

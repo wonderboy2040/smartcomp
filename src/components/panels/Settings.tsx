@@ -148,6 +148,22 @@ function ShopSettings() {
             <Label>UPI ID (for Invoice QR Code)</Label>
             <Input value={form.upiId || ''} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder="yourname@upi" className="mt-1" />
           </div>
+          <div>
+            <Label>Bank Name</Label>
+            <Input value={form.bankName || ''} onChange={(e) => setForm({ ...form, bankName: e.target.value })} placeholder="State Bank of India" className="mt-1" />
+          </div>
+          <div>
+            <Label>Account Number</Label>
+            <Input value={form.bankAccount || ''} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} placeholder="41400936006" className="mt-1" />
+          </div>
+          <div>
+            <Label>IFSC Code</Label>
+            <Input value={form.bankIfsc || ''} onChange={(e) => setForm({ ...form, bankIfsc: e.target.value })} placeholder="SBIN0015319" className="mt-1" />
+          </div>
+          <div>
+            <Label>Branch</Label>
+            <Input value={form.bankBranch || ''} onChange={(e) => setForm({ ...form, bankBranch: e.target.value })} placeholder="Yadgir" className="mt-1" />
+          </div>
           <div className="sm:col-span-2">
             <Label>Address</Label>
             <Textarea value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} className="mt-1" />

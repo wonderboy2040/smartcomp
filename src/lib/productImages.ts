@@ -15,6 +15,8 @@ export interface ProductImageSet {
   laptop: string
   printers: string
   accessories: string
+  flyer?: string
+  productgrid?: string
 }
 
 let CACHE: ProductImageSet | null = null
@@ -41,6 +43,23 @@ export function loadProductImages(): ProductImageSet {
       // banner still renders (with labels only, no image).
       result[key] = ''
     }
+  }
+
+  // Premium A4 (landscape) flyer — used by the 'flyer' ad-banner variant.
+  // Falls back to an empty string if the file is missing so the banner still renders.
+  try {
+    const flyerBuf = fs.readFileSync(path.join(process.cwd(), 'public', 'posters', 'smartcomputers-a4-flyer-landscape.png'))
+    result.flyer = `data:image/png;base64,${flyerBuf.toString('base64')}`
+  } catch {
+    result.flyer = ''
+  }
+
+  // Premium 4x4 product-grid flyer — used by the 'grid' ad-banner variant.
+  try {
+    const pgBuf = fs.readFileSync(path.join(process.cwd(), 'public', 'posters', 'smartcomputers-product-grid.png'))
+    result.productgrid = `data:image/png;base64,${pgBuf.toString('base64')}`
+  } catch {
+    result.productgrid = ''
   }
 
   CACHE = result

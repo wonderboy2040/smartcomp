@@ -78,6 +78,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         gstNumber: String(shop.gstNumber || ''),
         state: String(shop.state || ''),
         upiId: String(shop.upiId || ''),
+        bankName: String(shop.bankName || ''),
+        bankAccount: String(shop.bankAccount || ''),
+        bankIfsc: String(shop.bankIfsc || ''),
+        bankBranch: String(shop.bankBranch || ''),
       },
       customer: {
         name: String(job.customerName || 'Walk-in Customer'),
