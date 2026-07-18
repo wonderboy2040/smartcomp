@@ -56,6 +56,9 @@ export async function GET(req: NextRequest) {
         deliveredAt: job.deliveredAt || '',
         diagnosisNotes: String(job.diagnosisNotes || ''),
         statusHistory: safeJsonParse<any[]>(job.statusHistoryJson, []),
+        feedbackRating: Number(job.feedbackRating) || 0,
+        feedbackComment: String(job.feedbackComment || ''),
+        feedbackAt: job.feedbackAt || '',
       },
       shop: {
         name: String(shop.name || 'Smart Computers'),

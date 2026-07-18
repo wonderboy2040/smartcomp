@@ -41,7 +41,6 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       'lucide-react',
       'recharts',
-      'date-fns',
       'zod',
     ],
   },

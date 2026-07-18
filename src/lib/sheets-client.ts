@@ -150,7 +150,7 @@ async function callAppsScript(payload: any): Promise<any> {
         signal: AbortSignal.timeout(15000), // Reduced from 28s to 15s for faster response
       })
       if (res.status === 404) {
-        throw new Error(`Apps Script 404 (attempt ${attempt}/3). Redeploy needed.`)
+        throw new Error(`Apps Script 404 (attempt ${attempt}/2). Redeploy needed.`)
       }
       if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
       
@@ -167,7 +167,7 @@ async function callAppsScript(payload: any): Promise<any> {
     } catch (e: any) {
       lastErr = e
       const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML')
-      if (!isRetryable || attempt === 3) {
+      if (!isRetryable || attempt === 2) {
         consecutiveFailures++
         if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
           circuitBrokenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN
@@ -200,7 +200,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
         redirect: 'follow',
         signal: AbortSignal.timeout(10000), // Reduced from 28s to 10s for GET
       })
-      if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/3)`)
+      if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/2)`)
       if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
       
       const text = await res.text()
@@ -216,7 +216,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
     } catch (e: any) {
       lastErr = e
       const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML')
-      if (!isRetryable || attempt === 3) {
+      if (!isRetryable || attempt === 2) {
         consecutiveFailures++
         if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
           circuitBrokenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN

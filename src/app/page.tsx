@@ -92,7 +92,7 @@ function HomeInner() {
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
 
-  // ULTRA FAST v4.0: Prefetch with更快 stagger 200ms + batch prefetch for ultra speed
+  // ULTRA FAST v4.0: Prefetch with faster stagger 200ms + batch prefetch for ultra speed
   useEffect(() => {
     if (!isConfigured) return
     let cancelled = false

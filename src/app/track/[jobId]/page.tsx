@@ -6,6 +6,7 @@ import {
   Wrench, Clock, CheckCircle2, Package, Phone, MapPin, Mail,
   Laptop, Printer, Monitor, Battery, ScanLine, Smartphone,
   Calendar, Shield, AlertCircle, Loader2, MessageSquare, ArrowRight,
+  Star, Send, ThumbsUp,
 } from 'lucide-react'
 
 const DEVICE_ICONS: Record<string, any> = {
@@ -53,6 +54,14 @@ function TrackInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Feedback state
+  const [feedbackRating, setFeedbackRating] = useState(0)
+  const [feedbackHover, setFeedbackHover] = useState(0)
+  const [feedbackComment, setFeedbackComment] = useState('')
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
+  const [feedbackError, setFeedbackError] = useState('')
+
   useEffect(() => {
     if (!jobId || !token) {
       setError('Invalid tracking link')
@@ -64,10 +73,44 @@ function TrackInner() {
         const d = await r.json()
         if (!r.ok) throw new Error(d.error || 'Failed to load')
         setData(d)
+        // If feedback already exists, show it
+        if (d.job?.feedbackRating) {
+          setFeedbackRating(Number(d.job.feedbackRating))
+          setFeedbackComment(String(d.job.feedbackComment || ''))
+          setFeedbackSubmitted(true)
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [jobId, token])
+
+  const handleFeedbackSubmit = async () => {
+    if (feedbackRating < 1) {
+      setFeedbackError('Please select a star rating')
+      return
+    }
+    setFeedbackSubmitting(true)
+    setFeedbackError('')
+    try {
+      const r = await fetch('/api/track/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          token,
+          rating: feedbackRating,
+          comment: feedbackComment,
+        }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Failed to submit')
+      setFeedbackSubmitted(true)
+    } catch (e: any) {
+      setFeedbackError(e.message)
+    } finally {
+      setFeedbackSubmitting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -95,6 +138,7 @@ function TrackInner() {
   const statusCfg = STATUS_CONFIG[job?.status] || STATUS_CONFIG.Pending
   const StatusIcon = statusCfg.icon
   const DeviceIcon = DEVICE_ICONS[job?.deviceType] || Smartphone
+  const canLeaveFeedback = job?.status === 'Completed' || job?.status === 'Delivered'
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -186,7 +230,7 @@ function TrackInner() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-emerald-700 font-medium uppercase">Total Amount</p>
-                <p className="text-2xl font-bold text-emerald-700">Rs.{job.finalAmount}</p>
+                <p className="text-2xl font-bold text-emerald-700">₹{Number(job.finalAmount).toLocaleString('en-IN')}</p>
               </div>
               <CheckCircle2 className="w-10 h-10 text-emerald-500" />
             </div>
@@ -215,6 +259,119 @@ function TrackInner() {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
             <p className="text-sm font-semibold text-slate-900 mb-1">Repair Details</p>
             <p className="text-sm text-slate-600">{job.diagnosisNotes}</p>
+          </div>
+        )}
+
+        {/* ⭐ Feedback Section — NEW */}
+        {canLeaveFeedback && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Star className="w-5 h-5 text-amber-500" />
+              <p className="text-sm font-semibold text-slate-900">
+                {feedbackSubmitted ? 'Your Feedback' : 'Rate Our Service'}
+              </p>
+            </div>
+
+            {feedbackSubmitted ? (
+              <div className="text-center py-2">
+                <div className="flex items-center justify-center gap-1 mb-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-7 h-7 ${
+                        star <= feedbackRating
+                          ? 'text-amber-400 fill-amber-400'
+                          : 'text-slate-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                {feedbackComment && (
+                  <p className="text-sm text-slate-600 italic mt-2">"{feedbackComment}"</p>
+                )}
+                <div className="flex items-center justify-center gap-1.5 mt-3 text-emerald-600">
+                  <ThumbsUp className="w-4 h-4" />
+                  <p className="text-xs font-medium">Thank you for your feedback!</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">
+                  How was your experience? Your feedback helps us improve.
+                </p>
+
+                {/* Star Rating */}
+                <div className="flex items-center justify-center gap-2 py-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFeedbackRating(star)}
+                      onMouseEnter={() => setFeedbackHover(star)}
+                      onMouseLeave={() => setFeedbackHover(0)}
+                      className="transition-transform hover:scale-110 active:scale-95 p-1"
+                      aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
+                    >
+                      <Star
+                        className={`w-9 h-9 transition-colors ${
+                          star <= (feedbackHover || feedbackRating)
+                            ? 'text-amber-400 fill-amber-400'
+                            : 'text-slate-200 hover:text-amber-200'
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+
+                {feedbackRating > 0 && (
+                  <p className="text-center text-xs font-medium text-amber-600">
+                    {feedbackRating === 1
+                      ? 'Poor'
+                      : feedbackRating === 2
+                        ? 'Fair'
+                        : feedbackRating === 3
+                          ? 'Good'
+                          : feedbackRating === 4
+                            ? 'Very Good'
+                            : 'Excellent!'}
+                  </p>
+                )}
+
+                {/* Comment */}
+                <textarea
+                  value={feedbackComment}
+                  onChange={(e) => setFeedbackComment(e.target.value)}
+                  placeholder="Tell us more about your experience (optional)..."
+                  rows={3}
+                  maxLength={500}
+                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none transition-colors placeholder:text-slate-400"
+                />
+
+                {feedbackError && (
+                  <p className="text-xs text-red-600 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> {feedbackError}
+                  </p>
+                )}
+
+                <button
+                  onClick={handleFeedbackSubmit}
+                  disabled={feedbackSubmitting || feedbackRating < 1}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-200"
+                >
+                  {feedbackSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Submit Feedback
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

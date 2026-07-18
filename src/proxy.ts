@@ -95,7 +95,7 @@ export async function proxy(req: NextRequest) {
   const token = req.cookies.get(AUTH_COOKIE)?.value
   if (token) {
     // Accept either v3 or v1 token for backward compatibility
-    if (safeEqual(token, tokens.v3!) || safeEqual(token, tokens.v1!)) {
+    if (safeEqual(token, tokens.v3!) || (tokens.v1 && safeEqual(token, tokens.v1))) {
       return NextResponse.next()
     }
   }

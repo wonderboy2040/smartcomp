@@ -101,7 +101,7 @@ function LoginInner() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
               SECURE ACCESS
             </span>
-            <span className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground border font-medium">v5.0 Secure</span>
+            <span className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground border font-medium">v6.2 Secure</span>
           </div>
         </div>
 
@@ -169,13 +169,13 @@ function LoginInner() {
               )}
 
               {success && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 flex items-center gap-2.5 animate-in slide-in-from-top-1">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 flex items-center gap-2.5 animate-in slide-in-from-top-1">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="text-[13px] font-bold text-emerald-800">Access Granted</p>
-                    <p className="text-xs text-emerald-700">Redirecting to dashboard...</p>
+                    <p className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">Access Granted</p>
+                    <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Redirecting to dashboard...</p>
                   </div>
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
                 </div>
               )}
 
@@ -251,7 +251,7 @@ function LoginInner() {
             <span>Secure connection • Encrypted • No PIN displayed</span>
           </div>
           <p className="text-[10px] text-muted-foreground/70">
-            Smart Computers © {new Date().getFullYear()} • Sales & Service Panel • v5.0 Secure Pro
+            Smart Computers © {new Date().getFullYear()} • Sales & Service Panel • v6.2 Secure Pro
           </p>
         </div>
       </div>

@@ -12,7 +12,7 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: {
-    default: "Smart Computers — Sales & Service Panel v6.1 Theme Pro",
+    default: "Smart Computers — Sales & Service Panel v6.2 Premium",
     template: "%s · Smart Computers",
   },
   description:
