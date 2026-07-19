@@ -13,8 +13,11 @@ import {
 export function SetupWizard() {
   const { toast } = useToast()
   const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [configStatus, setConfigStatus] = useState<{ configured: boolean } | null>(null)
+  const [configStatus, setConfigStatus] = useState<{ configured: boolean; runtimeConfigActive?: boolean } | null>(null)
+  const [urlInput, setUrlInput] = useState('')
+  const [pinInput, setPinInput] = useState('')
 
   const checkConfig = async () => {
     try {
@@ -50,6 +53,37 @@ export function SetupWizard() {
     }
   }
 
+  // Desktop-only: save URL + PIN to runtime config file via the API
+  const handleSaveDesktop = async () => {
+    if (!urlInput.trim()) {
+      toast({ title: 'URL required', description: 'Paste your Google Apps Script /exec URL.', variant: 'destructive' })
+      return
+    }
+    if (!urlInput.includes('/exec')) {
+      toast({ title: 'Invalid URL', description: 'URL must end with /exec', variant: 'destructive' })
+      return
+    }
+    setSaving(true)
+    try {
+      const r = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appsScriptUrl: urlInput.trim(), appPin: pinInput.trim() }),
+      })
+      const res = await r.json()
+      if (res.success) {
+        toast({ title: 'Saved!', description: 'Connecting to your Google Sheet...' })
+        setTimeout(() => window.location.reload(), 800)
+      } else {
+        toast({ title: 'Save failed', description: res.message, variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const copyCode = () => {
     navigator.clipboard.writeText('apps-script/code.gs')
     setCopied(true)
@@ -79,10 +113,46 @@ export function SetupWizard() {
           <div>
             <p className="text-sm font-medium text-amber-200">Setup Required</p>
             <p className="text-xs text-amber-300/80 mt-0.5">
-              APPS_SCRIPT_URL environment variable is not set. Follow the steps below to complete setup.
+              {configStatus?.runtimeConfigActive
+                ? 'Desktop mode: paste your Google Apps Script /exec URL below to connect this device to your cloud Google Sheet.'
+                : 'APPS_SCRIPT_URL environment variable is not set. Follow the steps below to complete setup.'}
             </p>
           </div>
         </div>
+
+        {/* Desktop-mode URL entry */}
+        {configStatus?.runtimeConfigActive && (
+          <Card className="bg-card/95 backdrop-blur border border-emerald-500/40 shadow-2xl mb-4">
+            <CardContent className="p-4 sm:p-6 space-y-3">
+              <div className="flex items-center gap-2">
+                <Cloud className="w-5 h-5 text-emerald-500" />
+                <h2 className="text-base sm:text-lg font-bold text-slate-900">Connect to your Google Sheet</h2>
+              </div>
+              <p className="text-xs text-slate-600">
+                Paste the Web App URL you got from Apps Script → Deploy → Web app. All your data will sync live across Mobile, Tablet, Browser and this Desktop app via the same Google Sheet.
+              </p>
+              <Input
+                type="url"
+                placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                className="h-11 text-sm"
+              />
+              <Input
+                type="password"
+                placeholder="Optional: 4-8 digit PIN lock"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                className="h-11 text-sm"
+                inputMode="numeric"
+                pattern="\d{4,8}"
+              />
+              <Button onClick={handleSaveDesktop} disabled={saving} className="w-full bg-emerald-600 hover:bg-emerald-700 h-11">
+                {saving ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Saving...</> : <><ShieldCheck className="w-4 h-4 mr-1.5" /> Save & Connect</>}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Steps */}
         <Card className="bg-card/95 backdrop-blur border border-border shadow-2xl">

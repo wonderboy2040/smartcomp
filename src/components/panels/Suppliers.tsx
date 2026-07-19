@@ -51,10 +51,19 @@ export function SuppliersPanel() {
     if (!confirm('Delete this supplier?')) return
     try {
       await apiDelete(`/api/suppliers/${id}`)
-      toast({ title: 'Supplier deleted' })
+      toast({
+        title: 'Supplier deleted ✓',
+        description: 'Removed locally - syncing to cloud',
+        duration: 3500,
+      })
       refetch()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Delete failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
@@ -255,7 +264,7 @@ function SupplierDialog({
 
   const handleSave = async () => {
     if (!form.name || !form.phone) {
-      toast({ title: 'Name and phone are required', variant: 'destructive' })
+      toast({ title: 'Name and phone are required', variant: 'destructive', duration: 5000 })
       return
     }
     setSaving(true)
@@ -263,14 +272,27 @@ function SupplierDialog({
       const payload = { ...form, whatsappNumber: form.whatsappNumber || form.phone }
       if (editing) {
         await apiPut(`/api/suppliers/${editing.id}`, payload)
-        toast({ title: 'Supplier updated' })
+        toast({
+          title: 'Supplier updated ✓',
+          description: `${form.name} - syncs to cloud`,
+          duration: 3500,
+        })
       } else {
         await apiPost('/api/suppliers', payload)
-        toast({ title: 'Supplier added' })
+        toast({
+          title: 'Supplier added ✓',
+          description: `${form.name} - syncs to cloud`,
+          duration: 3500,
+        })
       }
       onSaved()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error saving supplier',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     } finally {
       setSaving(false)
     }

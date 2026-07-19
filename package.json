@@ -2,11 +2,15 @@
   "name": "smart-computers-panel",
   "private": true,
   "version": "6.2.0",
+  "main": "electron/main.js",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "check": "next build"
+    "check": "next build",
+    "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron electron/main.js\"",
+    "electron:build": "node scripts/build-exe.js",
+    "dist:win": "node scripts/build-exe.js --target=win-x64"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "1.2.3",
@@ -63,11 +67,19 @@
   "devDependencies": {
     "@types/node": "20.17.6",
     "@types/react": "19.2.17",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "tailwindcss": "4.1.12",
     "tsx": "^4.23.1",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "wait-on": "^8.0.1"
   },
   "engines": {
     "node": "20.x"
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
   }
 }

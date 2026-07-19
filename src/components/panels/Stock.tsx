@@ -67,10 +67,19 @@ export function StockPanel() {
     if (!confirm('Delete this item?')) return
     try {
       await apiDelete(`/api/items/${id}`)
-      toast({ title: 'Item deleted' })
+      toast({
+        title: 'Item deleted ✓',
+        description: 'Removed locally - syncing to cloud',
+        duration: 3500,
+      })
       refetch()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Delete failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
@@ -330,7 +339,7 @@ function ItemDialog({
 
   const handleSave = async () => {
     if (!form.name || !form.sku) {
-      toast({ title: 'Name and SKU are required', variant: 'destructive' })
+      toast({ title: 'Name and SKU are required', variant: 'destructive', duration: 5000 })
       return
     }
     setSaving(true)
@@ -339,17 +348,30 @@ function ItemDialog({
       if (editing) {
         await apiPut(`/api/items/${editing.id}`, form)
         const elapsed = Date.now() - start
-        toast({ title: `Item updated ✓ ${elapsed}ms`, description: `${form.name} - Ultra fast v6.0` })
+        toast({
+          title: `Item updated ✓ ${elapsed}ms`,
+          description: `${form.name} - syncs to cloud`,
+          duration: 4000,
+        })
       } else {
         // ULTRA-ULTRA FAST: Instant optimistic + background sync
         const { apiPostUltraFast } = await import('@/lib/api')
         const temp = await apiPostUltraFast('/api/items', form, { instantClose: true })
         const elapsed = Date.now() - start
-        toast({ title: `Item added instantly! ✓ ${elapsed}ms`, description: `${form.name} - Client number ${temp.sku || ''} - Syncing to Sheets in background (ultra fast v6.0: instant <100ms)` })
+        toast({
+          title: `Item added instantly! ✓ ${elapsed}ms`,
+          description: `${form.name} - SKU: ${temp.sku || ''} - Syncing in background`,
+          duration: 4000,
+        })
       }
       onSaved()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error saving item',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     } finally {
       setSaving(false)
     }

@@ -47,9 +47,17 @@ export function InvoicesPanel() {
     try {
       const res = await apiPost('/api/whatsapp/send', { action: 'shareInvoice', id: invoice.id })
       window.open(res.link, '_blank')
-      toast({ title: 'WhatsApp opened with invoice details ✓' })
+      toast({
+        title: 'WhatsApp opened with invoice details ✓',
+        duration: 3500,
+      })
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
@@ -58,19 +66,47 @@ export function InvoicesPanel() {
       const res = await apiPost('/api/razorpay/create-link', { invoiceId: invoice.id })
       if (res.success) {
         window.open(res.shortUrl, '_blank')
-        toast({ title: res.method === 'upi' ? 'UPI payment link opened' : 'Payment link sent', description: `Amount: Rs.${res.amount}` })
+        toast({
+          title: res.method === 'upi' ? 'UPI payment link opened' : 'Payment link sent',
+          description: `Amount: Rs.${res.amount}`,
+          duration: 4000,
+        })
       } else {
-        toast({ title: 'Error', description: res.error, variant: 'destructive' })
+        toast({
+          title: 'Error',
+          description: res.error,
+          variant: 'destructive',
+          duration: 6000,
+        })
       }
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this invoice? Stock will be restored and customer credit adjusted.')) return
-    try { await apiDelete(`/api/invoices/${id}`); toast({ title: 'Invoice deleted ✓' }); refetch() }
-    catch (e: any) { toast({ title: 'Error', description: e.message, variant: 'destructive' }) }
+    try {
+      await apiDelete(`/api/invoices/${id}`)
+      toast({
+        title: 'Invoice deleted ✓',
+        description: 'Removed locally - syncing to cloud',
+        duration: 3500,
+      })
+      refetch()
+    } catch (e: any) {
+      toast({
+        title: 'Delete failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
+    }
   }
 
   return (

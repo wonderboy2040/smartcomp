@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAppPin } from '@/lib/runtime-config'
 
 /**
  * PIN-based access protection - FIXED v6.0.0
@@ -6,6 +7,10 @@ import { NextRequest, NextResponse } from 'next/server'
  * BUGFIX v6.0.0: SALT mismatch fixed - login and proxy now use same SALT
  * Also supports both old (_smartcomp_v1) and new (_smartcomp_v3_2026) salts
  * for backward compatibility when users upgrade.
+ *
+ * DESKTOP SUPPORT: PIN is now read via getAppPin() so the Electron .exe
+ * can persist it in %APPDATA%/smartcomp/config.json and update it from
+ * the in-app settings panel without a rebuild.
  */
 
 const AUTH_COOKIE = 'smartcomp_auth'
@@ -16,7 +21,7 @@ let cachedPin: string | undefined
 let cachedTokens: { v3: string | null; v1: string | null } | null = null
 
 async function expectedTokens(): Promise<{ v3: string | null; v1: string | null }> {
-  const pin = process.env.APP_PIN
+  const pin = getAppPin()
   if (!pin) return { v3: null, v1: null }
   
   if (pin === cachedPin && cachedTokens) return cachedTokens

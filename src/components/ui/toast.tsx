@@ -15,8 +15,11 @@ const ToastViewport = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Viewport
     ref={ref}
+    // Stack multiple toasts vertically with gap; on mobile they appear at top
+    // (so keyboard/input isn't covered), on desktop bottom-right.
     className={cn(
-      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]",
+      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse gap-2 p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[440px] pointer-events-none",
+      "[&>li]:pointer-events-auto",
       className
     )}
     {...props}

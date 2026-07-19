@@ -20,9 +20,12 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 60 * 1000 // v4.0 ultra: 60s for ultra high speed - fewer Apps Script calls
+const STALE_MS = 120 * 1000 // v5.0: 120s — matches Apps Script cache (60s) + 60s extra window
+                          // Was 60s before, caused unnecessary refetches on every page navigation
 const RETRY_ATTEMPTS = 1 // Reduced from 2 to 1 for faster failure feedback
 const RETRY_DELAY = 500 // Reduced from 1000 to 500ms for faster retry
+const FETCH_TIMEOUT_MS = 8000 // 8s — was 15s (too slow for desktop UX)
+const DASHBOARD_INVALIDATE_DEBOUNCE = 800 // Debounce dashboard re-fetch so a single save doesn't trigger 5 of them
 
 // Offline detection
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -64,6 +67,11 @@ export function mutate<T>(key: string, dataOrUpdater: T | Updater<T>) {
   setCache(key, next)
 }
 
+// Dashboard invalidate debounce — multiple mutations in quick succession
+// (e.g. invoice create + payment create + stock update in one save) should
+// only trigger ONE dashboard reload, not 3-5 of them.
+let dashboardInvalidateTimer: ReturnType<typeof setTimeout> | null = null
+
 export function invalidate(prefix: string) {
   const affectedKeys: string[] = []
   for (const key of Array.from(cache.keys())) {
@@ -72,6 +80,36 @@ export function invalidate(prefix: string) {
       affectedKeys.push(key)
     }
   }
+
+  // Debounce dashboard re-fetch
+  if (prefix === '/api/dashboard' || prefix === '*') {
+    if (dashboardInvalidateTimer) {
+      clearTimeout(dashboardInvalidateTimer)
+    }
+    dashboardInvalidateTimer = setTimeout(() => {
+      dashboardInvalidateTimer = null
+      for (const key of affectedKeys) {
+        notify(key)
+        const subs = subscribers.get(key)
+        if (subs && subs.size > 0) {
+          doFetch(key)
+        }
+      }
+      if (prefix === '*') {
+        // For wildcard, also notify non-dashboard keys immediately
+        for (const key of Array.from(cache.keys())) {
+          if (!key.startsWith('/api/dashboard')) {
+            notify(key)
+            const subs = subscribers.get(key)
+            if (subs && subs.size > 0) doFetch(key)
+          }
+        }
+      }
+    }, DASHBOARD_INVALIDATE_DEBOUNCE)
+    return
+  }
+
+  // Non-dashboard invalidations happen immediately
   for (const key of affectedKeys) {
     notify(key)
     const subs = subscribers.get(key)
@@ -152,7 +190,7 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
 async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1): Promise<any> {
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15000)
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     
     const res = await fetch(url, {
       ...options,
@@ -200,10 +238,11 @@ function doFetch(url: string, options?: RequestInit) {
   return p
 }
 
-// ===== apiPost with optimistic UI =====
+// ===== apiPost with optimistic UI — INSTANT v7.0 =====
+// Returns a temp item INSTANTLY (UI shows it immediately with _pending flag),
+// syncs to server in background, then replaces temp with real data.
+// On failure, removes temp item and throws.
 export async function apiPost(url: string, body: any) {
-  if (!isOnline) throw new Error('Offline - cannot create. Please check internet connection.')
-
   const base = url.split('?')[0].split('#')[0]
   const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   const tempItem = { ...body, id: tempId, _pending: true, createdAt: new Date().toISOString() }
@@ -213,20 +252,42 @@ export async function apiPost(url: string, body: any) {
     const keyBase = key.split('?')[0].split('#')[0]
     if (keyBase === base && Array.isArray(cache.get(key))) {
       affectedKeys.push(key)
+      // INSTANT optimistic — UI shows the item before server responds
       mutate<any[]>(key, (prev) => (prev ? [tempItem, ...prev] : [tempItem]))
     }
   }
   invalidate('/api/dashboard')
 
+  // Offline mode — queue and return temp
+  if (!isOnline) {
+    try {
+      const { addToQueue } = await import('./offline-queue')
+      await addToQueue({
+        type: 'create',
+        sheet: base.split('/').pop() || 'unknown',
+        url,
+        method: 'POST',
+        body,
+        tempId,
+      })
+    } catch {}
+    return { ...tempItem, _queued: true, _offline: true }
+  }
+
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: controller.signal,
     })
+    clearTimeout(timeout)
     const data = await r.json()
     if (!r.ok) throw new Error(data.error || 'Failed to create')
 
+    // Replace temp item with real server data
     for (const key of affectedKeys) {
       mutate<any[]>(key, (prev) =>
         prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : []
@@ -234,6 +295,7 @@ export async function apiPost(url: string, body: any) {
     }
     return data
   } catch (e) {
+    // Rollback — remove temp item
     for (const key of affectedKeys) {
       mutate<any[]>(key, (prev) => (prev ? prev.filter((x) => x.id !== tempId) : []))
     }
@@ -343,47 +405,94 @@ export async function apiPostUltraFast(url: string, body: any, options: { instan
   }
 }
 
-// ===== apiPut with unwrapping =====
+// ===== apiPut with unwrapping — OPTIMISTIC v7.0 =====
+// Instant local update (UI reflects change immediately), server sync in background.
+// If server fails, snapshot is restored and an error is thrown.
 export async function apiPut(url: string, body: any) {
-  if (!isOnline) throw new Error('Offline - cannot update. Please check internet connection.')
-
-  const r = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await r.json()
-  if (!r.ok) throw new Error(data.error || 'Failed to update')
-
-  let entity: any = data
-  if (data && typeof data === 'object' && !Array.isArray(data)) {
-    const wrapperKeys = ['job', 'invoice', 'quotation', 'customer', 'supplier', 'item', 'payment', 'expense', 'amc', 'campaign', 'serial', 'exp']
-    for (const wk of wrapperKeys) {
-      if (data[wk] && typeof data[wk] === 'object' && (data[wk].id !== undefined || data[wk].jobId !== undefined)) {
-        entity = data[wk]
-        break
-      }
-    }
-  }
-
+  // Compute the list URL + entity ID from the URL
   const listUrl = listUrlOf(url)
-  const updatedId = entity?.id || idOf(url)
+  const targetId = idOf(url)
+
+  // Build the optimistic entity (from body + id)
+  const optimisticEntity: any = { ...body, id: targetId }
+
+  // Snapshot current cache state for rollback
+  const snapshots = new Map<string, any>()
+  const affectedKeys: string[] = []
   for (const key of Array.from(cache.keys())) {
     const keyBase = key.split('?')[0].split('#')[0]
     if (keyBase === listUrl && Array.isArray(cache.get(key))) {
+      snapshots.set(key, cache.get(key))
+      affectedKeys.push(key)
+      // INSTANT local update — UI reflects change immediately
       mutate<any[]>(key, (prev) =>
-        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...entity } : x)) : prev || []
+        prev ? prev.map((x) => (String(x?.id) === String(targetId) ? { ...x, ...optimisticEntity, _pending: true } : x)) : prev || []
       )
     }
   }
   invalidate('/api/dashboard')
-  return data
+
+  // Allow offline mode: queue if offline (don't throw — return optimistic result)
+  if (!isOnline) {
+    try {
+      const { addToQueue } = await import('./offline-queue')
+      await addToQueue({
+        type: 'update',
+        sheet: listUrl.split('/').pop() || 'unknown',
+        url,
+        method: 'PUT',
+        body,
+        tempId: targetId,
+      })
+    } catch {}
+    return { ...optimisticEntity, _pending: true, _offline: true }
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+    const data = await r.json()
+    if (!r.ok) throw new Error(data.error || 'Failed to update')
+
+    let entity: any = data
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const wrapperKeys = ['job', 'invoice', 'quotation', 'customer', 'supplier', 'item', 'payment', 'expense', 'amc', 'campaign', 'serial', 'exp']
+      for (const wk of wrapperKeys) {
+        if (data[wk] && typeof data[wk] === 'object' && (data[wk].id !== undefined || data[wk].jobId !== undefined)) {
+          entity = data[wk]
+          break
+        }
+      }
+    }
+
+    const updatedId = entity?.id || targetId
+    // Replace optimistic item with real server data, remove _pending flag
+    for (const key of affectedKeys) {
+      mutate<any[]>(key, (prev) =>
+        prev ? prev.map((x) => (String(x?.id) === String(updatedId) ? { ...x, ...entity, _pending: false } : x)) : prev || []
+      )
+    }
+    return data
+  } catch (e) {
+    // Rollback on failure
+    for (const [key, snap] of snapshots) {
+      setCache(key, snap)
+    }
+    throw e
+  }
 }
 
-// ===== apiDelete optimistic =====
+// ===== apiDelete — OPTIMISTIC v7.0 =====
+// Instant local removal (UI reflects change immediately), server sync in background.
+// If server fails, snapshot is restored and an error is thrown.
 export async function apiDelete(url: string) {
-  if (!isOnline) throw new Error('Offline - cannot delete. Please check internet connection.')
-
   const listUrl = listUrlOf(url)
   const targetId = idOf(url)
 
@@ -392,19 +501,39 @@ export async function apiDelete(url: string) {
     const keyBase = key.split('?')[0].split('#')[0]
     if (keyBase === listUrl && Array.isArray(cache.get(key))) {
       snapshots.set(key, cache.get(key))
+      // INSTANT local removal — UI reflects delete immediately
       mutate<any[]>(key, (prev) =>
         prev ? prev.filter((x) => String(x?.id) !== String(targetId)) : prev || []
       )
     }
   }
+  invalidate('/api/dashboard')
+
+  // Allow offline mode: queue if offline
+  if (!isOnline) {
+    try {
+      const { addToQueue } = await import('./offline-queue')
+      await addToQueue({
+        type: 'delete',
+        sheet: listUrl.split('/').pop() || 'unknown',
+        url,
+        method: 'DELETE',
+        tempId: targetId,
+      })
+    } catch {}
+    return { success: true, _pending: true, _offline: true }
+  }
 
   try {
-    const r = await fetch(url, { method: 'DELETE' })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    const r = await fetch(url, { method: 'DELETE', signal: controller.signal })
+    clearTimeout(timeout)
     const data = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(data.error || 'Failed to delete')
-    invalidate('/api/dashboard')
     return data
   } catch (e) {
+    // Rollback on failure
     for (const [key, snap] of snapshots) {
       setCache(key, snap)
     }

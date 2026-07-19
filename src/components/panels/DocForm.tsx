@@ -221,34 +221,43 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
       if (editing) {
         const result = await apiPut(url + `/${editing.id}`, payload)
         const elapsed = Date.now() - saveStart
-        toast({ title: `${docType === 'invoice' ? 'Invoice' : 'Quotation'} updated ✓`, description: `${result.number || ''} | ${elapsed}ms | Ultra fast` })
+        toast({
+          title: `${docType === 'invoice' ? 'Invoice' : 'Quotation'} updated ✓`,
+          description: `${result.number || ''} | ${elapsed}ms | Ultra fast`,
+          duration: 4000,
+        })
         onSaved(result)
       } else {
         // For new, use ultra fast instant close
         // Show instant feedback
-        toast({ 
-          title: `Creating ${docType}... ⚡`, 
-          description: `Client number ${tempNumber} generated instantly - syncing to Google Sheets (ultra fast v6.0: 1 call vs 7)`,
+        toast({
+          title: `Creating ${docType}... ⚡`,
+          description: `Client number ${tempNumber} generated instantly - syncing to Google Sheets`,
           duration: 2000,
         })
-        
+
         // Instant optimistic - close dialog immediately (<100ms)
         const tempResult = await apiPostUltraFast(url, payload, { instantClose: true })
-        
+
         const elapsed = Date.now() - saveStart
-        toast({ 
-          title: `${docType === 'invoice' ? 'Invoice' : 'Quotation'} created instantly! ✓ ${elapsed}ms`, 
-          description: `${tempResult.number} | Profit Rs.${calc.profit.toFixed(2)} | Syncing in background (2-4s) | Ultra-ultra fast v6.0`,
-          duration: 4000,
+        toast({
+          title: `${docType === 'invoice' ? 'Invoice' : 'Quotation'} created instantly! ✓ ${elapsed}ms`,
+          description: `${tempResult.number} | Profit Rs.${calc.profit.toFixed(2)} | Syncing in background`,
+          duration: 5000,
         })
-        
+
         // Close immediately for ultra fast UX
         onSaved(tempResult)
-        
+
         // Background sync will update cache when server responds (handled in apiPostUltraFast)
       }
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error saving document',
+        description: e.message || 'Unknown error',
+        variant: 'destructive',
+        duration: 6000,
+      })
     } finally {
       setSaving(false)
     }

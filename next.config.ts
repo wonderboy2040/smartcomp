@@ -13,6 +13,8 @@ import type { NextConfig } from "next";
  */
 
 const nextConfig: NextConfig = {
+  // Standalone output so Electron can ship the server bundle without node_modules
+  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },

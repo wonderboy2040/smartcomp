@@ -460,6 +460,11 @@ function SyncStatus() {
             </Badge>
           </div>
 
+          {/* Desktop-mode: change cloud URL / PIN without reinstalling */}
+          {settingsInfo?.runtimeConfigActive && (
+            <DesktopCloudConfigEditor />
+          )}
+
           {status?.counts && (
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 p-3 rounded-xl text-center border border-blue-100">
@@ -1251,5 +1256,128 @@ function SystemHealth() {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * DesktopCloudConfigEditor — visible only when the app is running inside the
+ * Electron desktop wrapper (runtimeConfigActive = true). Lets the user change
+ * the Google Apps Script URL and PIN without reinstalling the .exe.
+ *
+ * Why this exists:
+ *   - All add/edit/delete operations go through APPS_SCRIPT_URL → Google Sheet
+ *   - On desktop, the URL is stored in %APPDATA%/smartcomp/config.json
+ *   - Same Google Sheet = same data on Mobile + Tablet + Browser + Desktop
+ *   - Changing the URL here instantly repoints this desktop to a different
+ *     sheet (or fixes a stale deployment URL) without a rebuild
+ */
+function DesktopCloudConfigEditor() {
+  const { toast } = useToast()
+  const [url, setUrl] = useState('')
+  const [pin, setPin] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [reveal, setReveal] = useState(false)
+
+  // We don't auto-fill the URL field because the API returns it masked for
+  // security. The user pastes a fresh URL when they want to switch sheets.
+  useEffect(() => {
+    // no-op — kept for future hooks
+  }, [])
+
+  const handleSave = async () => {
+    if (!url.trim()) {
+      toast({ title: 'URL required', variant: 'destructive' })
+      return
+    }
+    if (!url.includes('/exec')) {
+      toast({ title: 'Invalid URL', description: 'URL must end with /exec', variant: 'destructive' })
+      return
+    }
+    if (pin && !/^\d{4,8}$/.test(pin)) {
+      toast({ title: 'Invalid PIN', description: 'PIN must be 4-8 digits', variant: 'destructive' })
+      return
+    }
+    setSaving(true)
+    try {
+      const r = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appsScriptUrl: url.trim(), appPin: pin.trim() }),
+      })
+      const res = await r.json()
+      if (res.success) {
+        toast({
+          title: 'Saved',
+          description: 'This desktop now points to the same Google Sheet as your other devices.',
+        })
+        setPin('')
+        setTimeout(() => window.location.reload(), 800)
+      } else {
+        toast({ title: 'Save failed', description: res.message, variant: 'destructive' })
+      }
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Cloud className="w-4 h-4 text-blue-600" />
+        <h3 className="text-sm font-semibold text-slate-900">Desktop Cloud Connection</h3>
+        <Badge variant="outline" className="ml-auto bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+          Desktop mode
+        </Badge>
+      </div>
+      <p className="text-xs text-slate-600">
+        This desktop app talks to the same Google Sheet as your phone, tablet, and browser.
+        Paste a new Apps Script URL here if your deployment changed. All add/edit/delete
+        actions will sync live to every device.
+      </p>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-slate-700">Google Apps Script URL (/exec)</Label>
+        <Input
+          type={reveal ? 'text' : 'password'}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+          className="h-9 text-xs font-mono"
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            type="button"
+            className="h-7 text-[10px] text-slate-600"
+            onClick={() => setReveal((v) => !v)}
+          >
+            {reveal ? 'Hide' : 'Reveal'}
+          </Button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-medium text-slate-700">
+          PIN (leave blank to keep current)
+        </Label>
+        <Input
+          type="password"
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          placeholder="4-8 digits"
+          className="h-9 text-xs"
+          inputMode="numeric"
+          pattern="\d{4,8}"
+        />
+      </div>
+      <Button onClick={handleSave} disabled={saving} className="w-full h-9 bg-blue-600 hover:bg-blue-700 text-xs">
+        {saving ? (
+          <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Saving...</>
+        ) : (
+          <><ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Save & Reconnect</>
+        )}
+      </Button>
+    </div>
   )
 }

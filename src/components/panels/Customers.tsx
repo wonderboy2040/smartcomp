@@ -61,10 +61,19 @@ export function CustomersPanel() {
     if (!confirm('Delete this customer? Invoices will remain but reference will be lost.')) return
     try {
       await apiDelete(`/api/customers/${id}`)
-      toast({ title: 'Customer deleted' })
+      toast({
+        title: 'Customer deleted ✓',
+        description: 'Removed locally - syncing to cloud',
+        duration: 3500,
+      })
       refetch()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Delete failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
@@ -351,21 +360,34 @@ function CustomerDialog({
 
   const handleSave = async () => {
     if (!form.name) {
-      toast({ title: 'Name is required', variant: 'destructive' })
+      toast({ title: 'Name is required', variant: 'destructive', duration: 5000 })
       return
     }
     setSaving(true)
     try {
       if (editing) {
         await apiPut(`/api/customers/${editing.id}`, form)
-        toast({ title: 'Customer updated' })
+        toast({
+          title: 'Customer updated ✓',
+          description: `${form.name} - syncs to cloud`,
+          duration: 3500,
+        })
       } else {
         await apiPost('/api/customers', form)
-        toast({ title: 'Customer added' })
+        toast({
+          title: 'Customer added ✓',
+          description: `${form.name} - syncs to cloud`,
+          duration: 3500,
+        })
       }
       onSaved()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error saving customer',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     } finally {
       setSaving(false)
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { testConnection, getConfiguredUrlPreview } from '@/lib/sheets-client'
+import { getAppPin } from '@/lib/runtime-config'
 
 // GET - connection status + masked URL preview (so user can verify the URL format)
 export async function GET() {
@@ -9,6 +10,9 @@ export async function GET() {
     urlPreview: urlInfo.urlPreview,
     urlConfigured: urlInfo.configured,
     urlEndsWithExec: urlInfo.endsWithExec,
+    // Desktop-mode flags so the Settings panel can show a "Change Cloud URL" UI
+    runtimeConfigActive: !!process.env.SMARTCOMP_CONFIG_PATH,
+    pinRequired: !!getAppPin(),
   })
 }
 

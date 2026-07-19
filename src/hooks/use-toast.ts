@@ -8,8 +8,13 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const TOAST_LIMIT = 5             // Show up to 5 toasts at once (was 1 — caused toast to vanish instantly when another fired)
+const TOAST_REMOVE_DELAY = 4000    // Auto-dismiss after 4s (was 1000000ms = ~17 min, way too long)
+const TOAST_REMOVE_DELAY_LONG = 7000 // Longer duration for important toasts (errors, success with details)
+const TOAST_DISMISS_ANIM_MS = 350   // Time for fade-out animation before removal
+
+// Track the duration per toast so we can give important messages more time
+const toastDurations = new Map<string, number>()
 
 type ToasterToast = ToastProps & {
   id: string
@@ -63,13 +68,17 @@ const addToRemoveQueue = (toastId: string) => {
     return
   }
 
+  // Use per-toast duration if set, otherwise default
+  const duration = toastDurations.get(toastId) ?? TOAST_REMOVE_DELAY
+  toastDurations.delete(toastId) // cleanup
+
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId)
     dispatch({
       type: "REMOVE_TOAST",
       toastId: toastId,
     })
-  }, TOAST_REMOVE_DELAY)
+  }, duration + TOAST_DISMISS_ANIM_MS) // Add animation time so toast fades out smoothly
 
   toastTimeouts.set(toastId, timeout)
 }
@@ -144,6 +153,13 @@ type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
   const id = genId()
+
+  // Store custom duration if provided (so addToRemoveQueue can use it)
+  if (typeof props.duration === 'number') {
+    toastDurations.set(id, props.duration)
+    // Strip duration so Radix doesn't try to use it incorrectly
+    delete (props as any).duration
+  }
 
   const update = (props: ToasterToast) =>
     dispatch({

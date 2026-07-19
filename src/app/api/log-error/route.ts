@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAppPin } from '@/lib/runtime-config'
 
 /**
  * Client-side error logger.
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
   // SECURITY: GET is admin-only (returns error stacks which leak implementation details).
   // POST remains public so client crashes can log before login.
   // We verify the PIN cookie directly here since middleware whitelists this path for POST.
-  const APP_PIN = process.env.APP_PIN
+  const APP_PIN = getAppPin()
   if (APP_PIN) {
     const cookie = req.cookies.get('smartcomp_auth')?.value
     const enc = new TextEncoder()

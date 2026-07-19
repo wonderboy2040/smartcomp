@@ -62,9 +62,17 @@ export function QuotationsPanel() {
         id: q.id,
       })
       window.open(res.link, '_blank')
-      toast({ title: 'WhatsApp opened with quotation details' })
+      toast({
+        title: 'WhatsApp opened with quotation details ✓',
+        duration: 3500,
+      })
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Error',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
@@ -72,10 +80,19 @@ export function QuotationsPanel() {
     if (!confirm(`Convert quotation ${q.number} to invoice? Stock will be deducted.`)) return
     try {
       const res = await apiPost(`/api/quotations/${q.id}`, { action: 'convert' })
-      toast({ title: 'Converted to invoice', description: `Invoice: ${res.invoiceNumber}` })
+      toast({
+        title: 'Converted to invoice ✓',
+        description: `Invoice: ${res.invoiceNumber}`,
+        duration: 4500,
+      })
       refetch()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Conversion failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 
@@ -83,10 +100,19 @@ export function QuotationsPanel() {
     if (!confirm('Delete this quotation?')) return
     try {
       await apiDelete(`/api/quotations/${id}`)
-      toast({ title: 'Quotation deleted' })
+      toast({
+        title: 'Quotation deleted ✓',
+        description: 'Removed locally - syncing to cloud',
+        duration: 3500,
+      })
       refetch()
     } catch (e: any) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Delete failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
   }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAppPin } from '@/lib/runtime-config'
 
 const AUTH_COOKIE = 'smartcomp_auth'
 const SALT = '_smartcomp_v3_2026' // v3.0 unified salt - MUST match proxy.ts
@@ -21,7 +22,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const pin = process.env.APP_PIN
+  const pin = getAppPin()
   if (!pin) {
     return NextResponse.json({ error: 'APP_PIN is not configured on the server. Open access mode.' }, { status: 400 })
   }

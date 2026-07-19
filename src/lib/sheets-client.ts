@@ -15,12 +15,17 @@
  *   - replaceAll() = BLOCKED
  */
 
-const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL
+// ===== RUNTIME CONFIG (for Electron desktop app) =====
+// Mobile / Tablet / Browser deployments set APPS_SCRIPT_URL + APP_PIN as env
+// vars at deploy time. The desktop .exe instead writes them to a JSON file at
+// runtime (path = SMARTCOMP_CONFIG_PATH env var). See src/lib/runtime-config.ts.
+import { getAppsScriptUrl, getAppPin } from '@/lib/runtime-config'
+export { getAppsScriptUrl, getAppPin } from '@/lib/runtime-config'
 
-// ===== CACHE: LRU with 90s TTL + 300 max for ultra speed =====
+// ===== CACHE: LRU with 120s TTL + 300 max for ultra speed =====
 type CacheEntry = { data: any; expires: number; hits: number }
 const cache = new Map<string, CacheEntry>()
-const CACHE_TTL = 90 * 1000 // 90s - ultra fast, fewer calls
+const CACHE_TTL = 120 * 1000 // v5.0: 120s — matches Apps Script 60s cache + extra 60s window for ultra speed
 const MAX_CACHE_SIZE = 300
 
 function getCached<T>(key: string): T | null {
@@ -50,14 +55,16 @@ function invalidateCache(sheet?: string) {
 
 // ===== CONFIG =====
 export function isConfigured(): boolean {
-  return !!APPS_SCRIPT_URL && APPS_SCRIPT_URL.includes('/exec')
+  const url = getAppsScriptUrl()
+  return !!url && url.includes('/exec')
 }
 
 export function getConfigError(): string | null {
-  if (!APPS_SCRIPT_URL) {
-    return 'APPS_SCRIPT_URL environment variable is not set. Please set it in your deployment environment variables.'
+  const url = getAppsScriptUrl()
+  if (!url) {
+    return 'APPS_SCRIPT_URL is not set. Open the desktop app settings (or set the env var on cloud deployments) and paste your Google Apps Script /exec URL.'
   }
-  if (!APPS_SCRIPT_URL.includes('/exec')) {
+  if (!url.includes('/exec')) {
     return 'APPS_SCRIPT_URL must end with /exec - it should be the Web App deployment URL, not the editor URL.'
   }
   return null
@@ -132,7 +139,8 @@ const CIRCUIT_BREAKER_THRESHOLD = 5
 const CIRCUIT_BREAKER_COOLDOWN = 30 * 1000
 
 async function callAppsScript(payload: any): Promise<any> {
-  if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured')
+  const APPS_SCRIPT_URL = getAppsScriptUrl()
+  if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured. Open the desktop app settings and paste your Google Apps Script /exec URL.')
   
   // Circuit breaker check
   if (Date.now() < circuitBrokenUntil) {
@@ -147,7 +155,7 @@ async function callAppsScript(payload: any): Promise<any> {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(sanitizeRowData(payload)),
         redirect: 'follow',
-        signal: AbortSignal.timeout(15000), // Reduced from 28s to 15s for faster response
+        signal: AbortSignal.timeout(8000), // v5.0: 8s — was 15s. Apps Script cold start is ~5s, so 8s is enough
       })
       if (res.status === 404) {
         throw new Error(`Apps Script 404 (attempt ${attempt}/2). Redeploy needed.`)
@@ -181,7 +189,8 @@ async function callAppsScript(payload: any): Promise<any> {
 }
 
 async function getFromAppsScript(params: Record<string, string>): Promise<any> {
-  if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured')
+  const APPS_SCRIPT_URL = getAppsScriptUrl()
+  if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured. Open the desktop app settings and paste your Google Apps Script /exec URL.')
   
   if (Date.now() < circuitBrokenUntil) {
     throw new Error(`Circuit breaker active. Try again in ${Math.ceil((circuitBrokenUntil - Date.now())/1000)}s`)
@@ -198,7 +207,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
       const res = await fetch(url.toString(), {
         method: 'GET',
         redirect: 'follow',
-        signal: AbortSignal.timeout(10000), // Reduced from 28s to 10s for GET
+        signal: AbortSignal.timeout(6000), // v5.0: 6s — was 10s. GET reads are usually cached, so 6s is enough
       })
       if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/2)`)
       if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
@@ -370,8 +379,9 @@ export async function getDashboardStats(): Promise<any> {
 // ===== CONNECTION TEST =====
 export async function testConnection(): Promise<{ success: boolean; message: string; urlPreview?: string }> {
   try {
+    const APPS_SCRIPT_URL = getAppsScriptUrl()
     if (!APPS_SCRIPT_URL) {
-      return { success: false, message: 'APPS_SCRIPT_URL not set in environment' }
+      return { success: false, message: 'APPS_SCRIPT_URL not set. Open the desktop app settings and paste your Google Apps Script /exec URL.' }
     }
     const urlStr = String(APPS_SCRIPT_URL).trim()
     const urlPreview = maskUrl(urlStr)
@@ -395,11 +405,13 @@ export async function testConnection(): Promise<{ success: boolean; message: str
       ? { success: true, message: 'Connected to Google Sheets successfully! (v3.0 Ready)', urlPreview }
       : { success: false, message: res.error || 'Connection failed', urlPreview }
   } catch (e: any) {
-    return { success: false, message: e?.message || 'Connection failed', urlPreview: APPS_SCRIPT_URL ? maskUrl(APPS_SCRIPT_URL) : undefined }
+    const url = getAppsScriptUrl()
+    return { success: false, message: e?.message || 'Connection failed', urlPreview: url ? maskUrl(url) : undefined }
   }
 }
 
 export function getConfiguredUrlPreview(): { configured: boolean; urlPreview: string | null; endsWithExec: boolean } {
+  const APPS_SCRIPT_URL = getAppsScriptUrl()
   if (!APPS_SCRIPT_URL) {
     return { configured: false, urlPreview: null, endsWithExec: false }
   }
