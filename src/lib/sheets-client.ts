@@ -430,8 +430,9 @@ export async function updateRow<T = any>(sheet: string, id: string, data: any): 
   return res.data as T
 }
 
-// SOFT-DELETE ONLY
+// SOFT-DELETE ONLY - Quantum: track deleted like PWA
 export async function deleteRow(sheet: string, id: string): Promise<boolean> {
+  trackDeleted(sheet, id)
   const res = await callAppsScript({ action: 'delete', sheet, id })
   if (!res.success) throw new Error(res.error || 'Failed to delete')
   invalidateCache(sheet)
