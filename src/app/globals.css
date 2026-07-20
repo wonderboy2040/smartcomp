@@ -873,3 +873,244 @@ html, body {
   overflow-x: hidden;
   max-width: 100vw;
 }
+
+/* ===== SUPER INTELLIGENCE v7.0 PRO - Premium Pro Animations & Effects ===== */
+
+/* Super Intelligence Glow Effects */
+.ai-glow {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.15), 0 0 40px rgba(99, 102, 241, 0.1);
+  animation: ai-pulse-glow 3s ease-in-out infinite;
+}
+
+@keyframes ai-pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.15), 0 0 40px rgba(99, 102, 241, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(124, 58, 237, 0.25), 0 0 60px rgba(99, 102, 241, 0.15); }
+}
+
+.pro-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pro-card-hover:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(124, 58, 237, 0.08);
+}
+
+/* Shimmer loading for AI */
+.ai-shimmer {
+  background: linear-gradient(90deg, #f8fafc 0%, #ede9fe 20%, #f8fafc 40%, #f8fafc 100%);
+  background-size: 400% 100%;
+  animation: ai-shimmer 2s ease-in-out infinite;
+}
+.dark .ai-shimmer {
+  background: linear-gradient(90deg, #1e1b4b 0%, #312e81 20%, #1e1b4b 40%, #1e1b4b 100%);
+  background-size: 400% 100%;
+}
+
+@keyframes ai-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Pro gradient text */
+.pro-gradient-text {
+  background: linear-gradient(135deg, #7c3aed, #6366f1, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 900;
+}
+
+/* Command center search glow */
+.command-search-focus:focus {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15), 0 4px 12px rgba(124, 58, 237, 0.1);
+  border-color: #7c3aed !important;
+}
+
+/* Super intelligence badge animation */
+.super-badge {
+  background: linear-gradient(135deg, #f59e0b, #f97316, #ef4444);
+  background-size: 200% 200%;
+  animation: super-badge-shift 3s ease infinite;
+  color: white;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+@keyframes super-badge-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Automation workflow connector lines */
+.workflow-line {
+  background: linear-gradient(to right, #e0e7ff, #c7d2fe, #a5b4fc);
+  height: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.workflow-line::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(124,58,237,0.6), transparent);
+  animation: workflow-flow 2s ease-in-out infinite;
+}
+
+@keyframes workflow-flow {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Premium scrollbar for pro panels */
+.pro-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.pro-scrollbar::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.1);
+  border-radius: 3px;
+}
+.pro-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  border-radius: 3px;
+}
+.pro-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #6d28d9, #4f46e5);
+}
+
+/* AI score circle */
+.ai-score-ring {
+  background: conic-gradient(from 0deg, #10b981 0%, #06b6d4 25%, #6366f1 50%, #7c3aed 75%, #10b981 100%);
+  border-radius: 50%;
+  padding: 2px;
+  animation: ai-score-rotate 4s linear infinite;
+}
+@keyframes ai-score-rotate {
+  to { transform: rotate(360deg); }
+}
+
+/* Pro toast / notification */
+.pro-notification {
+  backdrop-filter: blur(20px) saturate(1.5);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(124, 58, 237, 0.15);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1), 0 0 0 1px rgba(124,58,237,0.05);
+}
+.dark .pro-notification {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
+/* Voice listening animation */
+.voice-listening {
+  animation: voice-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+}
+@keyframes voice-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); transform: scale(1); }
+  50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); transform: scale(1.05); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); transform: scale(1); }
+}
+
+/* Stats counter animation */
+.stat-counter {
+  animation: stat-count-up 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes stat-count-up {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Pro upgrade: Grid pattern for AI panels */
+.ai-grid-pattern {
+  background-image: 
+    linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Hover lift for insight cards */
+.insight-lift {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.insight-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
+}
+
+/* SUPER PRO v7.0 - New premium sidebar active state */
+.super-nav-active {
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4f46e5 100%) !important;
+  color: white !important;
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3), inset 0 1px 0 rgba(255,255,255,0.2) !important;
+  border: 1px solid rgba(139, 92, 246, 0.4) !important;
+  position: relative;
+  overflow: hidden;
+}
+.super-nav-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: super-nav-shine 3s ease-in-out infinite;
+}
+@keyframes super-nav-shine {
+  0% { left: -100%; }
+  50% { left: 100%; }
+  100% { left: 100%; }
+}
+
+/* Hide scrollbar utility - use for tabs */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* PRO v7.0 Global enhancements */
+.premium-app-shell {
+  position: relative;
+}
+.premium-app-shell::before {
+  content: '';
+  position: fixed;
+  top: -20rem;
+  right: -15rem;
+  width: 40rem;
+  height: 40rem;
+  background: radial-gradient(circle, rgba(124,58,237,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+.premium-app-shell::after {
+  content: '';
+  position: fixed;
+  bottom: -15rem;
+  left: -15rem;
+  width: 35rem;
+  height: 35rem;
+  background: radial-gradient(circle, rgba(59,130,246,0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Enhanced focus for accessibility */
+.pro-focus:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(124,58,237,0.12);
+}
+
+/* Print hide PRO badges */
+@media print {
+  .super-badge, .ai-glow, .pro-notification { display: none !important; }
+}

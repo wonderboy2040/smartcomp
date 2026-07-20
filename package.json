@@ -1,7 +1,9 @@
 {
-  "name": "smart-computers-panel",
+  "name": "smart-computers-panel-pro",
   "private": true,
-  "version": "6.2.0",
+  "version": "7.0.0-pro-super-intelligence",
+  "description": "SmartComp PRO v7.0 Super Intelligence - AI Business Brain, Automation Hub, Command Center, Profit Leak Detector, Forecast Engine, Churn Prediction, Stock AI - Zero API Cost, Privacy-First, Offline Capable",
+  "keywords": ["shop management", "ai", "super intelligence", "automation", "business intelligence", "gst billing", "service management", "stock", "erp"],
   "main": "electron/main.js",
   "scripts": {
     "build": "next build",
