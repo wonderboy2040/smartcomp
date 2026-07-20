@@ -1,8 +1,8 @@
 {
   "name": "smart-computers-panel-pro",
   "private": true,
-  "version": "7.5.0-quantum-ultimate",
-  "description": "SmartComp PRO v7.5 Quantum Ultimate - All Issues Fixed - Super Intelligence + Invoice PRO Fix + Quantum Sync - 80x Faster Jobs, 5x Dashboard, 62% More PDF Space, Zero Blank Print - Build Passing",
+  "version": "7.6.0-deployment-fix-quantum-ultimate",
+  "description": "SmartComp PRO v7.6 Deployment Fix - Circuit Breaker Resilience + Stale Apps Script Fix + Quantum Sync Backoff + Friendly Warning Banner - Site never blank, auto recovers 10s, no spam logs",
   "keywords": [
     "shop management",
     "ai",
