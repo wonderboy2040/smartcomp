@@ -8,6 +8,7 @@ import { SetupWizard } from '@/components/SetupWizard'
 import { useTheme } from '@/lib/theme-context'
 import { PdfPreviewProvider } from '@/lib/preview-context'
 import { DashboardView } from '@/components/panels/Dashboard'
+import { QuantumSync } from '@/lib/quantum-sync'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
@@ -119,6 +120,17 @@ function HomeInner() {
       invalidate('/api/dashboard')
     }, 120000)
     return () => clearInterval(id)
+  }, [isConfigured])
+
+  // Quantum Live Sync - 1s interval with hash check like index.html PWA (superfast)
+  useEffect(() => {
+    if (!isConfigured) return
+    // Start quantum sync: push only if hash changed, pull with hash, 1s interval
+    QuantumSync.startQuantumLiveSync()
+    QuantumSync.createQuantumSyncUI()
+    return () => {
+      QuantumSync.stopQuantumLiveSync()
+    }
   }, [isConfigured])
 
   useEffect(() => {

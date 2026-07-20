@@ -94,106 +94,8 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
     return itemWithGst ? (Number(itemWithGst.gstRate) / 2) : 9
   }, [doc])
 
-  // PRO v7.1 ADVANCED PRINT FIX - iframe based to avoid blank page
   const handlePrint = () => {
-    const el = printRef.current
-    if (!el) {
-      window.print()
-      return
-    }
-
-    try {
-      const printWindow = window.open('', '_blank', 'width=900,height=1200')
-      if (!printWindow) {
-        // fallback: use iframe
-        const iframe = document.createElement('iframe')
-        iframe.style.position = 'fixed'
-        iframe.style.right = '0'
-        iframe.style.bottom = '0'
-        iframe.style.width = '0'
-        iframe.style.height = '0'
-        iframe.style.border = '0'
-        document.body.appendChild(iframe)
-        const docWin = iframe.contentWindow
-        if (!docWin) return
-        const docDoc = docWin.document
-        docDoc.open()
-        docDoc.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <title>${doc?.number || 'Invoice'} Print</title>
-              <style>
-                * { box-sizing: border-box; }
-                body { margin:0; padding:12mm; background:#fff; font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                @page { size: A4 portrait; margin: 8mm; }
-                @media print {
-                  body { padding:0; }
-                }
-                /* Tailwind reset minimal */
-                table { border-collapse: collapse; }
-              </style>
-              <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-            </head>
-            <body>
-              ${el.innerHTML}
-              <script>
-                setTimeout(() => { window.print(); window.close(); }, 300);
-              </script>
-            </body>
-          </html>
-        `)
-        docDoc.close()
-        setTimeout(() => { document.body.removeChild(iframe) }, 5000)
-        return
-      }
-
-      // Clone styles
-      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-        .map((s: any) => s.outerHTML)
-        .join('\n')
-
-      printWindow.document.open()
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>${doc?.number || 'Invoice'} - Print</title>
-            ${styles}
-            <style>
-              * { box-sizing: border-box; }
-              html, body { margin:0; padding:0; background:#fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              body { padding: 8mm; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-              @page { size: A4 portrait; margin: 8mm; }
-              @media print {
-                body { padding:0; }
-              }
-              .no-print, .print\\:hidden { display: none !important; }
-              /* Ensure signature stays with content - PRO fix */
-              .signature, .info-row, .bottom-split { break-inside: avoid; page-break-inside: avoid; }
-            </style>
-          </head>
-          <body>
-            <div class="print-paper print-invoice">
-              ${el.innerHTML}
-            </div>
-            <script>
-              setTimeout(() => {
-                window.print();
-                setTimeout(() => window.close(), 500);
-              }, 400);
-            </script>
-          </body>
-        </html>
-      `)
-      printWindow.document.close()
-    } catch (e) {
-      console.error('Print error', e)
-      window.print()
-    }
+    window.print()
   }
 
   if (loading) {
@@ -216,7 +118,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
 
   const isQuotation = doc.docType === 'quotation'
   const isService = doc.docType === 'service'
-  const titleText = isQuotation ? 'QUOTATION' : isService ? 'SERVICE INVOICE' : 'TAX INVOICE'
+  const titleText = isQuotation ? 'QUOTATION' : isService ? 'SERVICE INVOICE' : 'INVOICE'
 
   return (
     <div className="flex flex-col h-full bg-slate-100 text-slate-900 font-sans">
@@ -266,7 +168,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded shadow transition cursor-pointer"
           >
             <Printer className="w-4 h-4" />
-            <span>Print A4 PRO</span>
+            <span>Print A4</span>
           </button>
 
           <a
@@ -275,7 +177,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
             className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium px-3 py-1.5 rounded transition"
           >
             <Download className="w-4 h-4" />
-            <span className="hidden md:inline">PDF Download</span>
+            <span className="hidden md:inline">PDF</span>
           </a>
 
           {onClose && (
@@ -289,11 +191,11 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
         </div>
       </div>
 
-      {/* A4 Canvas Container - PRO FIX: print-paper + print-invoice classes to avoid blank */}
+      {/* A4 Canvas Container */}
       <div className="flex-1 overflow-y-auto p-2 sm:p-6 flex justify-center bg-slate-200/70 print:p-0 print:bg-white print:overflow-visible">
         <div
           ref={printRef}
-          className="print-paper print-invoice bg-white text-slate-900 shadow-xl border border-slate-300 rounded-none w-full max-w-[210mm] min-h-[297mm] p-6 sm:p-8 flex flex-col justify-between print:shadow-none print:border-none print:w-full print:max-w-none print:min-h-0 print:p-0 font-sans text-[11px] leading-tight select-text"
+          className="bg-white text-slate-900 shadow-xl border border-slate-300 rounded-none w-full max-w-[210mm] min-h-[297mm] p-6 sm:p-8 flex flex-col justify-between print:shadow-none print:border-none print:w-full print:max-w-none print:min-h-0 print:p-0 font-sans text-[11px] leading-tight select-text"
         >
           {/* Main Top Content */}
           <div className="space-y-5">
@@ -353,14 +255,13 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             </div>
 
-            {/* Bill To & Status Cards */}
+            {/* Bill To & Status Cards - CLEAR GAP BEFORE BILL TO */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-3 pt-1">
               <div className="border border-slate-300 rounded p-3 bg-slate-50/50">
                 <p className="font-bold text-xs uppercase tracking-wider text-slate-500 mb-1">Bill To / Customer Details</p>
                 <p className="font-bold text-sm text-slate-900">{doc.customer?.name || 'Walk-in Customer'}</p>
                 {doc.customer?.phone && <p className="text-slate-600 font-medium">Phone: {doc.customer.phone}</p>}
                 {doc.customer?.gstNumber && <p className="text-slate-900 font-bold mt-1">GSTIN: {doc.customer.gstNumber}</p>}
-                {doc.customer?.address && <p className="text-slate-600 text-xs mt-1">{doc.customer.address}</p>}
               </div>
 
               {isService ? (
@@ -381,14 +282,11 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                   {doc.amountDue > 0 && (
                     <p className="text-red-700 font-bold text-xs mt-2">Balance Due: {formatCurrency(doc.amountDue)}</p>
                   )}
-                  {doc.amountPaid > 0 && (
-                    <p className="text-emerald-700 font-bold text-xs mt-1">Paid: {formatCurrency(doc.amountPaid)}</p>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* Items Table - UNIFIED 8 COLS PRO */}
+            {/* Items Table */}
             <div className="overflow-x-auto border border-slate-300 rounded">
               <table className="w-full text-left border-collapse text-[10.5px]">
                 <thead>
@@ -397,13 +295,13 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                     style={{ backgroundColor: currentTpl.primary }}
                   >
                     <th className="py-2 px-2 border-b border-slate-300 text-center w-8">#</th>
-                    <th className="py-2 px-2 border-b border-slate-300">Item / Description</th>
-                    <th className="py-2 px-2 border-b border-slate-300 text-center w-14">HSN</th>
-                    <th className="py-2 px-2 border-b border-slate-300 text-center w-16">Qty</th>
-                    <th className="py-2 px-2 border-b border-slate-300 text-right w-16">Rate</th>
+                    <th className="py-2 px-2 border-b border-slate-300">Item Description</th>
+                    <th className="py-2 px-2 border-b border-slate-300 text-center w-16">HSN/SAC</th>
+                    <th className="py-2 px-2 border-b border-slate-300 text-right w-12">Qty</th>
+                    <th className="py-2 px-2 border-b border-slate-300 text-right w-20">Rate</th>
                     <th className="py-2 px-2 border-b border-slate-300 text-right w-20">Taxable</th>
-                    <th className="py-2 px-2 border-b border-slate-300 text-right w-20">GST</th>
-                    <th className="py-2 px-2 border-b border-slate-300 text-right w-20">Total</th>
+                    <th className="py-2 px-2 border-b border-slate-300 text-right w-24">GST</th>
+                    <th className="py-2 px-2 border-b border-slate-300 text-right w-24">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -415,7 +313,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                         {item.sku && <span className="block text-[9px] text-slate-500 font-mono">SKU: {item.sku}</span>}
                       </td>
                       <td className="py-2 px-2 text-center text-slate-600">{item.hsnCode || '-'}</td>
-                      <td className="py-2 px-2 text-center font-bold text-slate-900">{item.quantity} {item.unit || 'pcs'}</td>
+                      <td className="py-2 px-2 text-right font-bold text-slate-900">{item.quantity}</td>
                       <td className="py-2 px-2 text-right text-slate-700">Rs.{item.rate?.toFixed(2)}</td>
                       <td className="py-2 px-2 text-right font-medium text-slate-800">Rs.{item.amount?.toFixed(2)}</td>
                       <td className="py-2 px-2 text-right text-slate-600">
@@ -461,14 +359,15 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
               </div>
             )}
 
-            {/* Totals, Bank, & Words Grid - PRO keeps signature together */}
+            {/* CLEARANCE GAP AFTER TABLE */}
             <div className="pt-3">
+              {/* Totals, Bank, & Words Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-7 space-y-3">
                   {/* Amount in Words */}
                   <div className="p-2.5 rounded border border-slate-200 bg-slate-50">
                     <span className="font-bold text-slate-500 block text-[9.5px] uppercase">Amount in Words</span>
-                    <span className="font-bold text-slate-900 text-xs">{numberToWords(doc.calc?.grandTotal || 0)} Only</span>
+                    <span className="font-bold text-slate-900 text-xs">{numberToWords(doc.calc?.grandTotal || 0)}</span>
                   </div>
 
                   {/* Bank Details */}
@@ -483,28 +382,14 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                       <div className="space-y-0.5 text-[10px] text-slate-700 flex-1">
                         <p className="font-bold text-slate-900 uppercase">Bank Details & UPI</p>
                         {doc.shop?.bankName && <p>Bank: <strong>{doc.shop.bankName}</strong></p>}
-                        {doc.shop?.bankAccount && <p>A/c: <strong>{doc.shop.bankAccount}</strong> | IFSC: <strong>{doc.shop.bankIfsc || '-'}</strong></p>}
+                        {doc.shop?.bankAccount && <p>A/C: <strong>{doc.shop.bankAccount}</strong> | IFSC: <strong>{doc.shop.bankIfsc || '-'}</strong></p>}
                         {doc.shop?.upiId && <p className="text-blue-700 font-bold mt-1">UPI ID: {doc.shop.upiId}</p>}
                       </div>
                     </div>
                   )}
-
-                  {/* Notes & Terms */}
-                  {doc.notes && (
-                    <div className="p-2.5 rounded border border-amber-100 bg-amber-50/50">
-                      <p className="font-bold text-[9px] uppercase text-amber-700 mb-1">Notes</p>
-                      <p className="text-xs text-slate-700 whitespace-pre-line">{doc.notes}</p>
-                    </div>
-                  )}
-                  {doc.terms && (
-                    <div className="p-2.5 rounded border border-slate-200 bg-white">
-                      <p className="font-bold text-[9px] uppercase text-slate-500 mb-1">Terms & Conditions</p>
-                      <p className="text-[10px] text-slate-600 whitespace-pre-line leading-relaxed">{doc.terms}</p>
-                    </div>
-                  )}
                 </div>
 
-                {/* Totals Summary - CGST 9% SGST 9% */}
+                {/* Totals Summary displaying CGST (9%) and SGST (9%) */}
                 <div className="sm:col-span-5 bg-slate-50 border border-slate-300 rounded p-3 space-y-1.5 text-xs">
                   <div className="flex justify-between text-slate-700">
                     <span>Sub Total:</span>
@@ -514,52 +399,44 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
                     <>
                       <div className="flex justify-between text-slate-600">
                         <span>CGST ({halfGstRate}%):</span>
-                        <span>Rs.{(doc.calc?.gstAmount / 2).toFixed(2)}</span>
+                        <span>Rs.{doc.calc?.cgstAmount?.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>SGST ({halfGstRate}%):</span>
-                        <span>Rs.{(doc.calc?.gstAmount / 2).toFixed(2)}</span>
+                        <span>Rs.{doc.calc?.sgstAmount?.toFixed(2)}</span>
                       </div>
                     </>
                   )}
                   {doc.calc?.courierCharges > 0 && (
                     <div className="flex justify-between text-slate-700">
                       <span>Courier Charges:</span>
-                      <span>Rs.{doc.calc?.courierCharges?.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {doc.calc?.otherCharges > 0 && (
-                    <div className="flex justify-between text-slate-700">
-                      <span>Other Charges:</span>
-                      <span>Rs.{doc.calc?.otherCharges?.toFixed(2)}</span>
+                      <span>Rs.{doc.calc.courierCharges.toFixed(2)}</span>
                     </div>
                   )}
                   {doc.calc?.discount > 0 && (
-                    <div className="flex justify-between text-emerald-700">
+                    <div className="flex justify-between text-emerald-700 font-semibold">
                       <span>Discount:</span>
-                      <span>- Rs.{doc.calc?.discount?.toFixed(2)}</span>
+                      <span>- Rs.{doc.calc.discount.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-black text-sm border-t border-slate-300 pt-2 mt-2">
+
+                  <div className="border-t border-slate-300 my-1 pt-1.5 flex justify-between text-sm font-bold text-slate-900">
                     <span>Grand Total:</span>
-                    <span>Rs.{doc.calc?.grandTotal?.toFixed(2)}</span>
+                    <span className="text-base" style={{ color: currentTpl.primary }}>
+                      {formatCurrency(doc.calc?.grandTotal || 0)}
+                    </span>
                   </div>
+
                   {doc.amountPaid > 0 && (
-                    <div className="flex justify-between text-emerald-700 font-bold">
-                      <span>Paid:</span>
-                      <span>Rs.{doc.amountPaid?.toFixed(2)}</span>
+                    <div className="flex justify-between text-emerald-700 font-semibold text-xs pt-1 border-t border-slate-200">
+                      <span>Paid / Advance:</span>
+                      <span>Rs.{doc.amountPaid.toFixed(2)}</span>
                     </div>
                   )}
                   {doc.amountDue > 0 && (
-                    <div className="flex justify-between text-red-700 font-bold text-sm bg-red-50 -mx-3 -mb-3 p-3 rounded-b mt-2">
+                    <div className="flex justify-between text-red-700 font-bold text-xs">
                       <span>Balance Due:</span>
-                      <span>Rs.{doc.amountDue?.toFixed(2)}</span>
-                    </div>
-                  )}
-                  {doc.amountDue === 0 && doc.calc?.grandTotal > 0 && (
-                    <div className="flex justify-between text-emerald-700 font-bold text-xs bg-emerald-50 -mx-3 -mb-3 p-2 rounded-b mt-2">
-                      <span>Status:</span>
-                      <span>PAID ✓</span>
+                      <span>Rs.{doc.amountDue.toFixed(2)}</span>
                     </div>
                   )}
                 </div>
@@ -567,37 +444,105 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
             </div>
           </div>
 
-          {/* Signature - PRO FIX: always same page as totals, avoid next page */}
-          <div className="mt-8 pt-4 break-inside-avoid">
-            <div className="flex justify-end">
-              <div className="text-center w-56">
-                <p className="font-bold text-xs text-slate-900 mb-1">For {doc.shop?.name || 'Smart Computers'}:</p>
-                <div className="h-10"></div>
-                <div className="border-t border-slate-400 pt-1.5">
-                  <p className="font-bold text-[11px] text-slate-800">Authorized Signatory</p>
-                </div>
+          {/* Bottom Section: Authorized Signatory + 1000x285 Poster Image */}
+          <div className="mt-8 pt-4 border-t border-slate-300 space-y-6">
+            {/* Authorized Signature Block (Positioned strictly ABOVE 1000x285 Banner) */}
+            <div className="flex justify-end pr-2">
+              <div className="text-center min-w-[200px]">
+                <p className="font-bold text-xs text-slate-900 mb-8">
+                  For {doc.shop?.name || 'Smart Computers'}:
+                </p>
+                <div className="w-full border-b border-slate-400 mb-1"></div>
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider">Authorized Signatory</p>
               </div>
             </div>
-          </div>
 
-          {/* Ad Banner - small, last page only */}
-          <div className="mt-6 p-3 rounded border bg-slate-50 border-slate-200 flex items-center justify-between gap-3 text-xs">
-            <div>
-              <p className="font-bold text-slate-800">Computers • Laptops • Printers • Accessories & Repair</p>
-              <p className="text-slate-500">Wholesale & Retail IT Sales & Service Center • Thank you for your business!</p>
-            </div>
-            <div className="text-right">
-              {doc.shop?.phone && <p className="font-bold">{doc.shop.phone}</p>}
-              {doc.shop?.email && <p className="text-slate-500 text-[10px]">{doc.shop.email}</p>}
-            </div>
-          </div>
+            {/* Dynamic 1000px x 285px Poster Showcase */}
+            {bannerVariant === 'flyer' ? (
+              <div className="flex justify-center w-full">
+                <img
+                  src={doc.productImages?.flyer || '/posters/smartcomputers-a4-flyer-landscape.png'}
+                  alt="Smart Computers Premium Flyer"
+                  className="w-full max-w-[180mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
+                  style={{ aspectRatio: '1000 / 285' }}
+                />
+              </div>
+            ) : bannerVariant === 'grid' ? (
+              <div className="flex justify-center w-full">
+                <img
+                  src={doc.productImages?.productgrid || '/posters/smartcomputers-product-grid.png'}
+                  alt="Smart Computers Product Grid Poster"
+                  className="w-full max-w-[180mm] h-auto object-contain block rounded border border-slate-300 shadow-sm"
+                  style={{ aspectRatio: '1000 / 285' }}
+                />
+              </div>
+            ) : bannerVariant === 'featured' ? (
+              <div
+                className="p-3 rounded border flex items-center justify-between gap-3 max-w-[180mm] mx-auto"
+                style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
+              >
+                <div>
+                  <p className="font-black text-xs uppercase tracking-wider" style={{ color: currentTpl.primary }}>
+                    WE ALSO SUPPLY
+                  </p>
+                  <p className="text-[10px] text-slate-600 font-semibold">{doc.shop?.name || 'Smart Computers'}</p>
+                  {doc.shop?.phone && <p className="text-[10px] text-slate-500">Call: {doc.shop.phone}</p>}
+                </div>
+                <div className="grid grid-cols-4 gap-2 flex-1 max-w-md">
+                  {['computers', 'laptop', 'printers', 'accessories'].map((key) => (
+                    <div key={key} className="bg-white border border-slate-200 rounded p-1.5 text-center">
+                      {doc.productImages?.[key] && (
+                        <img src={doc.productImages[key]} alt={key} className="w-10 h-10 object-contain mx-auto" />
+                      )}
+                      <p className="text-[9px] font-bold text-slate-800 capitalize mt-0.5">{key}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              /* Default: 'strip' */
+              <div
+                className="p-3 rounded border flex items-center justify-between gap-3 text-xs max-w-[180mm] mx-auto"
+                style={{ backgroundColor: currentTpl.bgLight, borderColor: currentTpl.accent }}
+              >
+                <span className="font-bold uppercase text-sm" style={{ color: currentTpl.primary }}>
+                  SMART COMPUTERS IT SOLUTIONS
+                </span>
+                <span className="text-[11px] text-slate-600 hidden sm:inline font-medium">
+                  Computers • Laptops • Printers • CCTV • Accessories & Repairing
+                </span>
+                <span className="font-bold text-slate-900 text-xs">
+                  {doc.shop?.phone ? `Call: ${doc.shop.phone}` : 'Visit Store'}
+                </span>
+              </div>
+            )}
 
-          {/* Footer */}
-          <div className="mt-4 pt-2 border-t border-slate-200 text-center text-[9px] text-slate-400">
-            {titleText} {doc.number} | {doc.shop?.name || 'Smart Computers'} | Computer generated | {new Date().toLocaleString('en-IN')}
+            {/* Document Footer Line */}
+            <div className="flex justify-between items-center text-[9px] text-slate-400 border-t border-slate-200 pt-2">
+              <span>Invoice {doc.number} • {doc.shop?.name || 'Smart Computers'}</span>
+              <span>Computer generated document</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 8mm;
+          }
+          body {
+            background-color: white !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print\\:hidden {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

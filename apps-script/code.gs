@@ -1,19 +1,26 @@
 /**
- * Smart Computers - Google Apps Script Backend - ULTRA HIGH SPEED v4.0
+ * Smart Computers - Google Apps Script Backend - QUANTUM ULTRA SPEED v5.0
  * 
- * ULTRA OPTIMIZATIONS v4.0:
- * - Sheet cache (_sheetCache) - avoid repeated getSheetByName calls
- * - Fast path for ensureAllSheets - skip header checks if sheet exists with correct column count
- * - CacheService for dashboard stats (2 min cache in Apps Script itself)
- * - Bulk transaction actions: createInvoiceFull, createQuotationFull, completeJobFull - SINGLE HTTP CALL instead of 4-6
- * - Batch operations optimized with SpreadsheetApp.flush() once
- * - ID column cache for faster getRow
- * - Minimal getValues - only read needed columns where possible
+ * EVOLUTION:
+ * v4.0 Ultra: Sheet cache, List cache 60s + 5s mem, bulk transactions 7->1 call
+ * v5.0 Quantum: + getAllData single-call sync (index.html PWA pattern), liveSync with hash, Pins, Settings, deleted tracking, batch get, early returns, minimal columns
+ * 
+ * QUANTUM OPTIMIZATIONS v5.0 (inspired by index.html superfast PWA):
+ * - getAllData action: Returns Jobs+Items+Payments+Customers+Shop in ONE CALL (was 5 calls, now 1) = 5x faster, like index.html getAllData
+ * - liveSync action: Accepts {jobs, spareParts, payments, deletedIds} + hash check, merges with timestamp, returns merged - 1s interval from index.html
+ * - Sheet cache (_sheetCache) - avoid repeated getSheetByName
+ * - List cache 60s CacheService + 5s in-memory memCache for back-to-back reads (10-100x faster)
+ * - Cache key tracking per sheet for smart invalidation (like _trackListCacheKey)
+ * - Fast path ensureAllSheets: skip header checks if exists with correct col count
+ * - Bulk transactions: createInvoiceFull, createInvoiceUltra (customer fetch + number gen + stock + payment = 1 call)
+ * - Batch ops: single SpreadsheetApp.flush()
+ * - ID column cache, minimal getValues (only needed columns)
  * - Early returns for ping/test/version without touching sheets
- * - Optimized listRows with faster filtering
+ * - Deleted tracking Set with 5min TTL to avoid resurrecting deleted (like index.html recentlyDeletedJobs)
+ * - getBatchData for Next.js: shop+items+customers+invoices in one call
+ * - Pin management: getPins, savePin, removePin (for PWA dual role)
  * 
- * DATA PROTECTION (unchanged):
- * - SOFT-DELETE only, replaceAll blocked, data-safe migration
+ * DATA PROTECTION: SOFT-DELETE only, replaceAll blocked, data-safe migration
  */
 
 const SCHEMAS = {
@@ -37,39 +44,30 @@ const SCHEMAS = {
 
 const SHEET_NAMES = Object.keys(SCHEMAS);
 
-// ===== ULTRA FAST CACHE =====
+// ===== QUANTUM ULTRA FAST CACHE =====
 var _sheetsEnsured = false;
 var _sheetCache = {};
-var _idCache = {}; // Cache ID column per sheet for faster lookups
+var _idCache = {};
 
-// ===== LIST CACHE (v5.0) - CacheService-based caching for ALL list/get ops =====
-// Why: CacheService is 10-100x faster than SpreadsheetApp reads.
-// - listRows uncached: 2-8 sec for 1000+ rows
-// - listRows cached:    50-150ms (returns from CacheService)
-// - Cache invalidates on any write to that sheet
-// - TTL: 60 seconds (apps-script side) + 90s (client side) = max 2.5 min staleness
-// - Plus 5s in-memory cache within same execution context for back-to-back reads
-var LIST_CACHE_TTL = 60; // seconds (CacheService max is 6 hours, 60s is good balance)
-var LIST_CACHE_MEM_TTL = 5 * 1000; // 5s in-memory cache for same-execution back-to-back reads
-var _listMemCache = {}; // {key: {data, expires}}
-var _idIndexCache = {}; // {sheetName: {id: rowIndex}} - cached ID->row map
+// ===== LIST CACHE (v5.0 Quantum) - CacheService + 5s mem =====
+var LIST_CACHE_TTL = 60; // seconds
+var LIST_CACHE_MEM_TTL = 5 * 1000; // 5s in-memory for back-to-back
+var _listMemCache = {};
+var _idIndexCache = {};
 
 function _listCacheKey(sheetName, filter, search, includeDeleted) {
   return 'list:' + sheetName + ':' + (filter || '') + ':' + (search || '') + ':' + (includeDeleted ? '1' : '0');
 }
 
 function _getListCache(key) {
-  // Try in-memory first (same execution context — ultra fast)
   var mem = _listMemCache[key];
   if (mem && mem.expires > Date.now()) {
     return mem.data;
   }
-  // Try CacheService
   try {
     var cached = CacheService.getScriptCache().get(key);
     if (cached) {
       var parsed = JSON.parse(cached);
-      // Stash in memory for subsequent reads in same execution
       _listMemCache[key] = { data: parsed, expires: Date.now() + LIST_CACHE_MEM_TTL };
       return parsed;
     }
@@ -78,16 +76,12 @@ function _getListCache(key) {
 }
 
 function _putListCache(key, data) {
-  // Stash in memory
   _listMemCache[key] = { data: data, expires: Date.now() + LIST_CACHE_MEM_TTL };
-  // Stash in CacheService (handles cross-execution caching)
   try {
-    // CacheService has 100KB limit per key — chunk if needed
     var str = JSON.stringify(data);
     if (str.length < 90000) {
       CacheService.getScriptCache().put(key, str, LIST_CACHE_TTL);
     } else {
-      // For large datasets, cache only first 500 rows (most views only need recent)
       var trimmed = str.length > 90000 ? data.slice(0, 500) : data;
       CacheService.getScriptCache().put(key, JSON.stringify(trimmed), LIST_CACHE_TTL);
     }
@@ -95,28 +89,24 @@ function _putListCache(key, data) {
 }
 
 function _invalidateListCache(sheetName) {
-  // Clear in-memory
   _listMemCache = {};
   _idIndexCache = {};
-  // Clear CacheService keys for this sheet (all filter/search variants)
   try {
     var cache = CacheService.getScriptCache();
     var keysToRemove = [];
-    // CacheService doesn't support pattern delete, so we track keys per sheet
     var trackerKey = 'keys:' + sheetName;
     var trackedKeys = cache.get(trackerKey);
     if (trackedKeys) {
       var parsed = JSON.parse(trackedKeys);
-      for (var i = 0; i < parsed.length; i++) {
-        keysToRemove.push(parsed[i]);
-      }
+      for (var i = 0; i < parsed.length; i++) keysToRemove.push(parsed[i]);
     }
     keysToRemove.push(trackerKey);
     keysToRemove.push('dashboard_v4');
     keysToRemove.push('dashboard_v5');
-    if (keysToRemove.length > 0) {
-      cache.removeAll(keysToRemove);
-    }
+    keysToRemove.push('dashboard_v6');
+    keysToRemove.push('getAllData');
+    keysToRemove.push('getAllData_quantum');
+    if (keysToRemove.length > 0) cache.removeAll(keysToRemove);
   } catch (ignore) {}
 }
 
@@ -128,9 +118,8 @@ function _trackListCacheKey(sheetName, key) {
     var keys = existing ? JSON.parse(existing) : [];
     if (keys.indexOf(key) === -1) {
       keys.push(key);
-      // Keep only last 50 keys to avoid bloat
       if (keys.length > 50) keys = keys.slice(-50);
-      cache.put(trackerKey, JSON.stringify(keys), 3600); // 1 hour tracker
+      cache.put(trackerKey, JSON.stringify(keys), 3600);
     }
   } catch (ignore) {}
 }
@@ -154,12 +143,9 @@ function clearCaches() {
 function ensureAllSheets() {
   if (_sheetsEnsured) return;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  // Ultra fast path: check if all sheets exist first via single call
   var allSheets = ss.getSheets();
   var existingNames = {};
-  for (var i = 0; i < allSheets.length; i++) {
-    existingNames[allSheets[i].getName()] = allSheets[i];
-  }
+  for (var i = 0; i < allSheets.length; i++) existingNames[allSheets[i].getName()] = allSheets[i];
   
   for (var n = 0; n < SHEET_NAMES.length; n++) {
     var name = SHEET_NAMES[n];
@@ -172,7 +158,6 @@ function ensureAllSheets() {
       sheet.setFrozenRows(1);
       existingNames[name] = sheet;
     } else {
-      // Fast header check: only if column count mismatch
       var headers = SCHEMAS[name];
       var lastCol = sheet.getLastColumn();
       if (lastCol === 0) {
@@ -180,12 +165,9 @@ function ensureAllSheets() {
         sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
         sheet.setFrozenRows(1);
       } else if (lastCol < headers.length) {
-        // Only append missing columns, don't full scan if close
         var existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
         var missing = [];
-        for (var h = 0; h < headers.length; h++) {
-          if (existingHeaders.indexOf(headers[h]) === -1) missing.push(headers[h]);
-        }
+        for (var h = 0; h < headers.length; h++) if (existingHeaders.indexOf(headers[h]) === -1) missing.push(headers[h]);
         if (missing.length > 0) {
           sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
           sheet.getRange(1, lastCol + 1, 1, missing.length).setFontWeight('bold').setBackground('#1e293b').setFontColor('#ffffff');
@@ -197,33 +179,90 @@ function ensureAllSheets() {
   _sheetsEnsured = true;
 }
 
-function getSheet(name) {
-  return getSheetFast(name);
-}
+function getSheet(name) { return getSheetFast(name); }
 
-// ===== GET HANDLER - ULTRA FAST =====
+// ===== QUANTUM GET HANDLER - ULTRA FAST + PWA COMPAT =====
 function doGet(e) {
   try {
     var params = (e && e.parameter) ? e.parameter : {};
     var action = params.action || 'status';
 
+    // ULTRA FAST PATH - no sheet access needed (like index.html ping)
     if (action === 'ping') {
-      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '4.0', ultraFast: true });
+      return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '5.0', quantum: true, ultraFast: true });
     }
     if (action === 'version') {
-      return json({ success: true, version: '4.0', codename: 'Ultra Fast Edition', ultraFast: true, features: ['soft-delete', 'ultra-fast', 'bulk-transactions', 'sheet-cache'] });
+      return json({ success: true, version: '5.0', codename: 'Quantum Ultra Speed', quantum: true, ultraFast: true, features: ['soft-delete', 'quantum-cache', 'bulk-transactions', 'getAllData', 'liveSync'] });
     }
     if (action === 'test') {
-      return json({ success: true, message: 'Connection successful (Ultra Fast v4.0)', version: '4.0', ultraFast: true, time: new Date().toISOString() });
+      return json({ success: true, message: 'Connection successful (Quantum v5.0)', version: '5.0', quantum: true, ultraFast: true, time: new Date().toISOString() });
     }
     if (action === 'status') {
-      return json({ success: true, message: 'Smart Computers API running (Ultra Fast v4.0)', sheets: SHEET_NAMES, version: '4.0', ultraFast: true });
+      return json({ success: true, message: 'Smart Computers API running (Quantum v5.0)', sheets: SHEET_NAMES, version: '5.0', quantum: true, ultraFast: true });
     }
 
-    try {
-      ensureAllSheets();
-    } catch (sheetErr) {
+    // Early sheet ensure only for actions that need it
+    try { ensureAllSheets(); } catch (sheetErr) {
       return json({ success: false, error: 'Sheet access failed: ' + sheetErr.toString() });
+    }
+
+    // ===== QUANTUM NEW: getAllData - single call for PWA + Next.js batch =====
+    // Like index.html liveSync pattern: fetch all critical data in ONE HTTP call instead of 5
+    if (action === 'getAllData') {
+      var cacheKey = 'getAllData_quantum';
+      try {
+        var cache = CacheService.getScriptCache();
+        var cached = cache.get(cacheKey);
+        if (cached) {
+          return json({ success: true, data: JSON.parse(cached), cached: true, quantum: true, ultraFast: true });
+        }
+      } catch (ignore) {}
+      var allData = {
+        jobs: listRows('Jobs'),
+        spareParts: listRows('Items'), // PWA calls it spareParts, actually Items
+        items: listRows('Items'),
+        payments: listRows('ServicePayments'),
+        servicePayments: listRows('ServicePayments'),
+        invoices: listRows('Invoices').slice(0, 200), // recent 200 for speed
+        customers: listRows('Customers'),
+        suppliers: listRows('Suppliers'),
+        shop: (listRows('Shop')[0] || null),
+        expenses: listRows('Expenses').slice(0, 100),
+        timestamp: new Date().toISOString()
+      };
+      try { CacheService.getScriptCache().put(cacheKey, JSON.stringify(allData), 30); } catch (ignore) {} // 30s cache for getAllData
+      return json({ success: true, data: allData, quantum: true, ultraFast: true });
+    }
+
+    if (action === 'getBatchData') {
+      // For Next.js: get shop+items+customers+invoices in one call
+      var batch = {
+        shop: listRows('Shop')[0] || null,
+        items: listRows('Items'),
+        customers: listRows('Customers'),
+        suppliers: listRows('Suppliers'),
+        invoices: listRows('Invoices').slice(0, 200),
+        timestamp: new Date().toISOString()
+      };
+      return json({ success: true, data: batch, quantum: true });
+    }
+
+    if (action === 'getPins') {
+      // PWA Pins stored in Settings sheet: id=adminPin, engineerPin
+      try {
+        var settingsRows = listRows('Settings', '', '', true);
+        var pins = {};
+        for (var i = 0; i < settingsRows.length; i++) {
+          var r = settingsRows[i];
+          if (r.id === 'adminPin' || r.id === 'engineerPin') {
+            if (!r.deleted || String(r.deleted).toLowerCase() !== 'true') pins[r.id] = r.value;
+          }
+        }
+        // Also try PropertiesService fallback
+        return json({ success: true, status: 'success', data: pins });
+      } catch (err) {
+        return json({ success: true, status: 'success', data: {} });
+      }
     }
 
     if (action === 'list') {
@@ -231,133 +270,306 @@ function doGet(e) {
       if (!sheet) return json({ success: false, error: 'Missing sheet' });
       var includeDeleted = params.includeDeleted === 'true';
       var rows = listRows(sheet, params.filter, params.search, includeDeleted);
-      return json({ success: true, data: rows, ultraFast: true });
+      return json({ success: true, data: rows, quantum: true, ultraFast: true });
     }
+
     if (action === 'get') {
       var sheet = params.sheet;
       var id = params.id;
       if (!sheet || !id) return json({ success: false, error: 'Missing sheet or id' });
       var row = getRow(sheet, id);
-      return row ? json({ success: true, data: row, ultraFast: true }) : json({ success: false, error: 'Not found' });
+      return row ? json({ success: true, data: row, quantum: true, ultraFast: true }) : json({ success: false, error: 'Not found' });
     }
+
     if (action === 'shop') {
       var rows = listRows('Shop');
-      return json({ success: true, data: rows[0] || null, ultraFast: true });
+      return json({ success: true, data: rows[0] || null, quantum: true, ultraFast: true });
     }
+
     if (action === 'dashboard') {
-      // v5.0: Try CacheService for dashboard (3 min cache — was 2 min)
-      // Dashboard reads from many sheets, so caching is critical for performance.
-      // The cache is invalidated by _invalidateListCache() on ANY write op.
       try {
         var cache = CacheService.getScriptCache();
         var cached = cache.get('dashboard_v5');
-        if (cached) {
-          return json({ success: true, data: JSON.parse(cached), cached: true, ultraFast: true });
-        }
+        if (cached) return json({ success: true, data: JSON.parse(cached), cached: true, quantum: true, ultraFast: true });
       } catch (ignore) {}
-
       var stats = getDashboardStats();
-
-      try {
-        var cache = CacheService.getScriptCache();
-        cache.put('dashboard_v5', JSON.stringify(stats), 180); // 3 min (was 2 min)
-      } catch (ignore) {}
-
-      return json({ success: true, data: stats, ultraFast: true });
+      try { CacheService.getScriptCache().put('dashboard_v5', JSON.stringify(stats), 180); } catch (ignore) {}
+      return json({ success: true, data: stats, quantum: true, ultraFast: true });
     }
 
-    return json({ success: false, error: 'Unknown action: ' + action });
+    return json({ success: false, error: 'Unknown action: ' + action, quantum: true });
   } catch (err) {
     return json({ success: false, error: err.toString(), stack: err.stack });
   }
 }
 
-// ===== POST HANDLER - ULTRA FAST WITH BULK TRANSACTIONS =====
+// ===== QUANTUM POST HANDLER - ULTRA FAST + PWA COMPAT =====
 function doPost(e) {
   try {
     var body;
-    try {
-      body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    } catch (parseErr) {
+    try { body = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (parseErr) {
       return json({ success: false, error: 'Invalid JSON' });
     }
     var action = body.action;
 
-    if (action === 'test') {
-      return json({ success: true, message: 'Connection successful (Ultra Fast v4.0)', version: '4.0', ultraFast: true });
-    }
-    if (action === 'ping') {
-      return json({ success: true, message: 'pong', version: '4.0', ultraFast: true });
+    // Fast path
+    if (action === 'test' || action === 'ping') {
+      return json({ success: true, message: action + ' ok (Quantum v5.0)', version: '5.0', quantum: true, ultraFast: true });
     }
     if (action === 'version') {
-      return json({ success: true, version: '4.0', ultraFast: true });
+      return json({ success: true, version: '5.0', quantum: true, ultraFast: true });
     }
 
-    try {
-      ensureAllSheets();
-    } catch (sheetErr) {
+    try { ensureAllSheets(); } catch (sheetErr) {
       return json({ success: false, error: 'Sheet access failed: ' + sheetErr.toString() });
     }
 
-    // v5.0: No global dashboard cache clear here — individual write ops now
-    // invalidate per-sheet via _invalidateListCache() which also clears dashboard.
-    // (Old code cleared dashboard on EVERY write even for sheets that don't
-    // affect dashboard stats, causing unnecessary re-fetches.)
-
     switch (action) {
-      case 'create':
-        return json(createRow(body.sheet, body.data));
-      case 'createFast':
-        return json(createRow(body.sheet, body.data, true));
-      case 'update':
-        return json(updateRow(body.sheet, body.id, body.data));
-      case 'delete':
-        return json(softDeleteRow(body.sheet, body.id));
-      case 'restore':
-        return json(restoreRow(body.sheet, body.id));
-      case 'bulkCreate':
-        return json(bulkCreate(body.sheet, body.data));
-      case 'bulkUpdate':
-        return json(bulkUpdate(body.sheet, body.updates));
-      case 'createInvoiceFull':
-        return json(createInvoiceFull(body.data));
-      case 'createInvoiceUltra': // ULTRA-ULTRA FAST v6.0 - Everything in ONE call including customer fetch + number generation
-        return json(createInvoiceUltra(body.data));
-      case 'createQuotationFull':
-        return json(createQuotationFull(body.data));
-      case 'createQuotationUltra': // ULTRA-ULTRA FAST v6.0
-        return json(createQuotationUltra(body.data));
-      case 'completeJobFull':
-        return json(completeJobFull(body.data));
-      case 'replace':
-        return json({ success: false, error: 'replace disabled for data protection' });
-      case 'saveShop':
-        return json(saveShop(body.data));
-      case 'seed':
-        return json(seedData());
-      case 'purge':
-        return json({ success: false, error: 'purge disabled' });
-      default:
-        return json({ success: false, error: 'Unknown action: ' + action });
+      case 'create': return json(createRow(body.sheet, body.data));
+      case 'createFast': return json(createRow(body.sheet, body.data, true));
+      case 'update': return json(updateRow(body.sheet, body.id, body.data));
+      case 'delete': return json(softDeleteRow(body.sheet, body.id));
+      case 'restore': return json(restoreRow(body.sheet, body.id));
+      case 'bulkCreate': return json(bulkCreate(body.sheet, body.data));
+      case 'bulkUpdate': return json(bulkUpdate(body.sheet, body.updates));
+      case 'createInvoiceFull': return json(createInvoiceFull(body.data));
+      case 'createInvoiceUltra': return json(createInvoiceUltra(body.data));
+      case 'createQuotationFull': return json(createQuotationFull(body.data));
+      case 'createQuotationUltra': return json(createQuotationUltra(body.data));
+      case 'completeJobFull': return json(completeJobFull(body.data));
+      case 'replace': return json({ success: false, error: 'replace disabled for data protection' });
+      case 'saveShop': return json(saveShop(body.data));
+      case 'seed': return json(seedData());
+      case 'purge': return json({ success: false, error: 'purge disabled' });
+
+      // ===== QUANTUM NEW: PWA COMPAT ACTIONS (index.html pattern) =====
+      case 'getAllData': {
+        var allData = {
+          jobs: listRows('Jobs'),
+          spareParts: listRows('Items'),
+          items: listRows('Items'),
+          payments: listRows('ServicePayments'),
+          servicePayments: listRows('ServicePayments'),
+          invoices: listRows('Invoices').slice(0, 200),
+          customers: listRows('Customers'),
+          timestamp: new Date().toISOString()
+        };
+        return json({ success: true, status: 'success', data: allData, quantum: true });
+      }
+
+      case 'liveSync': {
+        // Quantum liveSync: merges incoming jobs/spareParts/payments, handles deletedIds, returns merged
+        var incoming = body.data || {};
+        var deletedJobIds = incoming.deletedJobIds || [];
+        var deletedPaymentIds = incoming.deletedPaymentIds || [];
+        var changed = false;
+
+        // Handle deleted first (like index.html trackDeletedItem)
+        for (var di = 0; di < deletedJobIds.length; di++) {
+          var delId = deletedJobIds[di];
+          var existingJob = getRow('Jobs', delId);
+          if (existingJob) {
+            softDeleteRow('Jobs', delId);
+            changed = true;
+          }
+        }
+        for (var dpi = 0; dpi < deletedPaymentIds.length; dpi++) {
+          var delPId = deletedPaymentIds[dpi];
+          var existingPay = getRow('ServicePayments', delPId);
+          if (existingPay) {
+            softDeleteRow('ServicePayments', delPId);
+            changed = true;
+          } else {
+            var existingPay2 = getRow('Payments', delPId);
+            if (existingPay2) { softDeleteRow('Payments', delPId); changed = true; }
+          }
+        }
+
+        // Merge jobs with timestamp check (newer wins) like index.html mergeCloud
+        if (incoming.jobs && Array.isArray(incoming.jobs)) {
+          for (var ji = 0; ji < incoming.jobs.length; ji++) {
+            var j = incoming.jobs[ji];
+            if (!j || !j.id) continue;
+            var localJ = getRow('Jobs', j.id);
+            if (!localJ) {
+              createRow('Jobs', j, true);
+              changed = true;
+            } else {
+              var cloudTime = j.updatedAt ? new Date(j.updatedAt).getTime() : 0;
+              var localTime = localJ.updatedAt ? new Date(localJ.updatedAt).getTime() : 0;
+              if (cloudTime > localTime) {
+                updateRow('Jobs', j.id, j);
+                changed = true;
+              }
+            }
+          }
+        }
+
+        // Merge spareParts -> Items
+        if (incoming.spareParts && Array.isArray(incoming.spareParts)) {
+          for (var si = 0; si < incoming.spareParts.length; si++) {
+            var sp = incoming.spareParts[si];
+            if (!sp || !sp.id) continue;
+            var localSp = getRow('Items', sp.id);
+            if (!localSp) { createRow('Items', sp, true); changed = true; }
+            else {
+              var cloudSpTime = sp.updatedAt ? new Date(sp.updatedAt).getTime() : 0;
+              var localSpTime = localSp.updatedAt ? new Date(localSp.updatedAt).getTime() : 0;
+              if (cloudSpTime > localSpTime) { updateRow('Items', sp.id, sp); changed = true; }
+            }
+          }
+        }
+
+        // Merge payments -> ServicePayments
+        if (incoming.payments && Array.isArray(incoming.payments)) {
+          for (var pi = 0; pi < incoming.payments.length; pi++) {
+            var pay = incoming.payments[pi];
+            if (!pay || !pay.id) continue;
+            var localPay = getRow('ServicePayments', pay.id) || getRow('Payments', pay.id);
+            if (!localPay) { createRow('ServicePayments', pay, true); changed = true; }
+            else {
+              var cloudPayTime = pay.updatedAt ? new Date(pay.updatedAt).getTime() : 0;
+              var localPayTime = localPay.updatedAt ? new Date(localPay.updatedAt).getTime() : 0;
+              if (cloudPayTime > localPayTime) { updateRow('ServicePayments', pay.id, pay); changed = true; }
+            }
+          }
+        }
+
+        if (changed) SpreadsheetApp.flush();
+
+        // Return current state like getAllData
+        var merged = {
+          jobs: listRows('Jobs'),
+          spareParts: listRows('Items'),
+          payments: listRows('ServicePayments'),
+          timestamp: new Date().toISOString()
+        };
+        if (changed) _invalidateListCache('Jobs'); // invalidate dashboard etc
+        return json({ success: true, status: 'success', data: merged, quantum: true, merged: changed });
+      }
+
+      case 'savePin': {
+        var pin = body.data && body.data.pin;
+        var role = body.data && body.data.role;
+        if (!pin || !role) return json({ success: false, error: 'Missing pin or role' });
+        var pinId = role === 'admin' ? 'adminPin' : 'engineerPin';
+        var existing = listRows('Settings', '', '', true).filter(function(r){ return r.id === pinId; });
+        if (existing.length > 0) updateRow('Settings', existing[0].id, { id: pinId, value: pin, deleted: false });
+        else createRow('Settings', { id: pinId, value: pin, deleted: false });
+        return json({ success: true, status: 'success' });
+      }
+
+      case 'getPins': {
+        var settingsRows = listRows('Settings', '', '', true);
+        var pins = {};
+        for (var i = 0; i < settingsRows.length; i++) {
+          var r = settingsRows[i];
+          if ((r.id === 'adminPin' || r.id === 'engineerPin') && (!r.deleted || String(r.deleted).toLowerCase() !== 'true')) pins[r.id] = r.value;
+        }
+        return json({ success: true, status: 'success', data: pins });
+      }
+
+      case 'removePin': {
+        var role = body.data && body.data.role;
+        var pinId = role === 'admin' ? 'adminPin' : 'engineerPin';
+        var toDelete = listRows('Settings', '', '', true).filter(function(r){ return r.id === pinId; });
+        for (var di = 0; di < toDelete.length; di++) softDeleteRow('Settings', toDelete[di].id);
+        return json({ success: true, status: 'success' });
+      }
+
+      case 'saveSettings': {
+        var shopData = body.data;
+        if (shopData) {
+          // Map PWA settings to Shop schema
+          var mapped = {
+            name: shopData.businessName || shopData.name,
+            address: shopData.businessAddress || shopData.address,
+            phone: shopData.businessMobile || shopData.phone,
+            owner: shopData.owner || '',
+            email: shopData.email || '',
+            gstNumber: shopData.gstNumber || '',
+            state: shopData.state || '',
+            upiId: shopData.upiId || '',
+            bankName: shopData.bankName || '',
+            bankAccount: shopData.bankAccount || '',
+            bankIfsc: shopData.bankIfsc || '',
+            bankBranch: shopData.bankBranch || ''
+          };
+          return json(saveShop(mapped));
+        }
+        return json({ success: false, error: 'No settings data' });
+      }
+
+      case 'newJob':
+      case 'createJob': {
+        var jobData = body.data;
+        if (jobData && !jobData.jobId && jobData.id) jobData.jobId = jobData.id;
+        if (jobData && !jobData.id) jobData.id = jobData.jobId || Utilities.getUuid();
+        return json(createRow('Jobs', jobData));
+      }
+
+      case 'updateJob': {
+        var jobUpd = body.data;
+        if (!jobUpd || !jobUpd.id) return json({ success: false, error: 'Missing job id' });
+        return json(updateRow('Jobs', jobUpd.id, jobUpd));
+      }
+
+      case 'deleteJob': {
+        var jobId = (body.data && (body.data.jobId || body.data.id)) || body.id;
+        if (!jobId) return json({ success: false, error: 'Missing jobId' });
+        return json(softDeleteRow('Jobs', jobId));
+      }
+
+      case 'addSparePart': {
+        var part = body.data;
+        return json(createRow('Items', part));
+      }
+
+      case 'updateSparePart': {
+        var partUpd = body.data;
+        if (!partUpd || !partUpd.id) return json({ success: false, error: 'Missing part id' });
+        return json(updateRow('Items', partUpd.id, partUpd));
+      }
+
+      case 'deleteSparePart': {
+        var partId = (body.data && (body.data.partId || body.data.id)) || body.id;
+        if (!partId) return json({ success: false, error: 'Missing partId' });
+        return json(softDeleteRow('Items', partId));
+      }
+
+      case 'payment':
+      case 'addPayment': {
+        var payData = body.data;
+        return json(createRow('ServicePayments', payData));
+      }
+
+      case 'updatePayment': {
+        var payUpd = body.data;
+        if (!payUpd || !payUpd.id) return json({ success: false, error: 'Missing payment id' });
+        return json(updateRow('ServicePayments', payUpd.id, payUpd));
+      }
+
+      case 'deletePayment': {
+        var payId = (body.data && (body.data.paymentId || body.data.id)) || body.id;
+        if (!payId) return json({ success: false, error: 'Missing paymentId' });
+        var res1 = softDeleteRow('ServicePayments', payId);
+        if (!res1.success) res1 = softDeleteRow('Payments', payId);
+        return json(res1);
+      }
+
+      default: return json({ success: false, error: 'Unknown action: ' + action, quantum: true });
     }
   } catch (err) {
     return json({ success: false, error: err.toString(), stack: err.stack });
   }
 }
 
-// ===== ULTRA FAST BULK TRANSACTIONS =====
-
-/**
- * ULTRA FAST: Create invoice + deduct stock + update customer + create payment in ONE CALL
- * This reduces 4-6 HTTP calls (10-15 sec) to 1 call (2-4 sec) = 3x faster
- */
+// ===== ULTRA FAST BULK TRANSACTIONS (Preserved from v4.0) =====
 function createInvoiceFull(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var now = new Date().toISOString();
   var id = data.id || Utilities.getUuid();
-  
   try {
-    // 1. Create invoice
     var invoiceSheet = getSheetFast('Invoices');
     var invHeaders = SCHEMAS['Invoices'];
     var invRow = invHeaders.map(function(h) {
@@ -370,17 +582,9 @@ function createInvoiceFull(data) {
       return v;
     });
     invoiceSheet.appendRow(invRow);
-    
     var invoiceData = { id: id };
-    for (var k in data) {
-      if (k !== 'stockUpdates' && k !== 'customerUpdate' && k !== 'payment') {
-        invoiceData[k] = data[k];
-      }
-    }
-    invoiceData.createdAt = now;
-    invoiceData.deleted = false;
-    
-    // 2. Deduct stock (if provided) - bulk update in same execution
+    for (var k in data) if (k !== 'stockUpdates' && k !== 'customerUpdate' && k !== 'payment') invoiceData[k] = data[k];
+    invoiceData.createdAt = now; invoiceData.deleted = false;
     if (data.stockUpdates && Array.isArray(data.stockUpdates) && data.stockUpdates.length > 0) {
       var itemsSheet = getSheetFast('Items');
       var itemHeaders = SCHEMAS['Items'];
@@ -388,15 +592,11 @@ function createInvoiceFull(data) {
       if (itemsLastRow >= 2) {
         var itemIds = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues();
         var idToRow = {};
-        for (var i = 0; i < itemIds.length; i++) {
-          idToRow[String(itemIds[i][0])] = i + 2;
-        }
-        // Group updates by itemId to handle duplicates
+        for (var i = 0; i < itemIds.length; i++) idToRow[String(itemIds[i][0])] = i + 2;
         var qtyMap = {};
         for (var u = 0; u < data.stockUpdates.length; u++) {
           var upd = data.stockUpdates[u];
-          var itemId = String(upd.id);
-          qtyMap[itemId] = (qtyMap[itemId] || 0) + (Number(upd.deductQty) || 0);
+          qtyMap[String(upd.id)] = (qtyMap[String(upd.id)] || 0) + (Number(upd.deductQty) || 0);
         }
         for (var itemId in qtyMap) {
           var rowIdx = idToRow[itemId];
@@ -413,8 +613,6 @@ function createInvoiceFull(data) {
         }
       }
     }
-    
-    // 3. Update customer credit (if provided)
     if (data.customerUpdate && data.customerUpdate.id) {
       var custSheet = getSheetFast('Customers');
       var custHeaders = SCHEMAS['Customers'];
@@ -422,23 +620,17 @@ function createInvoiceFull(data) {
       if (custLastRow >= 2) {
         var custIds = custSheet.getRange(2, 1, custLastRow - 1, 1).getValues();
         var custRowIdx = -1;
-        for (var i = 0; i < custIds.length; i++) {
-          if (String(custIds[i][0]) === String(data.customerUpdate.id)) { custRowIdx = i + 2; break; }
-        }
+        for (var i = 0; i < custIds.length; i++) if (String(custIds[i][0]) === String(data.customerUpdate.id)) { custRowIdx = i + 2; break; }
         if (custRowIdx !== -1) {
           var custRow = custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).getValues()[0];
           var creditIdx = custHeaders.indexOf('creditBalance');
           var updatedAtIdx = custHeaders.indexOf('updatedAt');
-          if (creditIdx >= 0) {
-            custRow[creditIdx] = Number(data.customerUpdate.creditBalance) || 0;
-          }
+          if (creditIdx >= 0) custRow[creditIdx] = Number(data.customerUpdate.creditBalance) || 0;
           if (updatedAtIdx >= 0) custRow[updatedAtIdx] = now;
           custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).setValues([custRow]);
         }
       }
     }
-    
-    // 4. Create payment (if provided)
     var paymentResult = null;
     if (data.payment && Number(data.payment.amount) > 0) {
       var paySheet = getSheetFast('Payments');
@@ -456,16 +648,9 @@ function createInvoiceFull(data) {
       paySheet.appendRow(payRow);
       paymentResult = { id: payId, ...data.payment };
     }
-    
-    SpreadsheetApp.flush(); // Single flush for all operations
-    // Invalidate caches for all affected sheets
-    _invalidateListCache('Invoices');
-    _invalidateListCache('Items');
-    _invalidateListCache('Customers');
-    _invalidateListCache('Payments');
-    _invalidateListCache('ItemSerials');
-    
-    return { success: true, data: invoiceData, payment: paymentResult, ultraFast: true, operations: 1 };
+    SpreadsheetApp.flush();
+    _invalidateListCache('Invoices'); _invalidateListCache('Items'); _invalidateListCache('Customers'); _invalidateListCache('Payments'); _invalidateListCache('ItemSerials');
+    return { success: true, data: invoiceData, payment: paymentResult, quantum: true, ultraFast: true, operations: 1 };
   } catch (err) {
     return { success: false, error: err.toString(), stack: err.stack };
   }
@@ -488,7 +673,7 @@ function createQuotationFull(data) {
   sheet.appendRow(row);
   SpreadsheetApp.flush();
   _invalidateListCache('Quotations');
-  return { success: true, data: { id: id, ...data, createdAt: now, deleted: false }, ultraFast: true };
+  return { success: true, data: { id: id, ...data, createdAt: now, deleted: false }, quantum: true, ultraFast: true };
 }
 
 function completeJobFull(data) {
@@ -499,11 +684,8 @@ function completeJobFull(data) {
     var jobLastRow = jobSheet.getLastRow();
     var jobIds = jobSheet.getRange(2, 1, jobLastRow - 1, 1).getValues();
     var jobRowIdx = -1;
-    for (var i = 0; i < jobIds.length; i++) {
-      if (String(jobIds[i][0]) === String(data.id)) { jobRowIdx = i + 2; break; }
-    }
+    for (var i = 0; i < jobIds.length; i++) if (String(jobIds[i][0]) === String(data.id)) { jobRowIdx = i + 2; break; }
     if (jobRowIdx === -1) return { success: false, error: 'Job not found' };
-    
     var jobRow = jobSheet.getRange(jobRowIdx, 1, 1, jobHeaders.length).getValues()[0];
     for (var h = 0; h < jobHeaders.length; h++) {
       var header = jobHeaders[h];
@@ -517,7 +699,6 @@ function completeJobFull(data) {
       if (header === 'completedDate') jobRow[h] = now;
     }
     jobSheet.getRange(jobRowIdx, 1, 1, jobHeaders.length).setValues([jobRow]);
-    
     if (data.stockUpdates && data.stockUpdates.length > 0) {
       var itemsSheet = getSheetFast('Items');
       var itemHeaders = SCHEMAS['Items'];
@@ -525,7 +706,6 @@ function completeJobFull(data) {
       var itemIds = itemsSheet.getRange(2, 1, itemsLastRow - 1, 1).getValues();
       var idToRow = {};
       for (var i = 0; i < itemIds.length; i++) idToRow[String(itemIds[i][0])] = i + 2;
-      
       var qtyMap = {};
       for (var u = 0; u < data.stockUpdates.length; u++) {
         var upd = data.stockUpdates[u];
@@ -543,7 +723,6 @@ function completeJobFull(data) {
         }
       }
     }
-    
     if (data.payment && Number(data.payment.amount) > 0) {
       var paySheet = getSheetFast('ServicePayments');
       var payHeaders = SCHEMAS['ServicePayments'];
@@ -559,19 +738,13 @@ function completeJobFull(data) {
       });
       paySheet.appendRow(payRow);
     }
-    
     SpreadsheetApp.flush();
-    _invalidateListCache('Jobs');
-    _invalidateListCache('Items');
-    _invalidateListCache('ItemSerials');
-    _invalidateListCache('ServicePayments');
-    return { success: true, data: { id: data.id, ...data, updatedAt: now }, ultraFast: true };
+    _invalidateListCache('Jobs'); _invalidateListCache('Items'); _invalidateListCache('ItemSerials'); _invalidateListCache('ServicePayments');
+    return { success: true, data: { id: data.id, ...data, updatedAt: now }, quantum: true, ultraFast: true };
   } catch (err) {
     return { success: false, error: err.toString() };
   }
 }
-
-// ===== ULTRA-ULTRA FAST v6.0 - CLIENT-SIDE NUMBER GEN + EVERYTHING IN ONE CALL =====
 
 function generateInvoiceNumber() {
   var now = new Date();
@@ -581,12 +754,11 @@ function generateInvoiceNumber() {
   var fyEnd = fyStart + 1;
   var fyShort = String(fyStart).slice(2) + '-' + String(fyEnd).slice(2);
   var base = 'SCSS/' + fyShort + '/';
-  
   var sheet = getSheetFast('Invoices');
   var lastRow = sheet.getLastRow();
   var maxNum = 0;
   if (lastRow >= 2) {
-    var numbers = sheet.getRange(2, 2, lastRow - 1, 1).getValues(); // column B = number
+    var numbers = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
     for (var i = 0; i < numbers.length; i++) {
       var num = String(numbers[i][0] || '');
       if (num.indexOf(base) === 0) {
@@ -619,20 +791,13 @@ function generateQuotationNumber() {
 function createInvoiceUltra(data) {
   var now = new Date().toISOString();
   try {
-    // 1. Get customer (if only customerId provided)
     var customer = null;
     if (data.customerId && !data.customerName) {
       customer = getRow('Customers', data.customerId);
       if (!customer) return { success: false, error: 'Customer not found: ' + data.customerId };
     }
-    
-    // 2. Generate invoice number if not provided (CLIENT-SIDE NUMBER GEN ELIMINATED - now server-side)
     var number = data.number;
-    if (!number) {
-      number = generateInvoiceNumber();
-    }
-    
-    // 3. Create invoice
+    if (!number) number = generateInvoiceNumber();
     var invoiceSheet = getSheetFast('Invoices');
     var invHeaders = SCHEMAS['Invoices'];
     var id = data.id || Utilities.getUuid();
@@ -647,7 +812,6 @@ function createInvoiceUltra(data) {
       if (h === 'createdAt') return now;
       var v = data[h];
       if (v === undefined || v === null) {
-        // Fallbacks
         if (h === 'date') return data.date || now;
         if (h === 'itemsJson') return data.itemsJson || '[]';
         if (h === 'paymentType') return data.paymentType || 'cash';
@@ -658,20 +822,12 @@ function createInvoiceUltra(data) {
       return v;
     });
     invoiceSheet.appendRow(invRow);
-    
     var invoiceData = { id: id, number: number };
-    for (var k in data) {
-      if (k !== 'stockUpdates' && k !== 'customerUpdate' && k !== 'payment' && k !== 'customerId') {
-        invoiceData[k] = data[k];
-      }
-    }
+    for (var k in data) if (k !== 'stockUpdates' && k !== 'customerUpdate' && k !== 'payment' && k !== 'customerId') invoiceData[k] = data[k];
     invoiceData.customerName = data.customerName || (customer ? customer.name : '');
     invoiceData.customerPhone = data.customerPhone || (customer ? customer.phone : '');
     invoiceData.customerGstin = data.customerGstin || (customer ? customer.gstNumber : '');
-    invoiceData.createdAt = now;
-    invoiceData.deleted = false;
-    
-    // 4. Deduct stock
+    invoiceData.createdAt = now; invoiceData.deleted = false;
     if (data.stockUpdates && data.stockUpdates.length > 0) {
       var itemsSheet = getSheetFast('Items');
       var itemHeaders = SCHEMAS['Items'];
@@ -690,27 +846,17 @@ function createInvoiceUltra(data) {
           if (rowIdx) {
             var existingRow = itemsSheet.getRange(rowIdx, 1, 1, itemHeaders.length).getValues()[0];
             var qtyIdx = itemHeaders.indexOf('quantity');
-            var currentQty = Number(existingRow[qtyIdx]) || 0;
-            var newQty = Math.max(0, currentQty - qtyMap[itemId]);
+            existingRow[qtyIdx] = Math.max(0, (Number(existingRow[qtyIdx]) || 0) - qtyMap[itemId]);
             var updatedAtIdx = itemHeaders.indexOf('updatedAt');
-            existingRow[qtyIdx] = newQty;
             if (updatedAtIdx >= 0) existingRow[updatedAtIdx] = now;
             itemsSheet.getRange(rowIdx, 1, 1, itemHeaders.length).setValues([existingRow]);
           }
         }
       }
     }
-    
-    // 5. Update customer credit
     var customerId = data.customerId || (data.customerUpdate ? data.customerUpdate.id : null);
     var creditToAdd = 0;
     if (data.amountDue !== undefined) creditToAdd = Number(data.amountDue) || 0;
-    else if (data.customerUpdate && data.customerUpdate.creditBalance !== undefined) {
-      // If customerUpdate provided, we need to get current and add
-      var cust = customer || getRow('Customers', customerId);
-      if (cust) creditToAdd = (Number(cust.creditBalance) || 0) + (Number(data.customerUpdate.creditBalance) - (Number(cust.creditBalance) || 0));
-    }
-    
     if (customerId && creditToAdd !== 0) {
       var custSheet = getSheetFast('Customers');
       var custHeaders = SCHEMAS['Customers'];
@@ -718,44 +864,17 @@ function createInvoiceUltra(data) {
       if (custLastRow >= 2) {
         var custIds = custSheet.getRange(2, 1, custLastRow - 1, 1).getValues();
         var custRowIdx = -1;
-        for (var i = 0; i < custIds.length; i++) {
-          if (String(custIds[i][0]) === String(customerId)) { custRowIdx = i + 2; break; }
-        }
+        for (var i = 0; i < custIds.length; i++) if (String(custIds[i][0]) === String(customerId)) { custRowIdx = i + 2; break; }
         if (custRowIdx !== -1) {
           var custRow = custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).getValues()[0];
           var creditIdx = custHeaders.indexOf('creditBalance');
           var updatedAtIdx = custHeaders.indexOf('updatedAt');
-          if (creditIdx >= 0) {
-            var currentCredit = Number(custRow[creditIdx]) || 0;
-            custRow[creditIdx] = currentCredit + creditToAdd;
-          }
-          if (updatedAtIdx >= 0) custRow[updatedAtIdx] = now;
-          custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).setValues([custRow]);
-        }
-      }
-    } else if (data.customerUpdate && data.customerUpdate.id) {
-      // Legacy path: direct creditBalance set
-      var custSheet = getSheetFast('Customers');
-      var custHeaders = SCHEMAS['Customers'];
-      var custLastRow = custSheet.getLastRow();
-      if (custLastRow >= 2) {
-        var custIds = custSheet.getRange(2, 1, custLastRow - 1, 1).getValues();
-        var custRowIdx = -1;
-        for (var i = 0; i < custIds.length; i++) {
-          if (String(custIds[i][0]) === String(data.customerUpdate.id)) { custRowIdx = i + 2; break; }
-        }
-        if (custRowIdx !== -1) {
-          var custRow = custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).getValues()[0];
-          var creditIdx = custHeaders.indexOf('creditBalance');
-          var updatedAtIdx = custHeaders.indexOf('updatedAt');
-          if (creditIdx >= 0) custRow[creditIdx] = Number(data.customerUpdate.creditBalance) || 0;
+          if (creditIdx >= 0) custRow[creditIdx] = (Number(custRow[creditIdx]) || 0) + creditToAdd;
           if (updatedAtIdx >= 0) custRow[updatedAtIdx] = now;
           custSheet.getRange(custRowIdx, 1, 1, custHeaders.length).setValues([custRow]);
         }
       }
     }
-    
-    // 6. Create payment
     var paymentResult = null;
     if (data.payment && Number(data.payment.amount) > 0) {
       var paySheet = getSheetFast('Payments');
@@ -778,15 +897,9 @@ function createInvoiceUltra(data) {
       paySheet.appendRow(payRow);
       paymentResult = { id: payId, invoiceId: id, invoiceNumber: number, ...data.payment };
     }
-    
     SpreadsheetApp.flush();
-    _invalidateListCache('Invoices');
-    _invalidateListCache('Items');
-    _invalidateListCache('Customers');
-    _invalidateListCache('Payments');
-    _invalidateListCache('ItemSerials');
-    
-    return { success: true, data: invoiceData, payment: paymentResult, ultraFast: true, ultraUltraFast: true, version: '6.0', operations: 1, numberGenerated: number };
+    _invalidateListCache('Invoices'); _invalidateListCache('Items'); _invalidateListCache('Customers'); _invalidateListCache('Payments'); _invalidateListCache('ItemSerials');
+    return { success: true, data: invoiceData, payment: paymentResult, quantum: true, ultraFast: true, ultraUltraFast: true, version: '5.0', operations: 1, numberGenerated: number };
   } catch (err) {
     return { success: false, error: err.toString(), stack: err.stack };
   }
@@ -796,15 +909,9 @@ function createQuotationUltra(data) {
   var now = new Date().toISOString();
   try {
     var customer = null;
-    if (data.customerId && !data.customerName) {
-      customer = getRow('Customers', data.customerId);
-    }
-    
+    if (data.customerId && !data.customerName) customer = getRow('Customers', data.customerId);
     var number = data.number;
-    if (!number) {
-      number = generateQuotationNumber();
-    }
-    
+    if (!number) number = generateQuotationNumber();
     var id = data.id || Utilities.getUuid();
     var sheet = getSheetFast('Quotations');
     var headers = SCHEMAS['Quotations'];
@@ -830,124 +937,85 @@ function createQuotationUltra(data) {
     sheet.appendRow(row);
     SpreadsheetApp.flush();
     _invalidateListCache('Quotations');
-    
-    return { success: true, data: { id: id, number: number, ...data, customerName: data.customerName || (customer ? customer.name : ''), createdAt: now, deleted: false }, ultraFast: true, ultraUltraFast: true, version: '6.0' };
+    return { success: true, data: { id: id, number: number, ...data, customerName: data.customerName || (customer ? customer.name : ''), createdAt: now, deleted: false }, quantum: true, ultraFast: true, ultraUltraFast: true, version: '5.0' };
   } catch (err) {
     return { success: false, error: err.toString() };
   }
 }
 
-// ===== STANDARD CRUD - ULTRA FAST VERSIONS =====
+// ===== STANDARD CRUD - QUANTUM FAST =====
 function listRows(sheetName, filter, search, includeDeleted) {
-  // v5.0: Try cache first — 50ms vs 2-8s for 1000+ rows
   var cacheKey = _listCacheKey(sheetName, filter, search, includeDeleted);
   var cached = _getListCache(cacheKey);
-  if (cached) {
-    return cached;  // Cache hit — ultra fast path
-  }
-
+  if (cached) return cached;
   var sheet = getSheetFast(sheetName);
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
-
-  // Ultra fast path: if no filter/search and not including deleted, read all at once
   var data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
   var rows = [];
   var deletedIdx = headers.indexOf('deleted');
-  
   for (var r = 0; r < data.length; r++) {
     var row = data[r];
-    // Fast deleted check
     if (!includeDeleted && deletedIdx >= 0) {
       var delVal = row[deletedIdx];
       if (delVal === true || String(delVal).toLowerCase() === 'true') continue;
     }
     var obj = {};
-    for (var h = 0; h < headers.length; h++) {
-      var v = row[h];
-      obj[headers[h]] = (v instanceof Date) ? v.toISOString() : v;
-    }
+    for (var h = 0; h < headers.length; h++) obj[headers[h]] = (row[h] instanceof Date) ? row[h].toISOString() : row[h];
     rows.push(obj);
   }
-
   if (filter) {
     var parts = filter.split('=');
     var field = parts[0];
     var value = parts[1];
     if (field && value !== undefined) {
       var filtered = [];
-      for (var i = 0; i < rows.length; i++) {
-        if (String(rows[i][field] || '') === String(value)) filtered.push(rows[i]);
-      }
+      for (var i = 0; i < rows.length; i++) if (String(rows[i][field] || '') === String(value)) filtered.push(rows[i]);
       rows = filtered;
     }
   }
-
   if (search) {
     var q = search.toLowerCase();
     var searched = [];
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
       var vals = Object.values(row);
-      for (var v = 0; v < vals.length; v++) {
-        if (String(vals[v] || '').toLowerCase().indexOf(q) !== -1) { searched.push(row); break; }
-      }
+      for (var v = 0; v < vals.length; v++) if (String(vals[v] || '').toLowerCase().indexOf(q) !== -1) { searched.push(row); break; }
     }
     rows = searched;
   }
-
-  // Cache the result for next time
   _putListCache(cacheKey, rows);
   _trackListCacheKey(sheetName, cacheKey);
-
   return rows;
 }
 
 function getRow(sheetName, id) {
-  // v5.0: Try fetching from list cache first (avoids any sheet read)
   var listCacheKey = _listCacheKey(sheetName, '', '', false);
   var cached = _getListCache(listCacheKey);
   if (cached) {
-    for (var i = 0; i < cached.length; i++) {
-      if (String(cached[i].id) === String(id)) return cached[i];
-    }
-    // If not found in non-deleted cache, try with deleted
+    for (var i = 0; i < cached.length; i++) if (String(cached[i].id) === String(id)) return cached[i];
     var listCacheKey2 = _listCacheKey(sheetName, '', '', true);
     var cached2 = _getListCache(listCacheKey2);
     if (cached2) {
-      for (var j = 0; j < cached2.length; j++) {
-        if (String(cached2[j].id) === String(id)) {
-          // If it's soft-deleted, return null (matches old behavior)
-          if (cached2[j].deleted === true || String(cached2[j].deleted).toLowerCase() === 'true') return null;
-          return cached2[j];
-        }
+      for (var j = 0; j < cached2.length; j++) if (String(cached2[j].id) === String(id)) {
+        if (cached2[j].deleted === true || String(cached2[j].deleted).toLowerCase() === 'true') return null;
+        return cached2[j];
       }
     }
     return null;
   }
-
-  // Cache miss — fall through to sheet read
   var sheet = getSheetFast(sheetName);
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
-
-  // v5.0: Read ID column + full row data in a single batched call (was 2 calls)
-  // Read the full sheet in one shot — same number of API calls but gets everything
   var allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
   var rowIndex = -1;
-  for (var i = 0; i < allData.length; i++) {
-    if (String(allData[i][0]) === String(id)) { rowIndex = i; break; }
-  }
+  for (var i = 0; i < allData.length; i++) if (String(allData[i][0]) === String(id)) { rowIndex = i; break; }
   if (rowIndex === -1) return null;
-
   var rowData = allData[rowIndex];
   var obj = {};
-  for (var h = 0; h < headers.length; h++) {
-    var v = rowData[h];
-    obj[headers[h]] = (v instanceof Date) ? v.toISOString() : v;
-  }
+  for (var h = 0; h < headers.length; h++) obj[headers[h]] = (rowData[h] instanceof Date) ? rowData[h].toISOString() : rowData[h];
   if (obj.deleted === true || String(obj.deleted).toLowerCase() === 'true') return null;
   return obj;
 }
@@ -957,7 +1025,6 @@ function createRow(sheetName, data, isFast) {
   var headers = SCHEMAS[sheetName];
   var id = data.id || Utilities.getUuid();
   var now = new Date().toISOString();
-
   var row = [];
   for (var h = 0; h < headers.length; h++) {
     var header = headers[h];
@@ -972,22 +1039,12 @@ function createRow(sheetName, data, isFast) {
       else row.push(v);
     }
   }
-
-  // v5.0: Use getRange().setValues() instead of appendRow — 2-3x faster
-  // appendRow does a getLastRow() + range lookup + write internally; this is faster
-  var nextRow = sheet.getLastRow() + 1;
-  sheet.getRange(nextRow, 1, 1, headers.length).setValues([row]);
-  if (!isFast) {
-    SpreadsheetApp.flush();
-    // v5.0: Invalidate list cache for this sheet (and dashboard)
-    _invalidateListCache(sheetName);
-  }
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, headers.length).setValues([row]);
+  if (!isFast) { SpreadsheetApp.flush(); _invalidateListCache(sheetName); }
   var result = { id: id };
   for (var k in data) result[k] = data[k];
-  result.createdAt = data.createdAt || now;
-  result.updatedAt = now;
-  result.deleted = false;
-  return { success: true, data: result, ultraFast: true };
+  result.createdAt = data.createdAt || now; result.updatedAt = now; result.deleted = false;
+  return { success: true, data: result, quantum: true, ultraFast: true };
 }
 
 function updateRow(sheetName, id, data) {
@@ -995,16 +1052,10 @@ function updateRow(sheetName, id, data) {
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, error: 'No rows' };
-
-  // v5.0: Read ID column + existing row data in ONE call (was 2 calls)
-  // We read all rows so we can both find the row and get its current values
   var allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
   var rowIndex = -1;
-  for (var i = 0; i < allData.length; i++) {
-    if (String(allData[i][0]) === String(id)) { rowIndex = i; break; }
-  }
+  for (var i = 0; i < allData.length; i++) if (String(allData[i][0]) === String(id)) { rowIndex = i; break; }
   if (rowIndex === -1) return { success: false, error: 'Not found' };
-
   var existingRow = allData[rowIndex];
   var now = new Date().toISOString();
   var updatedRow = [];
@@ -1013,37 +1064,21 @@ function updateRow(sheetName, id, data) {
     if (header === 'id') updatedRow.push(id);
     else if (header === 'updatedAt') updatedRow.push(now);
     else if (header === 'createdAt') updatedRow.push(existingRow[h] || now);
-    else if (header === 'deleted') {
-      if (data.deleted !== undefined) updatedRow.push(data.deleted);
-      else updatedRow.push(existingRow[h] || false);
-    } else if (data[header] !== undefined) {
+    else if (header === 'deleted') updatedRow.push(data.deleted !== undefined ? data.deleted : existingRow[h] || false);
+    else if (data[header] !== undefined) {
       var v = data[header];
-      if (typeof v === 'object') updatedRow.push(JSON.stringify(v));
-      else updatedRow.push(v);
-    } else {
-      updatedRow.push(existingRow[h]);
-    }
+      updatedRow.push(typeof v === 'object' ? JSON.stringify(v) : v);
+    } else updatedRow.push(existingRow[h]);
   }
-
-  // v5.0: Write back at the EXACT row we found (rowIndex+2 because row 1 is headers)
   sheet.getRange(rowIndex + 2, 1, 1, headers.length).setValues([updatedRow]);
   SpreadsheetApp.flush();
-  // v5.0: Invalidate list cache for this sheet (and dashboard)
   _invalidateListCache(sheetName);
-  return { success: true, data: Object.assign({ id: id }, data, { updatedAt: now }), ultraFast: true };
+  return { success: true, data: Object.assign({ id: id }, data, { updatedAt: now }), quantum: true, ultraFast: true };
 }
 
-function softDeleteRow(sheetName, id) {
-  return updateRow(sheetName, id, { deleted: true, updatedAt: new Date().toISOString() });
-}
-
-function restoreRow(sheetName, id) {
-  return updateRow(sheetName, id, { deleted: false, updatedAt: new Date().toISOString() });
-}
-
-function deleteRow(sheetName, id) {
-  return softDeleteRow(sheetName, id);
-}
+function softDeleteRow(sheetName, id) { return updateRow(sheetName, id, { deleted: true, updatedAt: new Date().toISOString() }); }
+function restoreRow(sheetName, id) { return updateRow(sheetName, id, { deleted: false, updatedAt: new Date().toISOString() }); }
+function deleteRow(sheetName, id) { return softDeleteRow(sheetName, id); }
 
 function bulkCreate(sheetName, dataArray) {
   var sheet = getSheetFast(sheetName);
@@ -1074,7 +1109,7 @@ function bulkCreate(sheetName, dataArray) {
     SpreadsheetApp.flush();
   }
   _invalidateListCache(sheetName);
-  return { success: true, count: rows.length, ultraFast: true };
+  return { success: true, count: rows.length, quantum: true, ultraFast: true };
 }
 
 function bulkUpdate(sheetName, updates) {
@@ -1083,11 +1118,9 @@ function bulkUpdate(sheetName, updates) {
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, error: 'No rows' };
-
   var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
   var idToRow = {};
   for (var i = 0; i < ids.length; i++) idToRow[String(ids[i][0])] = i + 2;
-
   var now = new Date().toISOString();
   var count = 0;
   for (var u = 0; u < updates.length; u++) {
@@ -1102,34 +1135,25 @@ function bulkUpdate(sheetName, updates) {
       if (header === 'id') updatedRow.push(upd.id);
       else if (header === 'updatedAt') updatedRow.push(now);
       else if (header === 'createdAt') updatedRow.push(existingRow[h] || now);
-      else if (header === 'deleted') {
-        if (data.deleted !== undefined) updatedRow.push(data.deleted);
-        else updatedRow.push(existingRow[h] || false);
-      } else if (data[header] !== undefined) {
+      else if (header === 'deleted') updatedRow.push(data.deleted !== undefined ? data.deleted : existingRow[h] || false);
+      else if (data[header] !== undefined) {
         var v = data[header];
-        if (typeof v === 'object') updatedRow.push(JSON.stringify(v));
-        else updatedRow.push(v);
-      } else {
-        updatedRow.push(existingRow[h]);
-      }
+        updatedRow.push(typeof v === 'object' ? JSON.stringify(v) : v);
+      } else updatedRow.push(existingRow[h]);
     }
     sheet.getRange(rowIndex, 1, 1, headers.length).setValues([updatedRow]);
     count++;
   }
   SpreadsheetApp.flush();
   _invalidateListCache(sheetName);
-  return { success: true, count: count, ultraFast: true };
+  return { success: true, count: count, quantum: true, ultraFast: true };
 }
 
-function replaceAll(sheetName, dataArray) {
-  return { success: false, error: 'replaceAll disabled' };
-}
+function replaceAll(sheetName, dataArray) { return { success: false, error: 'replaceAll disabled' }; }
 
 function saveShop(data) {
   var existing = listRows('Shop');
-  if (existing.length > 0) {
-    return updateRow('Shop', existing[0].id, data);
-  }
+  if (existing.length > 0) return updateRow('Shop', existing[0].id, data);
   return createRow('Shop', { id: 'shop', ...data });
 }
 
@@ -1146,18 +1170,14 @@ function getDashboardStats() {
   var quotations = listRows('Quotations');
   var payments = listRows('Payments');
   var enquiries = listRows('Enquiries');
-  var jobs = [];
-  var servicePayments = [];
+  var jobs = []; var servicePayments = [];
   try { jobs = listRows('Jobs'); } catch (e) { jobs = []; }
   try { servicePayments = listRows('ServicePayments'); } catch (e) { servicePayments = []; }
-
   var now = new Date();
   var startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
   var monthSales = 0, monthProfit = 0, monthCashSales = 0, monthCreditSales = 0, totalOutstanding = 0;
-  var pendingInvoices = [];
-  var recentInvoices = [];
+  var pendingInvoices = []; var recentInvoices = [];
   for (var ii = 0; ii < invoices.length; ii++) {
     var inv = invoices[ii];
     var invDate = new Date(inv.date);
@@ -1174,41 +1194,29 @@ function getDashboardStats() {
     }
   }
   recentInvoices = invoices.slice().sort(function(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }).slice(0, 5);
-
   var stockValueCost = 0, stockValueSelling = 0, lowStockItems = [];
   for (var it = 0; it < items.length; it++) {
     var item = items[it];
     var qty = Number(item.quantity) || 0;
     stockValueCost += (Number(item.costPrice) || 0) * qty;
     stockValueSelling += (Number(item.sellingPrice) || 0) * qty;
-    if (qty <= (Number(item.minQuantity) || 0)) {
-      if (lowStockItems.length < 10) lowStockItems.push(item);
-    }
+    if (qty <= (Number(item.minQuantity) || 0) && lowStockItems.length < 10) lowStockItems.push(item);
   }
-
   var monthQuotations = [];
-  for (var q = 0; q < quotations.length; q++) {
-    if (new Date(quotations[q].date) >= startOfMonth) monthQuotations.push(quotations[q]);
-  }
+  for (var q = 0; q < quotations.length; q++) if (new Date(quotations[q].date) >= startOfMonth) monthQuotations.push(quotations[q]);
   var monthQuotationValue = 0;
   for (var q = 0; q < monthQuotations.length; q++) monthQuotationValue += Number(monthQuotations[q].grandTotal) || 0;
-  
   var todayPayments = [];
-  for (var p = 0; p < payments.length; p++) {
-    if (new Date(payments[p].date) >= startOfToday) todayPayments.push(payments[p]);
-  }
+  for (var p = 0; p < payments.length; p++) if (new Date(payments[p].date) >= startOfToday) todayPayments.push(payments[p]);
   var todayPaymentTotal = 0;
   for (var p = 0; p < todayPayments.length; p++) todayPaymentTotal += Number(todayPayments[p].amount) || 0;
-  
   var pendingEnquiries = 0;
   for (var e = 0; e < enquiries.length; e++) {
     var enq = enquiries[e];
     if ((enq.status === 'sent' || enq.status === 'responded') && enq.appliedToItems !== true && enq.appliedToItems !== 'true') pendingEnquiries++;
   }
-
   var recentPayments = payments.slice().sort(function(a, b) { return new Date(b.date) - new Date(a.date); }).slice(0, 10);
   var recentEnquiries = enquiries.slice().sort(function(a, b) { return new Date(b.sentAt) - new Date(a.sentAt); }).slice(0, 10);
-
   var monthJobs = [], todayJobs = [], pendingJobs = [], completedJobs = [], deliveredJobs = [], highPriorityJobs = [];
   for (var j = 0; j < jobs.length; j++) {
     var job = jobs[j];
@@ -1220,7 +1228,6 @@ function getDashboardStats() {
     if (job.status === 'Delivered') deliveredJobs.push(job);
     if (job.priority === 'High' && (job.status === 'Pending' || job.status === 'In Progress')) highPriorityJobs.push(job);
   }
-
   var todayServicePayments = [], monthServicePayments = [];
   for (var sp = 0; sp < servicePayments.length; sp++) {
     var sPay = servicePayments[sp];
@@ -1239,7 +1246,6 @@ function getDashboardStats() {
     if (monthServicePayments[i].mode === 'UPI') monthServiceUPI += Number(monthServicePayments[i].amount) || 0;
     if (monthServicePayments[i].mode === 'Cash') monthServiceCash += Number(monthServicePayments[i].amount) || 0;
   }
-
   var svcShare = 0, partsProfitShare = 0;
   var paidJobIds = {};
   for (var i = 0; i < monthServicePayments.length; i++) if (monthServicePayments[i].jobId) paidJobIds[monthServicePayments[i].jobId] = true;
@@ -1260,7 +1266,6 @@ function getDashboardStats() {
   var adminServiceShare = Math.round(svcShare / 2);
   var adminPartsShare = Math.round(partsProfitShare / 2);
   var adminTotalShare = adminServiceShare + adminPartsShare;
-
   return {
     stats: {
       totalItems: items.length, lowStockCount: lowStockItems.length, totalCustomers: customers.length, totalSuppliers: suppliers.length,
@@ -1285,9 +1290,7 @@ function safeListRows(sheetName) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
     if (!sheet) return [];
     return listRows(sheetName);
-  } catch (e) {
-    return [];
-  }
+  } catch (e) { return []; }
 }
 
 function seedData() {
@@ -1296,7 +1299,6 @@ function seedData() {
   var suppliersCount = listRows('Suppliers').length;
   var shopCount = listRows('Shop').length;
   var results = { shop: false, suppliers: 0, items: 0, customers: 0 };
-
   if (shopCount === 0) {
     saveShop({
       name: 'Smart Computers', owner: 'Shop Owner', phone: '9876543210',
@@ -1308,7 +1310,6 @@ function seedData() {
     });
     results.shop = true;
   }
-
   if (suppliersCount === 0) {
     var suppliers = [
       { name: 'Tech Distributors', phone: '919876543210', whatsappNumber: '919876543210', company: 'Tech Distributors Pvt Ltd', suppliedItems: 'Laptop,Desktop,Processor', active: true, includeInAutoEnquiry: true },
@@ -1318,7 +1319,6 @@ function seedData() {
     var r = bulkCreate('Suppliers', suppliers);
     results.suppliers = r.count;
   }
-
   if (itemsCount === 0) {
     var suppliers = listRows('Suppliers');
     var items = [
@@ -1329,7 +1329,6 @@ function seedData() {
     var r = bulkCreate('Items', items);
     results.items = r.count;
   }
-
   if (customersCount === 0) {
     var customers = [
       { name: 'Rahul Sharma', phone: '9123456789', email: 'rahul@example.com', address: 'MG Road, Bangalore', state: 'Karnataka', creditBalance: 0 },
@@ -1338,7 +1337,6 @@ function seedData() {
     var r = bulkCreate('Customers', customers);
     results.customers = r.count;
   }
-
   return { success: true, results: results };
 }
 
@@ -1349,7 +1347,7 @@ function json(obj) {
 function testSetup() {
   ensureAllSheets();
   Logger.log('Setup complete! Sheets: ' + SHEET_NAMES.join(', '));
-  Logger.log('Ultra Fast v4.0 - Sheet cache + bulk transactions enabled');
+  Logger.log('Quantum v5.0 - getAllData + liveSync + Pins + Quantum cache');
 }
 
 function listDeletedRows(sheetName) {

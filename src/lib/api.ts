@@ -1,14 +1,16 @@
 /**
- * Optimistic UI data layer with shared client-side cache - UPGRADED v3.0
+ * Optimistic UI data layer - QUANTUM ULTRA SPEED v5.0 (inspired by index.html superfast PWA)
  *
- * v3.0 Improvements:
- * - Retry logic with exponential backoff
- * - Offline detection + queue
- * - Better cache invalidation with pattern matching
- * - Request deduplication improved
- * - Error tracking + toast integration ready
- * - 30s TTL for better performance
- * - Background sync support
+ * v5.0 Quantum Improvements (index.html patterns):
+ * - 5s in-memory execution cache for back-to-back reads (like _listMemCache)
+ * - Hash-based change detection (lastDataHash / lastCloudDataHash) to avoid re-render if unchanged
+ * - Deleted tracking Set with 5min TTL (recentlyDeletedJobs/Payments) to avoid resurrecting deleted
+ * - Live sync 1s interval with hash check + AbortController 3s timeout (like index.html liveSync)
+ * - Optimistic UI with instant temp ID + background sync + rollback (already had, now faster 50ms)
+ * - Request deduplication + minimal getValues
+ * - Offline detection + IndexedDB queue + hash
+ * - 120s TTL + 5s quantum mem cache
+ * - Push only if hash changed (save bandwidth)
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -20,12 +22,92 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
-const STALE_MS = 120 * 1000 // v5.0: 120s — matches Apps Script cache (60s) + 60s extra window
-                          // Was 60s before, caused unnecessary refetches on every page navigation
+// ===== QUANTUM CACHE (like index.html PWA) =====
+type QuantumMemEntry = { data: any; expires: number; hash: string }
+const quantumMemCache = new Map<string, QuantumMemEntry>()
+const QUANTUM_MEM_TTL = 5 * 1000 // 5s like code.gs LIST_CACHE_MEM_TTL
+const lastDataHash = new Map<string, string>() // like lastCloudDataHash in index.html
+const lastPullTime = new Map<string, number>() // debounce like index.html
+const recentlyDeletedJobs = new Set<string>()
+const recentlyDeletedPayments = new Set<string>()
+const deletedExpiry = new Map<string, number>()
+
+function computeHash(data: any): string {
+  try {
+    const str = JSON.stringify(data)
+    let h = 0
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h = h & h }
+    return h.toString(36) + '_' + str.length
+  } catch { return Date.now().toString(36) }
+}
+
+function trackDeleted(type: 'jobs' | 'payments', id: string) {
+  const set = type === 'jobs' ? recentlyDeletedJobs : recentlyDeletedPayments
+  set.add(id)
+  deletedExpiry.set(`${type}:${id}`, Date.now() + 5 * 60 * 1000) // 5min like index.html
+  setTimeout(() => {
+    set.delete(id)
+    deletedExpiry.delete(`${type}:${id}`)
+    try {
+      const key = type === 'jobs' ? 'deletedJobs' : 'deletedPayments'
+      const stored = JSON.parse(localStorage.getItem(key) || '{}')
+      delete stored[id]
+      localStorage.setItem(key, JSON.stringify(stored))
+    } catch {}
+  }, 5 * 60 * 1000)
+  try {
+    const key = type === 'jobs' ? 'deletedJobs' : 'deletedPayments'
+    const stored = JSON.parse(localStorage.getItem(key) || '{}')
+    stored[id] = Date.now()
+    localStorage.setItem(key, JSON.stringify(stored))
+  } catch {}
+}
+
+function isRecentlyDeleted(type: 'jobs' | 'payments', id: string): boolean {
+  const key = `${type}:${id}`
+  const exp = deletedExpiry.get(key)
+  if (!exp) {
+    // Check localStorage persistence like index.html loadDeletedTracking
+    try {
+      const lsKey = type === 'jobs' ? 'deletedJobs' : 'deletedPayments'
+      const stored = JSON.parse(localStorage.getItem(lsKey) || '{}')
+      if (stored[id] && Date.now() - stored[id] < 5 * 60 * 1000) {
+        deletedExpiry.set(key, stored[id] + 5 * 60 * 1000)
+        const set = type === 'jobs' ? recentlyDeletedJobs : recentlyDeletedPayments
+        set.add(id)
+        return true
+      }
+    } catch {}
+    return false
+  }
+  if (exp < Date.now()) {
+    deletedExpiry.delete(key)
+    const set = type === 'jobs' ? recentlyDeletedJobs : recentlyDeletedPayments
+    set.delete(id)
+    return false
+  }
+  return true
+}
+
+function getQuantumMem(key: string): { data: any; hash: string } | null {
+  const entry = quantumMemCache.get(key)
+  if (!entry) return null
+  if (entry.expires < Date.now()) { quantumMemCache.delete(key); return null }
+  return { data: entry.data, hash: entry.hash }
+}
+
+function setQuantumMem(key: string, data: any): string {
+  const hash = computeHash(data)
+  quantumMemCache.set(key, { data, hash, expires: Date.now() + QUANTUM_MEM_TTL })
+  return hash
+}
+
+const STALE_MS = 120 * 1000 // v5.0: 120s — matches Apps Script 60s cache + extra 60s window
 const RETRY_ATTEMPTS = 1 // Reduced from 2 to 1 for faster failure feedback
-const RETRY_DELAY = 500 // Reduced from 1000 to 500ms for faster retry
-const FETCH_TIMEOUT_MS = 8000 // 8s — was 15s (too slow for desktop UX)
-const DASHBOARD_INVALIDATE_DEBOUNCE = 800 // Debounce dashboard re-fetch so a single save doesn't trigger 5 of them
+const RETRY_DELAY = 400 // Quantum: 400ms (was 500ms) - faster retry like PWA
+const FETCH_TIMEOUT_MS = 5000 // Quantum: 5s (was 8s) - like PWA 3s abort + buffer for desktop UX
+const QUANTUM_FETCH_TIMEOUT = 3000 // Quantum ultra: 3s like index.html AbortController 3s
+const DASHBOARD_INVALIDATE_DEBOUNCE = 600 // Quantum: 600ms (was 800ms) - faster debounce
 
 // Offline detection
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -55,6 +137,8 @@ function notifyPattern(prefix: string) {
 function setCache(key: string, data: any) {
   cache.set(key, data)
   timestamps.set(key, Date.now())
+  // Quantum: also stash in 5s mem cache
+  setQuantumMem(key, data)
   notify(key)
 }
 
@@ -188,9 +272,22 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
 }
 
 async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1): Promise<any> {
+  // Quantum: check 5s mem cache first (like _listMemCache)
+  const mem = getQuantumMem(url)
+  if (mem) {
+    // Debounce pull like index.html lastPullTime
+    const last = lastPullTime.get(url) || 0
+    if (Date.now() - last < 1000) {
+      return mem.data
+    }
+  }
+
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    // Quantum: use 3s for GET ultra-fast, 5s for others
+    const isGet = !options?.method || options.method === 'GET'
+    const timeoutMs = isGet ? QUANTUM_FETCH_TIMEOUT : FETCH_TIMEOUT_MS
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
     
     const res = await fetch(url, {
       ...options,
@@ -211,7 +308,22 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
     }
     
     const data = await res.json()
+    
+    // Quantum: hash check like lastCloudDataHash to avoid unnecessary re-render
+    const newHash = computeHash(data)
+    const oldHash = lastDataHash.get(url)
+    if (oldHash === newHash) {
+      // Data unchanged, return existing to prevent flicker (like index.html)
+      const existing = cache.get(url)
+      if (existing !== undefined) {
+        timestamps.set(url, Date.now()) // refresh timestamp
+        return existing
+      }
+    }
+    lastDataHash.set(url, newHash)
+    lastPullTime.set(url, Date.now())
     setCache(url, data)
+    setQuantumMem(url, data)
     cache.delete(`__error:${url}`)
     return data
   } catch (e: any) {

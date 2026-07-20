@@ -296,14 +296,10 @@ export async function generateInvoiceHtml(
   const custState = (data.customer.state || '').toLowerCase()
   const sameState = !shopState || !custState || shopState === custState
 
-  // Build items table rows - UNIFIED 8 cols PRO v7.1: # | Item (with SKU) | HSN | Qty (with unit) | Rate | Taxable | GST | Total
-  // Matches PDF exactly to fix preview vs PDF mismatch
+  // Build items table rows
   const itemsRows = data.calc.items
     .map(
-      (item, i) => {
-        const qtyWithUnit = `${item.quantity} ${escapeHtml((item as any).unit || 'pcs')}`
-        const gstDisplay = item.gstApplicable && Number(item.gstAmount) > 0 ? `${formatCurrency(item.gstAmount).replace('Rs. ', '')} (${Number(item.gstRate) || 0}%)` : '-'
-        return `
+      (item, i) => `
       <tr class="item-row">
         <td class="num">${i + 1}</td>
         <td class="name">
@@ -311,13 +307,13 @@ export async function generateInvoiceHtml(
           ${item.sku ? `<div class="isku">SKU: ${escapeHtml(item.sku)}</div>` : ''}
         </td>
         <td class="center">${escapeHtml(item.hsnCode || '-')}</td>
-        <td class="center">${qtyWithUnit}</td>
-        <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
+        <td class="center">${item.quantity}</td>
+        <td class="center">${escapeHtml((item as any).unit || 'Nos')}</td>
+        <td class="right">${item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') : '-'}</td>
         <td class="right">${formatCurrency(item.amount).replace('Rs. ', '')}</td>
-        <td class="right">${gstDisplay}</td>
+        <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
         <td class="right bold">${formatCurrency(item.total).replace('Rs. ', '')}</td>
-      </tr>`
-      }
+      </tr>`,
     )
     .join('')
 
@@ -904,57 +900,25 @@ export async function generateInvoiceHtml(
     line-height: 1.4;
   }
 
-  /* ===== Print rules — perfect A4 PRO v7.1 FIX - no blank ===== */
+  /* ===== Print rules — perfect A4 ===== */
   @media print {
-    html, body { 
-      background: #fff !important; 
-      padding: 0 !important; 
-      margin: 0 !important;
-      gap: 0 !important; 
-      height: auto !important;
-      overflow: visible !important;
-    }
+    body { background: #fff !important; padding: 0 !important; gap: 0 !important; }
     .toolbar { display: none !important; }
-    .sheet, .print-paper, .print-invoice {
-      width: 210mm !important;
-      min-height: auto !important;
-      height: auto !important;
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
       box-shadow: none !important;
-      border: none !important;
       border-radius: 0 !important;
-      padding: 8mm !important;
-      margin: 0 auto !important;
-      background: #fff !important;
-      display: block !important;
-      visibility: visible !important;
-      overflow: visible !important;
+      padding: 0 !important;
+      margin: 0 !important;
     }
-    .sheet * , .print-paper * , .print-invoice * {
-      visibility: visible !important;
-    }
-    .header { margin: 0 0 10px 0; border-radius: 0; break-inside: avoid; }
-    /* Avoid breaking inside these blocks - PRO fix for signature next page */
-    .items-table tbody tr, .bill-box, .info-block, .totals-table tr, .hsn-table tr { 
-      page-break-inside: avoid; 
-      break-inside: avoid;
-    }
-    /* Totals and signature must stay together - FIX for next page issue */
-    .bottom-split, .info-row, .signature {
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-    }
-    .signature {
-      page-break-before: auto !important;
-      break-before: auto !important;
-    }
+    .header { margin: 0 0 10px 0; border-radius: 0; }
+    /* Avoid breaking inside these blocks */
+    .items-table tbody tr, .bill-box, .info-block, .totals-table tr, .hsn-table tr { page-break-inside: avoid; }
     /* Repeat table header on each printed page */
     thead { display: table-header-group; }
     tfoot { display: table-footer-group; }
-    .ad-banner, .footer { page-break-inside: avoid; break-inside: avoid; }
-    @page {
-      size: A4 portrait;
-      margin: 8mm;
-    }
+    .ad-banner, .signature, .footer { page-break-inside: avoid; }
   }
 
   /* Responsive on small screens — keep A4 ratio but shrink to fit */
@@ -1025,13 +989,14 @@ export async function generateInvoiceHtml(
       <thead>
         <tr>
           <th>#</th>
-          <th class="left">Item / Description</th>
-          <th>HSN</th>
+          <th class="left">Item name</th>
+          <th>HSN/SAC</th>
           <th>Qty</th>
-          <th class="right">Rate</th>
+          <th>Unit</th>
+          <th class="right">GST (Rs.)</th>
           <th class="right">Taxable</th>
-          <th class="right">GST</th>
-          <th class="right">Total</th>
+          <th class="right">Rate (Rs.)</th>
+          <th class="right">Amount (Rs.)</th>
         </tr>
       </thead>
       <tbody>
