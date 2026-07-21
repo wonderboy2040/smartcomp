@@ -554,7 +554,7 @@ export async function apiPut(url: string, body: any) {
         url,
         method: 'PUT',
         body,
-        tempId: targetId,
+        tempId: targetId || undefined,
       })
     } catch {}
     return { ...optimisticEntity, _pending: true, _offline: true }
@@ -630,7 +630,7 @@ export async function apiDelete(url: string) {
         sheet: listUrl.split('/').pop() || 'unknown',
         url,
         method: 'DELETE',
-        tempId: targetId,
+        tempId: targetId || undefined,
       })
     } catch {}
     return { success: true, _pending: true, _offline: true }

@@ -16,7 +16,7 @@ export function Toaster() {
   return (
     // swipeDirections disabled so toasts don't get accidentally dismissed on scroll
     // duration is per-toast (set in use-toast.ts) — Radix's default here is just a fallback
-    <ToastProvider duration={4000} swipeDirections={[]}>
+    <ToastProvider duration={4000} swipeDirection="right">
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>

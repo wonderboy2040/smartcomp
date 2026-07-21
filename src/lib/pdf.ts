@@ -51,6 +51,7 @@ export interface PdfDocData {
   bankDetails?: ShopInfo
   productImages?: any
   adBannerVariant?: string
+  docId?: string
   copyType?: 'ORIGINAL FOR RECIPIENT' | 'DUPLICATE FOR TRANSPORTER' | 'TRIPLICATE FOR SUPPLIER'
 }
 

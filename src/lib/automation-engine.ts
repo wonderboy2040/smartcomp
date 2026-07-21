@@ -374,7 +374,7 @@ export class AutomationEngine {
       for (const action of rule.actions) {
         if (action.delayMinutes && action.delayMinutes > 0) {
           // In real implementation, schedule delayed job
-          await new Promise(r => setTimeout(r, Math.min(100, action.delayMinutes * 10))) // fast sim
+          await new Promise(r => setTimeout(r, Math.min(100, (action.delayMinutes || 0) * 10))) // fast sim
         }
         await this.executeAction(action, context)
       }

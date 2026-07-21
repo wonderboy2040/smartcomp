@@ -16,7 +16,7 @@ type QueueOperation = {
   sheet: string
   url: string
   method: string
-  body: any
+  body?: any
   timestamp: number
   retries: number
   tempId?: string

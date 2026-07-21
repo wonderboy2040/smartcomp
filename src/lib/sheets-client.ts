@@ -161,7 +161,7 @@ export async function getAllDataQuantum(): Promise<any> {
       const oldHash = lastDataHash.get(cacheKey)
       if (oldHash === newHash) {
         // Data unchanged, return existing to avoid re-render
-        const existing = getCached(cacheKey) || mem?.data
+        const existing = getCached<any>(cacheKey) || (mem as any)?.data
         if (existing) return existing
       }
       lastDataHash.set(cacheKey, newHash)

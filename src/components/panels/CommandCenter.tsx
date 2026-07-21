@@ -29,11 +29,23 @@ export function CommandCenterPanel({ onNavigate }: { onNavigate?: (tab: string) 
 
   const searchResults = useMemo(() => {
     if (!query.trim()) return []
-    return universalSearch(query, { invoices, items, customers, jobs, quotations, suppliers })
+    return universalSearch(query, {
+      invoices: invoices || undefined,
+      items: items || undefined,
+      customers: customers || undefined,
+      jobs: jobs || undefined,
+      quotations: quotations || undefined,
+      suppliers: suppliers || undefined,
+    })
   }, [query, invoices, items, customers, jobs, quotations, suppliers])
 
   const contextActions = useMemo(() => {
-    return generateContextActions({ invoices, items, jobs, dashboard })
+    return generateContextActions({
+      invoices: invoices || undefined,
+      items: items || undefined,
+      jobs: jobs || undefined,
+      dashboard: dashboard || undefined,
+    })
   }, [invoices, items, jobs, dashboard])
 
   const handleVoiceToggle = () => {
