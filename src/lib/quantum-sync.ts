@@ -243,7 +243,7 @@ export async function pushToCloud(data?: SyncData): Promise<boolean> {
 }
 
 // Pull from cloud with hash check and debounce
-export async function pullFromCloud(force = false): Promise<{ changed: boolean; data?: any; error?: string }> {
+export async function pullFromCloud(force = false): Promise<{ changed: boolean; data?: any }> {
   const now = Date.now()
   if (!force && now - lastPullTime < 1000) return { changed: false } // debounce 1s like index.html
   lastPullTime = now
@@ -262,38 +262,9 @@ export async function pullFromCloud(force = false): Promise<{ changed: boolean; 
     })
     clearTimeout(timeout)
 
-    if (!res.ok) {
-      if (res.status === 429 || res.status === 503) throw new Error('Circuit breaker or rate limit')
-      return { changed: false }
-    }
+    if (!res.ok) return { changed: false }
 
     const result = await res.json()
-    
-    // Handle stale deployment error - don't treat as failure, just warn
-    if (result.staleDeployment) {
-      console.warn('[Quantum Sync] Stale deployment detected:', result.error)
-      updateSyncDot(false)
-      // Show user-friendly message in UI if possible
-      if (typeof document !== 'undefined') {
-        const existing = document.getElementById('staleDeploymentWarning')
-        if (!existing) {
-          const warning = document.createElement('div')
-          warning.id = 'staleDeploymentWarning'
-          warning.className = 'fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-amber-100 border border-amber-300 text-amber-800 p-3 rounded-xl shadow-lg z-50 text-xs'
-          warning.innerHTML = '<b>⚠️ Apps Script Update Needed:</b><br>Settings → Sync → Copy latest <b>code.gs</b> → Paste in Apps Script → Deploy new version (Anyone access) → Copy /exec URL → Update env.<br><button onclick="this.parentElement.remove()" class="mt-2 px-2 py-1 bg-amber-200 rounded text-[10px]">Dismiss</button> <button onclick="fetch(`/api/sheets/sync?action=resetCircuitBreaker`,{method:`POST`}).then(()=>location.reload())" class="mt-2 px-2 py-1 bg-blue-500 text-white rounded text-[10px] ml-1">Reset Breaker & Reload</button>'
-          document.body.appendChild(warning)
-          setTimeout(()=>{ if(warning.parentElement) warning.remove() }, 15000)
-        }
-      }
-      return { changed: false, error: result.error }
-    }
-
-    if (result.circuitBreaker) {
-      console.warn('[Quantum Sync] Circuit breaker active, backing off')
-      updateSyncDot(false)
-      return { changed: false, error: 'Circuit breaker active' }
-    }
-
     if (result.success && result.data) {
       const newHash = computeHash(result.data)
       if (!force && newHash === lastCloudDataHash) {
@@ -304,11 +275,8 @@ export async function pullFromCloud(force = false): Promise<{ changed: boolean; 
       updateSyncDot(true)
       return { changed: true, data: result.data }
     }
-  } catch (e: any) {
-    // Ignore network errors like index.html, but log for debug
-    if (e?.message?.includes('Circuit breaker')) {
-      return { changed: false, error: e.message }
-    }
+  } catch (e) {
+    // ignore, like index.html
   }
 
   return { changed: false }
@@ -365,9 +333,6 @@ export function createQuantumSyncUI() {
 }
 
 // Live sync interval like index.html startLiveSync 1s
-let consecutiveFailures = 0
-let backoffMs = 1000
-
 export function startQuantumLiveSync() {
   if (typeof window === 'undefined') return
   if (liveSyncInterval) clearInterval(liveSyncInterval)
@@ -378,59 +343,25 @@ export function startQuantumLiveSync() {
   }
 
   // Initial sync
-  pushToCloud().catch(()=>{})
-  pullFromCloud(true).catch(()=>{})
-
-  consecutiveFailures = 0
-  backoffMs = 1000
+  pushToCloud()
+  pullFromCloud(true)
 
   liveSyncInterval = setInterval(async () => {
     if (!navigator.onLine) {
       updateSyncDot(false)
       return
     }
-
-    // Exponential backoff if failing - like circuit breaker
-    if (consecutiveFailures >= 3) {
-      if (backoffMs < 30000) backoffMs *= 2
-      // Skip this interval, wait for backoff
-      console.warn(`[Quantum Sync] Backoff ${backoffMs}ms due to ${consecutiveFailures} failures - check Apps Script deployment`)
-      // Increase interval temporarily
-      if (liveSyncInterval) {
-        clearInterval(liveSyncInterval)
-        liveSyncInterval = setInterval(async () => {
-          // Retry logic inside
-          try {
-            await pushToCloud()
-            const result = await pullFromCloud(false)
-            if (result.changed && result.data) {
-              console.log('[Quantum Sync] Recovered, new data', result.data)
-              invalidate('/api/dashboard')
-              consecutiveFailures = 0
-              backoffMs = 1000
-              // Restore normal 1s interval
-              stopQuantumLiveSync()
-              startQuantumLiveSync()
-            }
-          } catch {}
-        }, backoffMs)
+    await pushToCloud()
+    const result = await pullFromCloud(false)
+    if (result.changed && result.data) {
+      // Merge and update local caches
+      // This is simplified - in real app we'd merge into api cache
+      console.log('[Quantum Sync] New data from cloud', result.data)
+      invalidate('/api/dashboard')
+      // Show notification for new jobs if engineer (like index.html)
+      if (result.data.jobs && Array.isArray(result.data.jobs)) {
+        // Could show notification for new job IDs not in local cache
       }
-      return
-    }
-
-    try {
-      await pushToCloud()
-      const result = await pullFromCloud(false)
-      if (result.changed && result.data) {
-        console.log('[Quantum Sync] New data from cloud')
-        invalidate('/api/dashboard')
-      }
-      consecutiveFailures = 0
-      backoffMs = 1000
-    } catch (e) {
-      consecutiveFailures++
-      console.warn(`[Quantum Sync] Sync failed ${consecutiveFailures} times:`, e)
-      updateSyncDot(false)
     }
   }, 1000) // 1s like index.html
 }

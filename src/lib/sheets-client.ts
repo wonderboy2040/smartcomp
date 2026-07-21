@@ -111,23 +111,6 @@ function invalidateCache(sheet?: string) {
   lastPullTime.clear()
 }
 
-export function resetCircuitBreaker() {
-  circuitBrokenUntil = 0
-  consecutiveFailures = 0
-}
-
-export function isCircuitBreakerActive(): boolean {
-  return Date.now() < circuitBrokenUntil
-}
-
-function handleHtmlError(text: string): never {
-  // HTML error means stale deployment - don't count heavily towards breaker, reset quickly
-  consecutiveFailures = Math.max(0, consecutiveFailures - 2) // reduce count, don't increase
-  circuitBrokenUntil = Date.now() + CIRCUIT_BREAKER_HTML_COOLDOWN // short 5s cooldown for HTML errors
-  const hint = diagnoseHtmlResponse(text)
-  throw new Error(hint || 'Apps Script returned HTML - stale deployment')
-}
-
 // ===== CONFIG =====
 export function isConfigured(): boolean {
   const url = getAppsScriptUrl()
@@ -277,9 +260,8 @@ function diagnoseHtmlResponse(text: string): string | null {
 // ===== REQUEST WITH RETRY + CIRCUIT BREAKER =====
 let circuitBrokenUntil = 0
 let consecutiveFailures = 0
-const CIRCUIT_BREAKER_THRESHOLD = 15 // Quantum: increased from 5 to 15 to avoid aggressive blocking during deploy issues
-const CIRCUIT_BREAKER_COOLDOWN = 10 * 1000 // Quantum: reduced from 30s to 10s for faster recovery
-const CIRCUIT_BREAKER_HTML_COOLDOWN = 5 * 1000 // For HTML errors (stale deployment), shorter cooldown
+const CIRCUIT_BREAKER_THRESHOLD = 5
+const CIRCUIT_BREAKER_COOLDOWN = 30 * 1000
 
 async function callAppsScript(payload: any): Promise<any> {
   const APPS_SCRIPT_URL = getAppsScriptUrl()
@@ -358,22 +340,11 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
       const text = await res.text()
       try {
         const parsed = JSON.parse(text)
-        consecutiveFailures = 0 // success resets circuit breaker
+        consecutiveFailures = 0
         return parsed
       } catch {
-        // Check if it's HTML error page (stale deployment)
-        if (text.toLowerCase().includes('<!doctype html') || text.toLowerCase().includes('<html') || text.includes('docs/script/images/favicon.ico')) {
-          handleHtmlError(text)
-        }
         const hint = diagnoseHtmlResponse(text)
-        if (hint) {
-          // For HTML errors, use short cooldown
-          if (hint.includes('HTML') || hint.includes('Stale') || hint.includes('LOGIN')) {
-            consecutiveFailures = Math.max(0, consecutiveFailures - 1)
-            circuitBrokenUntil = Date.now() + CIRCUIT_BREAKER_HTML_COOLDOWN
-          }
-          throw new Error(hint)
-        }
+        if (hint) throw new Error(hint)
         throw new Error('Invalid JSON from Apps Script: ' + text.slice(0, 200))
       }
     } catch (e: any) {

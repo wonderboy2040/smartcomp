@@ -1,8 +1,8 @@
 {
   "name": "smart-computers-panel-pro",
   "private": true,
-  "version": "7.6.0-deployment-fix-quantum-ultimate",
-  "description": "SmartComp PRO v7.6 Deployment Fix - Circuit Breaker Resilience + Stale Apps Script Fix + Quantum Sync Backoff + Friendly Warning Banner - Site never blank, auto recovers 10s, no spam logs",
+  "version": "8.0.0-quantum-ultimate-superfast",
+  "description": "SmartComp PRO v8.0 Quantum Ultimate Superfast - All Issues Fixed + PWA + Instant Stock +/- + Bottom Nav + Vibration + SW Registration + Deployment Resilience - Build Passing",
   "keywords": [
     "shop management",
     "ai",

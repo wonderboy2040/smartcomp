@@ -53,47 +53,8 @@ export function DashboardView({ onNavigate, sheetsConnected = true }: { onNaviga
     }
   }, [invoices, items, customers, jobs, payments, expenses])
 
-  const hasCircuitBreaker = (data as any)?.circuitBreaker
-  const hasStaleDeployment = (data as any)?.staleDeployment
-  const warningMsg = (data as any)?.warning || (data as any)?.error
-
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Quantum Fix: Show warning banner if circuit breaker or stale deployment */}
-      {(hasCircuitBreaker || hasStaleDeployment) && (
-        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
-          <div className="flex gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-amber-600 text-xl">⚠️</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm text-amber-900">
-                {hasStaleDeployment ? '🔧 Google Apps Script Update Needed!' : '⏳ Sheets Temporarily Unavailable - Auto Recovery in 10s'}
-              </p>
-              <p className="text-xs text-amber-800 mt-1 whitespace-pre-wrap">{warningMsg}</p>
-              {hasStaleDeployment && (
-                <div className="mt-3 p-2.5 rounded-lg bg-white border border-amber-200 text-[11px] text-slate-700">
-                  <p className="font-bold">Fix Steps (2 min):</p>
-                  <ol className="list-decimal ml-4 mt-1 space-y-0.5">
-                    <li>Go to Settings → Sync tab → Copy latest <b>code.gs v5.0 Quantum</b></li>
-                    <li>Open Google Apps Script (script.google.com) → Paste code → Save</li>
-                    <li>Deploy → Manage Deployments → Edit → New Version → Deploy</li>
-                    <li>Ensure <b>Who has access: Anyone</b></li>
-                    <li>Copy new <b>/exec URL</b> → Paste in .env APPS_SCRIPT_URL → Redeploy site</li>
-                    <li>Or click Reset Breaker button below</li>
-                  </ol>
-                </div>
-              )}
-              <div className="flex gap-2 mt-3">
-                <button onClick={() => refetch()} className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700">🔄 Retry Now</button>
-                <button onClick={async () => { try { await fetch('/api/sheets/sync?action=resetCircuitBreaker', {method:'POST'}); refetch(); } catch {} }} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">♻️ Reset Breaker & Reload</button>
-                <button onClick={() => window.open('/api/config', '_blank')} className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 rounded-lg text-xs font-medium">Check Config</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header + PRO badge */}
       <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
         <div className="min-w-0 flex-1">
