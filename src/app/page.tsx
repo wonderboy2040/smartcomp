@@ -72,10 +72,15 @@ const PREFETCH_URLS = [
   '/api/items',
   '/api/customers',
   '/api/invoices?limit=200',
-  '/api/suppliers',
+  '/api/quotations?limit=200',
   '/api/jobs',
+  '/api/suppliers',
   '/api/expenses',
+  '/api/payments?limit=200',
+  '/api/shop',
 ]
+
+const CORE_PRIORITY_PANELS = ['dashboard', 'invoices', 'quotations', 'jobs', 'stock', 'customers', 'payments', 'settings', 'command', 'ai']
 
 export default function Home() {
   return (
@@ -92,11 +97,32 @@ function HomeInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
-  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab]))
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab, ...CORE_PRIORITY_PANELS]))
   const { theme, toggleTheme } = useTheme()
 
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
+
+  // Superfast 0ms Eager Background Bundle Preloader
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const preload = () => {
+      import('@/components/panels/Invoices')
+      import('@/components/panels/Quotations')
+      import('@/components/panels/Jobs')
+      import('@/components/panels/Stock')
+      import('@/components/panels/Customers')
+      import('@/components/panels/Payments')
+      import('@/components/panels/Settings')
+      import('@/components/panels/CommandCenter')
+      import('@/components/panels/AIIntelligence')
+    }
+    if ('requestIdleCallback' in window) {
+      ;(window as any).requestIdleCallback(preload)
+    } else {
+      setTimeout(preload, 100)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isConfigured) return
@@ -105,7 +131,7 @@ function HomeInner() {
     PREFETCH_URLS.forEach((url, i) => {
       const t = setTimeout(() => {
         if (!cancelled) prefetch(url)
-      }, 100 + i * 150)
+      }, 50 + i * 50)
       timers.push(t)
     })
     return () => {
