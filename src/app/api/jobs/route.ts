@@ -89,7 +89,13 @@ export async function POST(req: NextRequest) {
 
     const existing = await listRows<any>('Jobs')
     const todays = existing.filter((j) => String(j?.jobId || '').includes(dateStr))
-    const seq = String(todays.length + 1).padStart(3, '0')
+    let maxSeq = 0
+    for (const j of todays) {
+      const numStr = String(j?.jobId || '').slice(-3)
+      const n = parseInt(numStr, 10)
+      if (!isNaN(n) && n > maxSeq) maxSeq = n
+    }
+    const seq = String(maxSeq + 1).padStart(3, '0')
 
     const jobId = `SC${dateStr}${seq}`
     const trackToken = generateTrackToken()
