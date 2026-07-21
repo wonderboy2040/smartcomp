@@ -1110,7 +1110,25 @@ html, body {
   box-shadow: 0 0 0 4px rgba(124,58,237,0.12);
 }
 
-/* Print hide PRO badges */
+/* Print hide PRO badges and unclip preview modal */
 @media print {
   .super-badge, .ai-glow, .pro-notification { display: none !important; }
+  
+  /* If main window print is ever triggered while modal is active, unclip modal containers */
+  body {
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+  .fixed.inset-0 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    overflow: visible !important;
+  }
+  @page {
+    margin: 0;
+    size: A4 portrait;
+  }
 }

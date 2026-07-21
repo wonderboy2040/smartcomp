@@ -95,7 +95,35 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
   }, [doc])
 
   const handlePrint = () => {
-    window.print()
+    const idParam = encodeURIComponent(docId || doc?.id || doc?.number || '')
+    const typeParam = encodeURIComponent(docType || doc?.docType || 'invoice')
+    const iframeUrl = `/api/doc-html/${idParam}?type=${typeParam}&template=${encodeURIComponent(templateId)}&banner=${encodeURIComponent(bannerVariant)}`
+
+    let printFrame = document.getElementById('smartcomp_print_frame') as HTMLIFrameElement | null
+    if (!printFrame) {
+      printFrame = document.createElement('iframe')
+      printFrame.id = 'smartcomp_print_frame'
+      printFrame.style.position = 'fixed'
+      printFrame.style.right = '0'
+      printFrame.style.bottom = '0'
+      printFrame.style.width = '0'
+      printFrame.style.height = '0'
+      printFrame.style.border = '0'
+      printFrame.style.visibility = 'hidden'
+      document.body.appendChild(printFrame)
+    }
+
+    printFrame.src = iframeUrl
+    printFrame.onload = () => {
+      setTimeout(() => {
+        try {
+          printFrame?.contentWindow?.focus()
+          printFrame?.contentWindow?.print()
+        } catch {
+          window.print()
+        }
+      }, 250)
+    }
   }
 
   if (loading) {
