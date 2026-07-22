@@ -22,7 +22,6 @@ export function QuotationsPanel() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
-  const { data: shopSettings } = useFetch<any>('/api/shop', undefined)
   const { openPreview } = usePdfPreview()
 
   const { data: quotations, loading, refetch } = useFetch<any[]>(
@@ -201,7 +200,7 @@ export function QuotationsPanel() {
                           <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openPreview(`/api/pdf/${q.id}?type=quotation&template=${encodeURIComponent(shopSettings?.pdfTemplate || 'tally-classic')}&banner=${encodeURIComponent(shopSettings?.adBannerVariant || 'grid')}`, `Quotation ${q.number}`, q)}>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openPreview(`/api/pdf/${q.id}?type=quotation`, `Quotation ${q.number}`)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(q)} title="Edit Quotation">
@@ -301,7 +300,7 @@ export function QuotationsPanel() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openPreview(`/api/pdf/${q.id}?type=quotation&template=${encodeURIComponent(shopSettings?.pdfTemplate || 'tally-classic')}&banner=${encodeURIComponent(shopSettings?.adBannerVariant || 'grid')}`, `Quotation ${q.number}`, q)}
+                              onClick={() => openPreview(`/api/pdf/${q.id}?type=quotation`, `Quotation ${q.number}`)}
                               title="View PDF"
                             >
                               <Eye className="w-3.5 h-3.5" />

@@ -9,6 +9,7 @@ export interface DocumentHtmlViewerProps {
   docId?: string
   docType?: 'invoice' | 'quotation' | 'service'
   data?: any
+  title?: string
   onClose?: () => void
 }
 
@@ -25,16 +26,25 @@ const TEMPLATES = [
   { id: 'gst-minimal-white', name: 'Minimal White Pro', badge: 'ECO PRINT', primary: '#0f172a', accent: '#0284c7', bgLight: '#f0f9ff', headerBg: '#ffffff', headerText: '#0f172a' },
 ]
 
-export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }: DocumentHtmlViewerProps) {
-  const [doc, setDoc] = useState<any>(data || null)
-  const [loading, setLoading] = useState<boolean>(!data && !!docId)
+export function DocumentHtmlViewer({ docId, docType = 'invoice', data, title, onClose }: DocumentHtmlViewerProps) {
+  // The `data` prop is only trusted if it looks like a fully-rendered doc
+  // (i.e. it has the `calc` block we build server-side). The list-row shape
+  // coming from the Invoices/Quotations/Jobs tables is NOT enough to render
+  // the preview, so we always fetch the canonical doc-data in that case.
+  const dataIsFullDoc = !!(data && data.calc && data.shop && data.number)
+  const [doc, setDoc] = useState<any>(dataIsFullDoc ? data : null)
+  const [loading, setLoading] = useState<boolean>(!dataIsFullDoc && !!docId)
   const [error, setError] = useState<string | null>(null)
-  const [templateId, setTemplateId] = useState<string>('tally-classic')
-  const [bannerVariant, setBannerVariant] = useState<string>('flyer')
+  const [templateId, setTemplateId] = useState<string>(dataIsFullDoc && data.templateId ? data.templateId : 'tally-classic')
+  const [bannerVariant, setBannerVariant] = useState<string>(
+    dataIsFullDoc && (data.bannerVariant || data.adBannerVariant)
+      ? (data.bannerVariant || data.adBannerVariant)
+      : 'flyer'
+  )
   const printRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (data) {
+    if (dataIsFullDoc) {
       setDoc(data)
       if (data.templateId) setTemplateId(data.templateId)
       if (data.bannerVariant || data.adBannerVariant) setBannerVariant(data.bannerVariant || data.adBannerVariant)
@@ -44,24 +54,28 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
 
     if (!docId) return
 
+    let cancelled = false
     setLoading(true)
     setError(null)
-    fetch(`/api/doc-data/${docId}?type=${docType}`)
+    fetch(`/api/doc-data/${docId}?type=${docType}`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load document data')
         return res.json()
       })
       .then((d) => {
+        if (cancelled) return
         setDoc(d)
         if (d.templateId) setTemplateId(d.templateId)
         if (d.bannerVariant || d.adBannerVariant) setBannerVariant(d.bannerVariant || d.adBannerVariant)
         setLoading(false)
       })
       .catch((err) => {
+        if (cancelled) return
         setError(err.message || 'Error loading document')
         setLoading(false)
       })
-  }, [docId, docType, data])
+    return () => { cancelled = true }
+  }, [docId, docType, dataIsFullDoc])
 
   const currentTpl = useMemo(() => {
     return TEMPLATES.find((t) => t.id === templateId) || TEMPLATES[0]
@@ -128,9 +142,41 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', data, onClose }
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-white text-slate-700 min-h-[300px]">
-        <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-        <p className="text-sm font-semibold">Loading document preview...</p>
+      <div className="flex flex-col h-full bg-slate-100 text-slate-900 font-sans">
+        {/* Toolbar skeleton */}
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white px-4 py-3 shadow-md border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-400" />
+            <div>
+              <span className="font-bold text-sm block leading-tight">
+                {title || (docType === 'quotation' ? 'Quotation' : docType === 'service' ? 'Service Invoice' : 'Invoice')} Preview
+              </span>
+              <span className="text-[11px] text-slate-400">Loading document…</span>
+            </div>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+        {/* A4 skeleton */}
+        <div className="flex-1 overflow-y-auto p-2 sm:p-6 flex justify-center bg-slate-200/70">
+          <div className="bg-white text-slate-900 shadow-xl border border-slate-300 rounded-none w-full max-w-[210mm] min-h-[297mm] p-6 sm:p-8 flex flex-col gap-4">
+            <div className="h-6 w-1/3 bg-slate-200 rounded animate-pulse" />
+            <div className="h-4 w-1/2 bg-slate-100 rounded animate-pulse" />
+            <div className="h-32 bg-slate-100 rounded animate-pulse mt-4" />
+            <div className="h-4 w-2/3 bg-slate-100 rounded animate-pulse" />
+            <div className="h-24 bg-slate-100 rounded animate-pulse mt-4" />
+            <div className="flex items-center justify-center mt-6 text-slate-400 text-sm gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>Fetching document data…</span>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

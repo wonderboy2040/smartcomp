@@ -105,10 +105,33 @@ function setCached(key: string, data: any) {
 }
 
 function invalidateCache(sheet?: string) {
-  cache.clear()
-  quantumMemCache.clear()
-  // Keep lastDataHash for comparison, but reset pull time
-  lastPullTime.clear()
+  if (!sheet) {
+    // Wildcard invalidation — only happens on shop save / seed. Acceptable.
+    cache.clear()
+    quantumMemCache.clear()
+    lastPullTime.clear()
+    return
+  }
+  // Sheet-scoped invalidation: drop only the entries that belong to this sheet.
+  // This keeps invoices cached when, say, a job is completed, and vice versa —
+  // a major speedup for the multi-tab workflow.
+  const prefix = `list:${sheet}:`
+  const getPrefix = `get:${sheet}:`
+  for (const key of Array.from(cache.keys())) {
+    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('shop:') || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
+      cache.delete(key)
+    }
+  }
+  for (const key of Array.from(quantumMemCache.keys())) {
+    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('shop:') || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
+      quantumMemCache.delete(key)
+    }
+  }
+  for (const key of Array.from(lastPullTime.keys())) {
+    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('shop:') || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
+      lastPullTime.delete(key)
+    }
+  }
 }
 
 // ===== CONFIG =====
@@ -280,7 +303,7 @@ async function callAppsScript(payload: any): Promise<any> {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(sanitizeRowData(payload)),
         redirect: 'follow',
-        signal: AbortSignal.timeout(5000) // Quantum: 5s like PWA 3s abort + buffer, // v5.0: 8s — was 15s. Apps Script cold start is ~5s, so 8s is enough
+        signal: AbortSignal.timeout(10000) // 10s — Apps Script cold start can take 6-8s on first hit
       })
       if (res.status === 404) {
         throw new Error(`Apps Script 404 (attempt ${attempt}/2). Redeploy needed.`)
@@ -332,7 +355,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
       const res = await fetch(url.toString(), {
         method: 'GET',
         redirect: 'follow',
-        signal: AbortSignal.timeout(4000) // Quantum: 4s like PWA 3s abort, // v5.0: 6s — was 10s. GET reads are usually cached, so 6s is enough
+        signal: AbortSignal.timeout(8000) // 8s — was 4s. Apps Script cold start can take 6-8s.
       })
       if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/2)`)
       if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)

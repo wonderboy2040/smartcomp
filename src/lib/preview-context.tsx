@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { DocumentHtmlViewer } from '@/components/DocumentHtmlViewer'
 
@@ -30,9 +30,13 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
   const [title, setTitle] = useState<string>('Document Preview')
   const [docData, setDocData] = useState<any | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  // SSR-safe initial mount: true on the browser, false on the server. This avoids
+  // a one-frame flash where the first preview click would be ignored.
+  const [mounted, setMounted] = useState<boolean>(typeof window !== 'undefined')
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const openPreview = useCallback((u: string, t = 'Document Preview', d?: any) => {
     setUrl(u)
@@ -50,16 +54,18 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
   const toggleCollapse = useCallback(() => setCollapsed((c) => !c), [])
 
   // Parse docId and docType from url
-  const { docId, docType } = React.useMemo(() => {
-    if (!url) return { docId: null, docType: 'invoice' }
+  const { docId, docType } = useMemo(() => {
+    if (!url) return { docId: null as string | null, docType: 'invoice' as 'invoice' | 'quotation' | 'service' }
     try {
       const parsedUrl = new URL(url, 'http://localhost')
       const pathSegments = parsedUrl.pathname.split('/').filter(Boolean)
       const id = pathSegments[pathSegments.length - 1] || null
-      const type = parsedUrl.searchParams.get('type') || (parsedUrl.pathname.includes('service') ? 'service' : 'invoice')
+      const type =
+        parsedUrl.searchParams.get('type') ||
+        (parsedUrl.pathname.includes('service') ? 'service' : 'invoice')
       return { docId: id, docType: type as 'invoice' | 'quotation' | 'service' }
     } catch {
-      return { docId: null, docType: 'invoice' as const }
+      return { docId: null as string | null, docType: 'invoice' as const }
     }
   }, [url])
 
@@ -73,25 +79,27 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
     return () => window.removeEventListener('keydown', onKey)
   }, [url, closePreview])
 
-  const panel =
-    mounted && url && docId
-      ? createPortal(
-          !collapsed ? (
-            // Full Overlay Drawer / Modal
-            <div className="fixed inset-0 z-[100] flex flex-col bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-150">
-              <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-4 bg-white shadow-2xl rounded-none sm:rounded-xl overflow-hidden flex flex-col border border-slate-700">
-                <DocumentHtmlViewer
-                  docId={docId}
-                  docType={docType}
-                  data={docData}
-                  onClose={closePreview}
-                />
-              </div>
-            </div>
-          ) : null,
-          document.body
-        )
-      : null
+  const panel = useMemo(() => {
+    if (!mounted || !url || !docId) return null
+    return createPortal(
+      !collapsed ? (
+        // Full Overlay Drawer / Modal — opens instantly on click
+        <div className="fixed inset-0 z-[100] flex flex-col bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-4 bg-white shadow-2xl rounded-none sm:rounded-xl overflow-hidden flex flex-col border border-slate-700">
+            <DocumentHtmlViewer
+              key={`${docId}:${docType}`}
+              docId={docId}
+              docType={docType}
+              data={docData}
+              title={title}
+              onClose={closePreview}
+            />
+          </div>
+        </div>
+      ) : null,
+      document.body
+    )
+  }, [mounted, url, docId, docType, docData, title, collapsed, closePreview])
 
   return (
     <PreviewContext.Provider value={{ openPreview, closePreview, toggleCollapse }}>

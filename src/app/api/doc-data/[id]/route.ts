@@ -10,6 +10,29 @@ type DocDataCacheEntry = { data: any; expires: number }
 const DOC_DATA_CACHE = new Map<string, DocDataCacheEntry>()
 const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
+// Shop is global and rarely changes. Cache it for 5 min to avoid re-fetching
+// on every doc-data call (which would otherwise double the latency).
+type ShopCacheEntry = { shop: any; expires: number }
+let shopCache: ShopCacheEntry | null = null
+const SHOP_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function getShopFast(): Promise<any> {
+  if (shopCache && shopCache.expires > Date.now()) {
+    return shopCache.shop
+  }
+  const shopRows = await listRows<any>('Shop').catch(() => [])
+  const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
+  shopCache = { shop, expires: Date.now() + SHOP_CACHE_TTL }
+  return shop
+}
+
+// Product images are static — load once per process.
+let productImagesCache: any = null
+function getProductImagesFast(): any {
+  if (!productImagesCache) productImagesCache = loadProductImages()
+  return productImagesCache
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -26,14 +49,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
-    const shopRows = await listRows<any>('Shop').catch(() => [])
-    const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
+    const shop = await getShopFast()
 
     const finalTemplateId = templateId || String(shop.pdfTemplate || '') || 'tally-classic'
     const finalBannerVariant = bannerVariant || String(shop.adBannerVariant || '') || 'grid'
 
     let docData: any = null
-    const productImages = loadProductImages()
+    const productImages = getProductImagesFast()
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
@@ -51,8 +73,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         number: String(invoice.number || ''),
         date: invoice.date || invoice.createdAt || new Date().toISOString(),
         docType: 'invoice',
-        templateId,
-        bannerVariant,
+        templateId: finalTemplateId,
+        bannerVariant: finalBannerVariant,
         productImages,
         shop: {
           name: String(shop.name || 'Smart Computers'),
@@ -101,8 +123,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         date: q.date || q.createdAt || new Date().toISOString(),
         validTill: q.validTill || undefined,
         docType: 'quotation',
-        templateId,
-        bannerVariant,
+        templateId: finalTemplateId,
+        bannerVariant: finalBannerVariant,
         productImages,
         shop: {
           name: String(shop.name || 'Smart Computers'),
@@ -161,8 +183,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         number: `JOB-${job.jobId || job.id}`,
         date: job.completedDate || job.createdAt || new Date().toISOString(),
         docType: 'service',
-        templateId,
-        bannerVariant,
+        templateId: finalTemplateId,
+        bannerVariant: finalBannerVariant,
         productImages,
         jobId: job.jobId || job.id,
         deviceType: job.deviceType,
@@ -215,7 +237,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     DOC_DATA_CACHE.set(cacheKey, { data: docData, expires: Date.now() + CACHE_TTL })
-    return NextResponse.json(docData)
+    return NextResponse.json(docData, {
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=300' },
+    })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
   }

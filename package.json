@@ -1,18 +1,16 @@
 {
-  "name": "smart-computers-panel-pro",
+  "name": "smartcomp",
   "private": true,
-  "version": "8.0.0-quantum-ultimate-superfast",
-  "description": "SmartComp PRO v8.0 Quantum Ultimate Superfast - All Issues Fixed + PWA + Instant Stock +/- + Bottom Nav + Vibration + SW Registration + Deployment Resilience - Build Passing",
+  "version": "9.0.0-clean",
+  "description": "SmartComp — Sales & Service Panel. Cleaned, performance-tuned build with instant preview, sheet-scoped cache, and the bloated AI/Command/Automation/Poster modules removed.",
   "keywords": [
     "shop management",
-    "ai",
-    "super intelligence",
-    "automation",
-    "business intelligence",
     "gst billing",
     "service management",
     "stock",
-    "erp"
+    "erp",
+    "invoicing",
+    "quotations"
   ],
   "main": "electron/main.js",
   "scripts": {

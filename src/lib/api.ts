@@ -102,12 +102,12 @@ function setQuantumMem(key: string, data: any): string {
   return hash
 }
 
-const STALE_MS = 120 * 1000 // v5.0: 120s — matches Apps Script 60s cache + extra 60s window
-const RETRY_ATTEMPTS = 1 // Reduced from 2 to 1 for faster failure feedback
-const RETRY_DELAY = 400 // Quantum: 400ms (was 500ms) - faster retry like PWA
-const FETCH_TIMEOUT_MS = 5000 // Quantum: 5s (was 8s) - like PWA 3s abort + buffer for desktop UX
-const QUANTUM_FETCH_TIMEOUT = 3000 // Quantum ultra: 3s like index.html AbortController 3s
-const DASHBOARD_INVALIDATE_DEBOUNCE = 600 // Quantum: 600ms (was 800ms) - faster debounce
+const STALE_MS = 120 * 1000 // 120s — matches Apps Script 60s cache + extra 60s window
+const RETRY_ATTEMPTS = 1
+const RETRY_DELAY = 400
+const FETCH_TIMEOUT_MS = 8000 // 8s for writes — Apps Script cold start can take 6-8s
+const QUANTUM_FETCH_TIMEOUT = 8000 // 8s for GET — was 3s, far too short for cold starts
+const DASHBOARD_INVALIDATE_DEBOUNCE = 600
 
 // Offline detection
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
