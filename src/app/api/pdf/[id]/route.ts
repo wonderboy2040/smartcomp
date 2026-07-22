@@ -131,6 +131,92 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           'Cache-Control': 'no-cache',
         },
       })
+    } else if (type === 'service') {
+      const job = await getRow<any>('Jobs', id)
+      if (!job) return NextResponse.json({ error: 'Service job not found' }, { status: 404 })
+
+      const partsUsed = safeJsonParse<any[]>(job.partsUsedJson || job.partsUsed || '[]', [])
+      const lineItems: LineItem[] = [
+        ...partsUsed.map((p: any) => ({
+          name: String(p.name || 'Spare Part'),
+          sku: String(p.sku || ''),
+          hsnCode: String(p.hsnCode || ''),
+          quantity: Number(p.qty || 1),
+          rate: Number(p.sellPrice || p.price || p.costPrice || 0),
+          gstApplicable: false,
+          gstRate: 0,
+          costPrice: Number(p.costPrice || 0),
+        })),
+        {
+          name: `Service & Repair Charge - ${job.deviceType || 'Device'} ${job.brandModel ? `(${job.brandModel})` : ''}`,
+          sku: 'SERVICE',
+          hsnCode: '9983',
+          quantity: 1,
+          rate: Number(job.serviceCharge) || Number(job.finalAmount) || 0,
+          gstApplicable: false,
+          gstRate: 0,
+          costPrice: 0,
+        },
+      ]
+
+      const finalLineItems = partsUsed.length > 0 ? lineItems : [lineItems[lineItems.length - 1]]
+      const calc = computeInvoice(finalLineItems, {
+        courierCharges: 0,
+        otherCharges: 0,
+        discount: 0,
+      })
+
+      const jobTotal = Number(job.finalAmount) || Number(job.estimatedAmount) || calc.grandTotal
+      const paid = (Number(job.paidAmount) || 0) + (Number(job.advanceAmount) || 0)
+
+      const pdfBuffer = await generateInvoicePdf({
+        number: `INV-${String(job.jobId || id)}`,
+        date: new Date(job.createdAt || job.date || Date.now()),
+        shop: {
+          name: String(shop.name || 'Smart Computers'),
+          owner: String(shop.owner || ''),
+          phone: String(shop.phone || ''),
+          email: String(shop.email || ''),
+          address: String(shop.address || ''),
+          gstNumber: String(shop.gstNumber || ''),
+          state: String(shop.state || ''),
+          upiId: String(shop.upiId || ''),
+          bankName: String(shop.bankName || ''),
+          bankAccount: String(shop.bankAccount || ''),
+          bankIfsc: String(shop.bankIfsc || ''),
+          bankBranch: String(shop.bankBranch || ''),
+        },
+        customer: {
+          name: String(job.customerName || 'Walk-in Customer'),
+          phone: String(job.customerMobile || ''),
+          address: String(job.customerAddress || ''),
+          gstNumber: '',
+          state: '',
+        },
+        calc: {
+          ...calc,
+          grandTotal: jobTotal,
+        },
+        notes: String(job.diagnosisNotes || job.notes || `Service completed for ${job.deviceType || 'device'}. Problem: ${job.problemDesc || ''}. ${job.accessories ? `Accessories: ${job.accessories}` : ''}`),
+        terms: String(shop.termsInvoice || `${Number(job.warrantyDays) || 30} days service warranty. Parts warranty as per manufacturer. Please collect device within 30 days.`),
+        amountPaid: paid,
+        amountDue: Math.max(0, jobTotal - paid),
+        paymentType: String(job.paymentMode || 'cash'),
+        paymentStatus: paid >= jobTotal ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
+        docType: 'service',
+        templateId,
+        productImages: loadProductImages(),
+        adBannerVariant: bannerVariant,
+        ...(job as any),
+      })
+
+      return new NextResponse(pdfBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="Service-Invoice-${job.jobId || id}.pdf"`,
+          'Cache-Control': 'no-cache',
+        },
+      })
     }
 
     return NextResponse.json({ error: 'Invalid type' }, { status: 400 })

@@ -1112,13 +1112,20 @@ html, body {
 
 /* Print hide PRO badges and unclip preview modal */
 @media print {
-  .super-badge, .ai-glow, .pro-notification { display: none !important; }
+  .super-badge, .ai-glow, .pro-notification, nav, header, sidebar, .print\:hidden {
+    display: none !important;
+  }
   
-  /* If main window print is ever triggered while modal is active, unclip modal containers */
   body {
     background: #ffffff !important;
+    color: #0f172a !important;
     overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
+
   .fixed.inset-0 {
     position: static !important;
     background: transparent !important;
@@ -1127,8 +1134,9 @@ html, body {
     display: block !important;
     overflow: visible !important;
   }
+
   @page {
-    margin: 0;
     size: A4 portrait;
+    margin: 10mm;
   }
 }

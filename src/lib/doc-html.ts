@@ -901,24 +901,49 @@ export async function generateInvoiceHtml(
   }
 
   /* ===== Print rules — perfect A4 ===== */
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
   @media print {
-    body { background: #fff !important; padding: 0 !important; gap: 0 !important; }
+    html, body {
+      background: #ffffff !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      gap: 0 !important;
+      width: 100% !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     .toolbar { display: none !important; }
     .sheet {
-      width: 210mm;
-      min-height: 297mm;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: auto !important;
       box-shadow: none !important;
+      border: none !important;
       border-radius: 0 !important;
       padding: 0 !important;
       margin: 0 !important;
     }
     .header { margin: 0 0 10px 0; border-radius: 0; }
     /* Avoid breaking inside these blocks */
-    .items-table tbody tr, .bill-box, .info-block, .totals-table tr, .hsn-table tr { page-break-inside: avoid; }
+    .items-table tbody tr,
+    .bill-box,
+    .info-block,
+    .totals-table tr,
+    .hsn-table tr,
+    .bottom-split,
+    .info-row,
+    .signature,
+    .ad-banner,
+    .footer {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
     /* Repeat table header on each printed page */
     thead { display: table-header-group; }
     tfoot { display: table-footer-group; }
-    .ad-banner, .signature, .footer { page-break-inside: avoid; }
   }
 
   /* Responsive on small screens — keep A4 ratio but shrink to fit */
@@ -1064,23 +1089,29 @@ export async function generateInvoiceHtml(
 
 function buildPaymentBox(data: PdfDocData, isService: boolean): string {
   if (isService) {
+    const brandModel = (data as any).brandModel || (data as any).deviceType || 'Computer / Laptop'
+    const serialNumber = (data as any).serialNumber || 'N/A'
+    const problemDesc = (data as any).problemDesc || 'Repair & Maintenance'
     const serviceType = (data as any).serviceType || 'In-Shop'
-    const priority = (data as any).priority || 'Normal'
     const warrantyDays = (data as any).warrantyDays || 30
     return `
-      <h3>PAYMENT &amp; SERVICE DETAILS</h3>
-      <div class="cline">Service Type: ${escapeHtml(serviceType)} | Priority: ${escapeHtml(priority)}</div>
-      <div class="cline">Warranty: ${escapeHtml(String(warrantyDays))} days</div>
-      ${data.amountDue !== undefined ? `<div class="cline ${data.amountDue > 0 ? 'gst' : ''}" style="${data.amountDue > 0 ? 'color:#dc2626' : 'color:#16a34a'};font-weight:700;">${data.amountDue > 0 ? `Due: ${formatCurrency(data.amountDue)}` : 'PAID &#10003;'}</div>` : ''}
+      <h3>SERVICE &amp; REPAIR DETAILS</h3>
+      <div class="cline" style="font-weight:700;color:#0f172a;">Device: ${escapeHtml(brandModel)}</div>
+      <div class="cline">S/N: ${escapeHtml(serialNumber)} | Type: ${escapeHtml(serviceType)}</div>
+      <div class="cline">Issue: ${escapeHtml(problemDesc)}</div>
+      <div class="cline" style="color:#047857;font-weight:700;margin-top:2px;">Service Warranty: ${escapeHtml(String(warrantyDays))} Days</div>
+      ${data.amountDue !== undefined
+        ? `<div class="cline ${data.amountDue > 0 ? 'gst' : ''}" style="${data.amountDue > 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;'}margin-top:2px;">${data.amountDue > 0 ? `Balance Due: ${formatCurrency(data.amountDue).replace('Rs. ', '₹')}` : 'STATUS: PAID &#10003;'}</div>`
+        : ''}
     `
   }
   return `
     <h3>PAYMENT &amp; SHIPPING DETAILS</h3>
     <div class="cline">Payment: ${escapeHtml((data.paymentType || 'cash').toUpperCase())} | Status: ${escapeHtml((data.paymentStatus || 'paid').toUpperCase())}</div>
     ${data.amountDue !== undefined && data.amountDue > 0
-      ? `<div class="cline gst" style="color:#dc2626;">Balance Due: ${formatCurrency(data.amountDue)}</div>`
+      ? `<div class="cline gst" style="color:#dc2626;font-weight:700;">Balance Due: ${formatCurrency(data.amountDue).replace('Rs. ', '₹')}</div>`
       : data.amountPaid !== undefined && data.amountPaid > 0
-        ? `<div class="cline" style="color:#16a34a;font-weight:700;">Paid: ${formatCurrency(data.amountPaid)}</div>`
+        ? `<div class="cline" style="color:#16a34a;font-weight:700;">Paid: ${formatCurrency(data.amountPaid).replace('Rs. ', '₹')}</div>`
         : ''}
     ${data.placeOfSupply ? `<div class="cline">Place of Supply: ${escapeHtml(data.placeOfSupply)}</div>` : ''}
     ${data.reverseCharge ? `<div class="cline gst">Reverse Charge: Yes</div>` : ''}
