@@ -6,7 +6,7 @@ import { DocumentHtmlViewer } from '@/components/DocumentHtmlViewer'
 
 interface PreviewApi {
   /** Open the in-app fast HTML preview panel with the given URL or doc parameters. */
-  openPreview: (url: string, title?: string) => void
+  openPreview: (url: string, title?: string, data?: any) => void
   /** Fully close the preview panel. */
   closePreview: () => void
   /** Collapse / expand the preview panel. */
@@ -28,19 +28,22 @@ export function usePdfPreview(): PreviewApi {
 export function PdfPreviewProvider({ children }: { children: React.ReactNode }) {
   const [url, setUrl] = useState<string | null>(null)
   const [title, setTitle] = useState<string>('Document Preview')
+  const [docData, setDocData] = useState<any | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => setMounted(true), [])
 
-  const openPreview = useCallback((u: string, t = 'Document Preview') => {
+  const openPreview = useCallback((u: string, t = 'Document Preview', d?: any) => {
     setUrl(u)
     setTitle(t)
+    setDocData(d || null)
     setCollapsed(false)
   }, [])
 
   const closePreview = useCallback(() => {
     setUrl(null)
+    setDocData(null)
     setCollapsed(false)
   }, [])
 
@@ -80,6 +83,7 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
                 <DocumentHtmlViewer
                   docId={docId}
                   docType={docType}
+                  data={docData}
                   onClose={closePreview}
                 />
               </div>

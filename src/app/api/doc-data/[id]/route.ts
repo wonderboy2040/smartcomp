@@ -5,17 +5,32 @@ import { safeJsonParse } from '@/lib/utils'
 import { loadProductImages } from '@/lib/productImages'
 import QRCode from 'qrcode'
 
+// Fast in-memory cache for doc data
+type DocDataCacheEntry = { data: any; expires: number }
+const DOC_DATA_CACHE = new Map<string, DocDataCacheEntry>()
+const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const url = new URL(req.url)
     const type = url.searchParams.get('type') || 'invoice'
+    const templateId = url.searchParams.get('template') || ''
+    const bannerVariant = url.searchParams.get('banner') || ''
+
+    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}`
+    const cached = DOC_DATA_CACHE.get(cacheKey)
+    if (cached && cached.expires > Date.now()) {
+      return NextResponse.json(cached.data, {
+        headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=600' },
+      })
+    }
 
     const shopRows = await listRows<any>('Shop').catch(() => [])
     const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
 
-    const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
-    const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
+    const finalTemplateId = templateId || String(shop.pdfTemplate || '') || 'tally-classic'
+    const finalBannerVariant = bannerVariant || String(shop.adBannerVariant || '') || 'grid'
 
     let docData: any = null
     const productImages = loadProductImages()
@@ -199,6 +214,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    DOC_DATA_CACHE.set(cacheKey, { data: docData, expires: Date.now() + CACHE_TTL })
     return NextResponse.json(docData)
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
