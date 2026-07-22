@@ -657,7 +657,7 @@ function SyncStatus() {
                   </ol>
                   <div className="mt-3 p-2 bg-white border border-amber-200 rounded text-[11px]">
                     <p className="font-semibold mb-1">Why this happens:</p>
-                    <p>The Apps Script returned an HTML error page (titled "فشل" / "Error") instead of JSON. This means the OLD script code has a runtime error — usually because it tries to access sheets before checking if the script is properly deployed. The NEW code (v2.6) handles the <code className="bg-amber-100 px-1 rounded">test</code> action WITHOUT touching sheets, so Test Connection will work even if sheets aren't set up yet.</p>
+                    <p>The Apps Script returned an HTML error page (titled "SmartComp") instead of JSON. This means the OLD script code has a runtime error — usually because it tries to access sheets before checking if the script is properly deployed. The NEW code (v2.6) handles the <code className="bg-amber-100 px-1 rounded">test</code> action WITHOUT touching sheets, so Test Connection will work even if sheets aren't set up yet.</p>
                   </div>
                   <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-[11px]">
                     <p className="font-semibold mb-1">After updating code.gs:</p>

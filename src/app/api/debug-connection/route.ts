@@ -118,8 +118,8 @@ FIX (one-click):
   6. Come back to this page → click "Test Connection"`
   }
   // Error page detection (multilingual)
-  if (title && /error|កំហុស|错误|錯誤|ত্রুটি|गलती|erreur|fehler|erro/i.test(title)) {
-    return `APPS SCRIPT ERROR: Google is showing an error page titled "${title}". This usually means the script has a runtime error. Open the Apps Script editor → Run → "doGet" or "doPost" function → check the execution log for the error. Common causes: (1) syntax error in code.gs, (2) the sheet name doesn\'t exist, (3) missing permissions for SpreadsheetApp.`
+  if (title && /error|فشل|កំហុស|错误|錯誤|ত্রুটি|गलती|erreur|fehler|erro/i.test(title)) {
+    return `SmartComp Apps Script Error: Google returned an error page titled "${title || 'SmartComp'}". This usually means the script has a runtime error or stale deployment version. Open Apps Script editor → Deploy → Manage deployments → Edit to New version → Deploy.`
   }
   if (lowerBody.includes('not found') || lowerBody.includes('404')) {
     return 'DEPLOYMENT NOT FOUND: The Apps Script deployment was deleted or the URL is stale. Create a new deployment: Deploy → New deployment → Web app → copy new /exec URL.'
