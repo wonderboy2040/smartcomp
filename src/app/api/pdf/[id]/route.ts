@@ -2,11 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRow, listRows, isConfigured } from '@/lib/sheets-client'
 import { generateInvoicePdf } from '@/lib/pdf'
 import { loadProductImages } from '@/lib/productImages'
-
-// Server-only route (uses fs to read product images for the ad banner)
-export const runtime = 'nodejs'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
+
+export const runtime = 'nodejs'
+
+// Server in-memory PDF cache (10 min TTL for instant back-to-back downloads)
+type PdfCacheEntry = { buffer: Buffer; expires: number }
+const PDF_CACHE = new Map<string, PdfCacheEntry>()
+const PDF_CACHE_TTL = 10 * 60 * 1000
+
+// Fast Shop cache (5 min TTL)
+type ShopCacheEntry = { shop: any; expires: number }
+let shopCache: ShopCacheEntry | null = null
+const SHOP_CACHE_TTL = 5 * 60 * 1000
+
+async function getShopFast(): Promise<any> {
+  if (shopCache && shopCache.expires > Date.now()) {
+    return shopCache.shop
+  }
+  const shopRows = await listRows<any>('Shop').catch(() => [])
+  const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
+  shopCache = { shop, expires: Date.now() + SHOP_CACHE_TTL }
+  return shop
+}
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,11 +37,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const url = new URL(req.url)
     const type = url.searchParams.get('type') || 'invoice'
 
-    const shopRows = await listRows<any>('Shop')
-    const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
+    const shop = await getShopFast()
 
     const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
-    const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
+    const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'flyer'
+
+    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}`
+    const cached = PDF_CACHE.get(cacheKey)
+    if (cached && cached.expires > Date.now()) {
+      return new NextResponse(cached.buffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename="${type}-${id}.pdf"`,
+          'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+        },
+      })
+    }
+
+    let pdfBuffer: Buffer | null = null
+    let filename = `${type}-${id}.pdf`
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
@@ -35,7 +68,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         discount: Number(invoice.discount) || 0,
       })
 
-      const pdfBuffer = await generateInvoicePdf({
+      filename = `Invoice-${invoice.number || id}.pdf`
+
+      pdfBuffer = await generateInvoicePdf({
         number: String(invoice.number || ''),
         date: new Date(invoice.date || invoice.createdAt || Date.now()),
         shop: {
@@ -71,14 +106,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         productImages: loadProductImages(),
         adBannerVariant: bannerVariant,
       })
-
-      return new NextResponse(pdfBuffer, {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="Invoice-${invoice.number}.pdf"`,
-          'Cache-Control': 'no-cache',
-        },
-      })
     } else if (type === 'quotation') {
       const q = await getRow<any>('Quotations', id)
       if (!q) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -90,7 +117,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         discount: Number(q.discount) || 0,
       })
 
-      const pdfBuffer = await generateInvoicePdf({
+      filename = `Quotation-${q.number || id}.pdf`
+
+      pdfBuffer = await generateInvoicePdf({
         number: String(q.number || ''),
         date: new Date(q.date || q.createdAt || Date.now()),
         validTill: q.validTill ? new Date(q.validTill) : undefined,
@@ -122,14 +151,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         templateId,
         productImages: loadProductImages(),
         adBannerVariant: bannerVariant,
-      })
-
-      return new NextResponse(pdfBuffer, {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="Quotation-${q.number}.pdf"`,
-          'Cache-Control': 'no-cache',
-        },
       })
     } else if (type === 'service') {
       const job = await getRow<any>('Jobs', id)
@@ -169,7 +190,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       const jobTotal = Number(job.finalAmount) || Number(job.estimatedAmount) || calc.grandTotal
       const paid = (Number(job.paidAmount) || 0) + (Number(job.advanceAmount) || 0)
 
-      const pdfBuffer = await generateInvoicePdf({
+      filename = `Service-Invoice-${job.jobId || id}.pdf`
+
+      pdfBuffer = await generateInvoicePdf({
         number: `INV-${String(job.jobId || id)}`,
         date: new Date(job.createdAt || job.date || Date.now()),
         shop: {
@@ -197,8 +220,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           ...calc,
           grandTotal: jobTotal,
         },
-        notes: String(job.diagnosisNotes || job.notes || `Service completed for ${job.deviceType || 'device'}. Problem: ${job.problemDesc || ''}. ${job.accessories ? `Accessories: ${job.accessories}` : ''}`),
-        terms: String(shop.termsInvoice || `${Number(job.warrantyDays) || 30} days service warranty. Parts warranty as per manufacturer. Please collect device within 30 days.`),
+        notes: String(job.diagnosisNotes || job.notes || `Service completed for ${job.deviceType || 'device'}. Problem: ${job.problemDesc || ''}.`),
+        terms: String(shop.termsInvoice || `${Number(job.warrantyDays) || 30} days service warranty. Please collect device within 30 days.`),
         amountPaid: paid,
         amountDue: Math.max(0, jobTotal - paid),
         paymentType: String(job.paymentMode || 'cash'),
@@ -209,19 +232,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         adBannerVariant: bannerVariant,
         ...(job as any),
       })
-
-      return new NextResponse(pdfBuffer, {
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': `inline; filename="Service-Invoice-${job.jobId || id}.pdf"`,
-          'Cache-Control': 'no-cache',
-        },
-      })
     }
 
-    return NextResponse.json({ error: 'Invalid type' }, { status: 400 })
+    if (!pdfBuffer) {
+      return NextResponse.json({ error: 'Invalid document type' }, { status: 400 })
+    }
+
+    // Cache PDF buffer for instant subsequent requests
+    PDF_CACHE.set(cacheKey, { buffer: pdfBuffer, expires: Date.now() + PDF_CACHE_TTL })
+
+    return new NextResponse(pdfBuffer, {
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${filename}"`,
+        'Cache-Control': 'private, max-age=300, stale-while-revalidate=600',
+      },
+    })
   } catch (e: any) {
     console.error('PDF generation error:', e)
-    return NextResponse.json({ error: e?.message || 'Failed' }, { status: 500 })
+    return NextResponse.json({ error: e?.message || 'Failed to generate PDF' }, { status: 500 })
   }
 }
