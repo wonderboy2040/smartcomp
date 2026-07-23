@@ -90,10 +90,10 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
   const tableHead = `rgb(${template.tableHead.join(',')})`
 
   const AD_IMGS = [
-    { src: '/ads/computers.png', label: 'Computers' },
-    { src: '/ads/laptop.png', label: 'Laptops' },
-    { src: '/ads/printers.png', label: 'Printers' },
-    { src: '/ads/accessories.png', label: 'Accessories' },
+    { src: '/posters/gaming-pc.webp', label: 'Computers' },
+    { src: '/posters/laptop-sale.webp', label: 'Laptops' },
+    { src: '/posters/printer-offer.webp', label: 'Printers' },
+    { src: '/posters/accessories.webp', label: 'Accessories' },
   ]
   const renderAdBanner = (style: string) => {
     // Full-width "merged" band: spans the content width (no side margins) so
@@ -112,8 +112,8 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
     )
     if (style === 'flyer' || style === 'grid') {
       const poster = style === 'flyer'
-        ? '/posters/smartcomputers-a4-flyer-landscape.png'
-        : '/posters/smartcomputers-product-grid.png'
+        ? '/posters/smartcomputers-a4-flyer-landscape.webp'
+        : '/posters/smartcomputers-product-grid.webp'
       return (
         <div style={{ ...fullBleed, marginTop: '22px' }}>
           <div style={{ borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, background: '#fff', lineHeight: 0 }}>

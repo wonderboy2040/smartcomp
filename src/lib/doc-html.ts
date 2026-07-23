@@ -439,7 +439,7 @@ export async function generateInvoiceHtml(
   // Ad banner variant — uses STATIC image URLs (no base64 bloat)
   // Browser caches these once and they are reused across all invoices.
   const adVariant = data.adBannerVariant || 'grid'
-  const adBanner = buildAdBanner(adVariant, data.shop, tpl)
+  const adBanner = buildAdBanner(adVariant, data.shop, tpl, data.productImages)
 
   // Right-side "ship to / payment" box content
   const rightBoxContent = isInvoice || isService
@@ -1128,74 +1128,75 @@ function buildQuotationBox(data: PdfDocData): string {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Ad banner builders — use static image URLs (no base64 bloat)
+// Ad banner builders — support .webp poster images with base64 fallback
 // ──────────────────────────────────────────────────────────────────────
 
-function buildAdBanner(variant: string, shop: ShopInfo, tpl: HtmlTemplate): string {
+function buildAdBanner(variant: string, shop: ShopInfo, tpl: HtmlTemplate, productImages?: any): string {
+  if (variant === 'none') return ''
+
   const phone = shop.phone || ''
   const shopName = shop.name || 'Smart Computers'
 
-  // Variant: grid (default) — 4 product tiles + headline
+  const flyerSrc = productImages?.flyer || '/posters/smartcomputers-a4-flyer-landscape.webp'
+  const gridSrc = productImages?.productgrid || '/posters/smartcomputers-product-grid.webp'
+  const compSrc = productImages?.computers || '/posters/gaming-pc.webp'
+  const laptopSrc = productImages?.laptop || '/posters/laptop-sale.webp'
+  const printerSrc = productImages?.printers || '/posters/printer-offer.webp'
+  const accSrc = productImages?.accessories || '/posters/accessories.webp'
+
+  // Variant: flyer — landscape WebP flyer image (1000x285 px format)
+  if (variant === 'flyer') {
+    return `
+      <div class="ad-banner" style="padding:3px;margin-top:auto;page-break-inside:avoid;break-inside:avoid;">
+        <img src="${flyerSrc}" alt="Offers" style="width:100%;max-height:65px;object-fit:cover;border-radius:4px;display:block;" />
+      </div>
+    `
+  }
+
+  // Variant: grid — WebP 4x4 product grid poster (1000x285 px format)
   if (variant === 'grid') {
     return `
-      <div class="ad-banner grid-4">
-        <div class="ad-tile"><img src="/ads/computers.png" alt="Computers" /><div class="ad-tile-label">Computers</div></div>
-        <div class="ad-tile"><img src="/ads/laptop.png" alt="Laptops" /><div class="ad-tile-label">Laptops</div></div>
-        <div class="ad-tile"><img src="/ads/printers.png" alt="Printers" /><div class="ad-tile-label">Printers</div></div>
-        <div class="ad-tile"><img src="/ads/accessories.png" alt="Accessories" /><div class="ad-tile-label">Accessories</div></div>
+      <div class="ad-banner" style="padding:3px;margin-top:auto;page-break-inside:avoid;break-inside:avoid;">
+        <img src="${gridSrc}" alt="Product Showcase" style="width:100%;max-height:65px;object-fit:cover;border-radius:4px;display:block;" />
       </div>
-      <div style="text-align:center;margin-top:6px;font-size:9px;color:${tpl.accent};font-weight:700;letter-spacing:0.04em;">CHECK OUT OUR LATEST OFFERS! ${phone ? `&nbsp; Call ${escapeHtml(phone)}` : ''}</div>
     `
   }
 
   // Variant: featured — left panel + 4 product tiles
   if (variant === 'featured') {
     return `
-      <div class="ad-banner featured">
+      <div class="ad-banner featured" style="page-break-inside:avoid;break-inside:avoid;">
         <div class="ad-left">
           <div class="ad-headline">WE ALSO SUPPLY</div>
           <div class="ad-sub">${escapeHtml(shopName)}</div>
           ${phone ? `<div class="ad-sub">Call: ${escapeHtml(phone)}</div>` : ''}
         </div>
         <div class="ad-right">
-          <div class="ad-tile"><img src="/ads/computers.png" alt="Computers" /><div class="ad-tile-label">Computers</div></div>
-          <div class="ad-tile"><img src="/ads/laptop.png" alt="Laptops" /><div class="ad-tile-label">Laptops</div></div>
-          <div class="ad-tile"><img src="/ads/printers.png" alt="Printers" /><div class="ad-tile-label">Printers</div></div>
-          <div class="ad-tile"><img src="/ads/accessories.png" alt="Accessories" /><div class="ad-tile-label">Accessories</div></div>
+          <div class="ad-tile"><img src="${compSrc}" alt="Computers" /><div class="ad-tile-label">Computers</div></div>
+          <div class="ad-tile"><img src="${laptopSrc}" alt="Laptops" /><div class="ad-tile-label">Laptops</div></div>
+          <div class="ad-tile"><img src="${printerSrc}" alt="Printers" /><div class="ad-tile-label">Printers</div></div>
+          <div class="ad-tile"><img src="${accSrc}" alt="Accessories" /><div class="ad-tile-label">Accessories</div></div>
         </div>
       </div>
     `
   }
 
-  // Variant: strip — compact horizontal
+  // Variant: strip — compact horizontal strip
   if (variant === 'strip') {
     return `
-      <div class="ad-banner">
+      <div class="ad-banner" style="page-break-inside:avoid;break-inside:avoid;">
         <div class="ad-text">
           <div class="ad-headline">WE ALSO SUPPLY</div>
           <div class="ad-sub">Computers &middot; Laptops &middot; Printers &middot; Accessories ${phone ? `&middot; Call: ${escapeHtml(phone)}` : ''}</div>
         </div>
-        <img src="/ads/computers.png" class="ad-img" alt="" />
-        <img src="/ads/laptop.png" class="ad-img" alt="" />
-        <img src="/ads/printers.png" class="ad-img" alt="" />
-        <img src="/ads/accessories.png" class="ad-img" alt="" />
+        <img src="${compSrc}" class="ad-img" alt="" />
+        <img src="${laptopSrc}" class="ad-img" alt="" />
+        <img src="${printerSrc}" class="ad-img" alt="" />
+        <img src="${accSrc}" class="ad-img" alt="" />
       </div>
     `
   }
 
-  // Variant: flyer — landscape flyer image
-  if (variant === 'flyer') {
-    return `
-      <div class="ad-banner" style="padding:4px;">
-        <img src="/posters/smartcomputers-a4-flyer-landscape.png" alt="Offers" style="width:100%;height:60px;object-fit:cover;border-radius:4px;" />
-        <div class="ad-text" style="margin-left:10px;">
-          <div class="ad-headline">CHECK OUT OUR LATEST OFFERS!</div>
-          <div class="ad-sub">Computers &middot; Laptops &middot; Printers &middot; Accessories ${phone ? `&middot; Call ${escapeHtml(phone)}` : ''}</div>
-        </div>
-      </div>
-    `
-  }
-
-  // Fallback = grid
-  return buildAdBanner('grid', shop, tpl)
+  // Fallback = flyer
+  return buildAdBanner('flyer', shop, tpl, productImages)
 }

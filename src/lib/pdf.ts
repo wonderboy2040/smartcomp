@@ -392,8 +392,13 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   // Draw Official Crest Shield Logo on Top Left
   if (hasLogo) {
     try {
-      doc.addImage(logoImg, 'PNG', logoX, logoY, logoW, logoH)
-    } catch {}
+      doc.addImage(logoImg, logoX, logoY, logoW, logoH)
+    } catch {
+      try {
+        const fmt = String(logoImg).startsWith('data:image/webp') ? 'WEBP' : 'PNG'
+        doc.addImage(logoImg, fmt, logoX, logoY, logoW, logoH)
+      } catch {}
+    }
   }
 
   // Draw Shop Name beside logo
@@ -743,9 +748,15 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     if (variant === 'flyer') {
       if (imgs['flyer']) {
         try {
-          doc.addImage(imgs['flyer'], 'PNG', posterX, by, posterW, bandH)
+          doc.addImage(imgs['flyer'], posterX, by, posterW, bandH)
           return
-        } catch {}
+        } catch {
+          try {
+            const fmt = imgs['flyer'].startsWith('data:image/webp') ? 'WEBP' : 'PNG'
+            doc.addImage(imgs['flyer'], fmt, posterX, by, posterW, bandH)
+            return
+          } catch {}
+        }
       }
     }
 
@@ -753,9 +764,15 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     if (variant === 'grid') {
       if (imgs['productgrid']) {
         try {
-          doc.addImage(imgs['productgrid'], 'PNG', posterX, by, posterW, bandH)
+          doc.addImage(imgs['productgrid'], posterX, by, posterW, bandH)
           return
-        } catch {}
+        } catch {
+          try {
+            const fmt = imgs['productgrid'].startsWith('data:image/webp') ? 'WEBP' : 'PNG'
+            doc.addImage(imgs['productgrid'], fmt, posterX, by, posterW, bandH)
+            return
+          } catch {}
+        }
       }
     }
 
