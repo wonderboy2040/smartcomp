@@ -826,11 +826,18 @@ export async function generateInvoiceHtml(
     gap: 10px;
     min-height: 50px;
   }
+  .ad-banner.poster-banner {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin-top: auto;
+    margin-bottom: 4px;
+  }
   .ad-banner img.ad-img {
     width: auto;
     height: 50px;
     border-radius: 4px;
-    object-fit: cover;
+    object-fit: contain;
   }
   .ad-banner .ad-text { flex: 1; }
   .ad-banner .ad-headline {
@@ -855,8 +862,8 @@ export async function generateInvoiceHtml(
   }
   .ad-banner.grid-4 .ad-tile img {
     width: 100%;
-    height: 40px;
-    object-fit: cover;
+    height: 44px;
+    object-fit: contain;
     border-radius: 4px;
     margin-bottom: 2px;
   }
@@ -878,8 +885,8 @@ export async function generateInvoiceHtml(
   }
   .ad-banner.featured .ad-right .ad-tile img {
     width: 100%;
-    height: 36px;
-    object-fit: cover;
+    height: 40px;
+    object-fit: contain;
     border-radius: 3px;
   }
   .ad-banner.featured .ad-right .ad-tile .ad-tile-label {
@@ -1144,20 +1151,20 @@ function buildAdBanner(variant: string, shop: ShopInfo, tpl: HtmlTemplate, produ
   const printerSrc = productImages?.printers || '/posters/printer-offer.webp'
   const accSrc = productImages?.accessories || '/posters/accessories.webp'
 
-  // Variant: flyer — landscape WebP flyer image (1000x285 px format)
+  // Variant: flyer — landscape WebP flyer image (exact 1000x285 px format, 100% full view, zero cropping)
   if (variant === 'flyer') {
     return `
-      <div class="ad-banner" style="padding:3px;margin-top:auto;page-break-inside:avoid;break-inside:avoid;">
-        <img src="${flyerSrc}" alt="Offers" style="width:100%;max-height:65px;object-fit:cover;border-radius:4px;display:block;" />
+      <div class="ad-banner poster-banner" style="page-break-inside:avoid;break-inside:avoid;">
+        <img src="${flyerSrc}" alt="Offers" style="width:100%;height:auto;aspect-ratio:1000/285;object-fit:contain;border-radius:6px;display:block;margin:0 auto;" />
       </div>
     `
   }
 
-  // Variant: grid — WebP 4x4 product grid poster (1000x285 px format)
+  // Variant: grid — WebP 4x4 product grid poster (exact 1000x285 px format, 100% full view, zero cropping)
   if (variant === 'grid') {
     return `
-      <div class="ad-banner" style="padding:3px;margin-top:auto;page-break-inside:avoid;break-inside:avoid;">
-        <img src="${gridSrc}" alt="Product Showcase" style="width:100%;max-height:65px;object-fit:cover;border-radius:4px;display:block;" />
+      <div class="ad-banner poster-banner" style="page-break-inside:avoid;break-inside:avoid;">
+        <img src="${gridSrc}" alt="Product Showcase" style="width:100%;height:auto;aspect-ratio:1000/285;object-fit:contain;border-radius:6px;display:block;margin:0 auto;" />
       </div>
     `
   }

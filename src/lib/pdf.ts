@@ -291,21 +291,21 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const margin = 12
   const usableWidth = pageWidth - margin * 2
 
-  // ===== EXACT COMPACT AD BANNER & EXPANDED USABLE PAGE GEOMETRY =====
+  // ===== EXACT FULL UNCROPPED AD BANNER GEOMETRY (1000x285 ASPECT RATIO) =====
   const variant = data.adBannerVariant || 'flyer'
 
-  const posterW = 175
-  const posterH = 22 // 22mm compact banner height (fits 1000x285 px banner proportionally)
-  const posterX = margin + (usableWidth - posterW) / 2 // 17.5mm
+  const posterW = usableWidth // 186mm full width
+  const posterH = Math.round(usableWidth * (285 / 1000)) // 53mm exact 1000x285 proportion
+  const posterX = margin // 12mm
 
   const FOOTER_Y = 293
   const FOOTER_LINE = 290
-  const AD_BAND_BOTTOM = 289
-  const AD_BAND_TOP = AD_BAND_BOTTOM - posterH // 267mm
+  const AD_BAND_BOTTOM = 288
+  const AD_BAND_TOP = AD_BAND_BOTTOM - posterH // 235mm
 
-  // Signature block positioned strictly ABOVE top of banner with 255mm content limit (+51.3mm extra space)
-  const SIG_LINE_Y = AD_BAND_TOP - 12 // 255mm
-  const CONTENT_LIMIT = SIG_LINE_Y - 6 // 249mm
+  // Signature block positioned strictly ABOVE top of banner
+  const SIG_LINE_Y = AD_BAND_TOP - 10 // 225mm
+  const CONTENT_LIMIT = SIG_LINE_Y - 5 // 220mm
 
   let pageNumber = 1
   const pageEnds: Record<number, number> = {}

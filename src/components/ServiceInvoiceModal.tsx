@@ -118,7 +118,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
         <div style={{ ...fullBleed, marginTop: '22px' }}>
           <div style={{ borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, background: '#fff', lineHeight: 0 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={poster} alt="Smart Computers latest offers" style={{ width: '100%', height: '150px', objectFit: 'cover', display: 'block' }} />
+            <img src={poster} alt="Smart Computers latest offers" style={{ width: '100%', height: 'auto', aspectRatio: '1000 / 285', objectFit: 'contain', display: 'block', borderRadius: '4px' }} />
           </div>
           {caption}
         </div>
