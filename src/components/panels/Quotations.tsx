@@ -200,7 +200,7 @@ export function QuotationsPanel() {
                           <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openPreview(`/api/pdf/${q.id}?type=quotation`, `Quotation ${q.number}`)}>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openPreview(q.id, 'quotation', `Quotation ${q.number}`)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(q)} title="Edit Quotation">
@@ -300,7 +300,7 @@ export function QuotationsPanel() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => openPreview(`/api/pdf/${q.id}?type=quotation`, `Quotation ${q.number}`)}
+                              onClick={() => openPreview(q.id, 'quotation', `Quotation ${q.number}`)}
                               title="View PDF"
                             >
                               <Eye className="w-3.5 h-3.5" />

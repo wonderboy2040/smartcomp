@@ -373,10 +373,10 @@ export async function generateInvoiceHtml(
     if (sameState) {
       const rate = (data.calc.items[0]?.gstRate || 18) / 2
       totalsRows.push(
-        `<tr><td>CGST (${rate}%)</td><td class="right">${formatCurrency(data.calc.sgstAmount)}</td></tr>`,
+        `<tr><td>CGST (${rate}%)</td><td class="right">${formatCurrency(data.calc.cgstAmount)}</td></tr>`,
       )
       totalsRows.push(
-        `<tr><td>SGST (${rate}%)</td><td class="right">${formatCurrency(data.calc.cgstAmount)}</td></tr>`,
+        `<tr><td>SGST (${rate}%)</td><td class="right">${formatCurrency(data.calc.sgstAmount)}</td></tr>`,
       )
     } else {
       const rate = data.calc.items[0]?.gstRate || 18

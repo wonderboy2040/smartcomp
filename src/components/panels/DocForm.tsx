@@ -64,11 +64,14 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         setCourierCharges(editing.courierCharges || 0)
         setOtherCharges(editing.otherCharges || 0)
         setDiscount(editing.discount || 0)
+        setDiscountPercent(0)
         setPaymentType(editing.paymentType || 'cash')
         setAmountPaid(editing.amountPaid || 0)
         setNotes(editing.notes || '')
         setValidTill(editing.validTill ? new Date(editing.validTill).toISOString().slice(0, 10) : '')
         setDate(editing.date ? new Date(editing.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10))
+        setSelectedTemplate(editing.template || editing.templateId || 'tally-classic')
+        setRoundOff(editing.roundOff === true || editing.roundOff === 'true')
       } else {
         setCustomerId('')
         setItems([])
@@ -112,13 +115,13 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
     ).slice(0, 30)
   }, [stockItems, itemSearch])
 
-  // Discount percent handler
+  // Discount percent handler — recalculate when subtotal or percent changes
   useEffect(() => {
     if (discountPercent > 0) {
       const disc = (calc.subtotal * discountPercent) / 100
       setDiscount(Math.round(disc))
     }
-  }, [discountPercent])
+  }, [discountPercent, calc.subtotal])
 
   const addStockItem = (item: any) => {
     if (Number(item.quantity) <= 0) {
@@ -307,15 +310,20 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1.5 h-11 bg-white border-slate-200" />
             </div>
             <div className="lg:col-span-3">
-              <Label className="text-xs font-bold text-slate-700">PDF Template</Label>
+              <Label className="text-xs font-bold text-slate-700">PDF Template <span className="text-[10px] text-indigo-600 font-semibold">10 Premium</span></Label>
               <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                 <SelectTrigger className="mt-1.5 h-11 bg-white border-slate-200"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tally-classic">Tally Classic (White + Blue)</SelectItem>
+                  <SelectItem value="tally-classic">⭐ Tally Classic (White + Blue)</SelectItem>
                   <SelectItem value="tally-modern">Tally Modern (Dark + Emerald)</SelectItem>
-                  <SelectItem value="tally-corporate">Corporate (Navy + Gold)</SelectItem>
-                  <SelectItem value="tally-elegant">Elegant (Maroon + Cream)</SelectItem>
-                  <SelectItem value="tally-bold">Bold (Teal + Orange)</SelectItem>
+                  <SelectItem value="tally-corporate">Corporate Elite (Navy + Gold)</SelectItem>
+                  <SelectItem value="tally-elegant">Royal Executive (Maroon + Gold)</SelectItem>
+                  <SelectItem value="tally-bold">Tech Store Pro (Teal + Orange)</SelectItem>
+                  <SelectItem value="gst-premium-dark">Premium Dark Elite (Black + Gold)</SelectItem>
+                  <SelectItem value="gst-classic-plus">GST Classic Plus (White + Blue)</SelectItem>
+                  <SelectItem value="gst-executive-formal">Executive Formal (Slate)</SelectItem>
+                  <SelectItem value="gst-vibrant-bold">Vibrant Bold Offer (Orange)</SelectItem>
+                  <SelectItem value="gst-minimal-white">Minimal White Pro (Eco Print)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -358,7 +366,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                         <TableCell><Input type="number" min={0.1} step={0.1} value={item.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} className="h-9 text-sm font-semibold bg-white border-slate-200" /></TableCell>
                         <TableCell><Input type="number" value={item.rate} onChange={(e) => updateItem(idx, { rate: Number(e.target.value) })} className="h-9 text-sm font-bold bg-white border-slate-200" /><div className="text-[10px] text-slate-500 mt-1">Cost: Rs.{item.costPrice || 0}</div></TableCell>
                         <TableCell><Input type="number" value={item.discount || 0} onChange={(e) => updateItem(idx, { discount: Number(e.target.value) })} className="h-9 text-sm bg-white border-slate-200" /></TableCell>
-                        <TableCell className="text-center"><div className="flex flex-col items-center gap-1"><Checkbox checked={item.gstApplicable} onCheckedChange={(v) => updateItem(idx, { gstApplicable: v === true })} /><span className="text-[10px] font-bold text-slate-600">{item.gstApplicable ? `${item.gstRate}%` : 'No GST'}</span></div></TableCell>
+                        <TableCell className="text-center"><div className="flex flex-col items-center gap-1"><Checkbox checked={item.gstApplicable} onCheckedChange={(v) => updateItem(idx, { gstApplicable: v === true })} />{item.gstApplicable ? <select value={item.gstRate} onChange={(e) => updateItem(idx, { gstRate: Number(e.target.value) })} className="text-[10px] font-bold text-slate-700 bg-white border border-slate-200 rounded px-1 py-0.5 w-14 text-center cursor-pointer"><option value={5}>5%</option><option value={12}>12%</option><option value={18}>18%</option><option value={28}>28%</option></select> : <span className="text-[10px] font-bold text-slate-400">No GST</span>}</div></TableCell>
                         <TableCell className="text-right text-sm font-medium text-slate-900">{formatCurrency(computed.amount)}</TableCell>
                         <TableCell className="text-right"><div className="text-sm font-bold text-slate-900">{formatCurrency(computed.total)}</div><div className="text-[10px] text-emerald-600 font-semibold">Profit: {formatCurrency(computed.profit)}</div></TableCell>
                         <TableCell><Button variant="ghost" size="sm" onClick={() => removeItem(idx)} className="h-8 w-8 p-0 hover:bg-red-50"><Trash2 className="w-4 h-4 text-red-500" /></Button></TableCell>
@@ -376,7 +384,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                   <div key={idx} className="p-3 space-y-2 bg-white">
                     <div className="flex justify-between gap-2"><div className="min-w-0"><div className="font-bold text-sm text-slate-900 truncate">{item.name}</div><div className="text-[11px] text-slate-500">{item.sku} {item.itemId ? '• Stock' : ''}</div></div><Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => removeItem(idx)}><Trash2 className="w-4 h-4 text-red-500" /></Button></div>
                     <div className="grid grid-cols-3 gap-2"><div><Label className="text-[10px] font-bold text-slate-600">Qty</Label><Input type="number" value={item.quantity} onChange={(e) => updateItem(idx, { quantity: Number(e.target.value) })} className="h-10 text-sm font-bold bg-white" /></div><div><Label className="text-[10px] font-bold text-slate-600">Rate</Label><Input type="number" value={item.rate} onChange={(e) => updateItem(idx, { rate: Number(e.target.value) })} className="h-10 text-sm font-bold bg-white" /></div><div><Label className="text-[10px] font-bold text-slate-600">Disc</Label><Input type="number" value={item.discount || 0} onChange={(e) => updateItem(idx, { discount: Number(e.target.value) })} className="h-10 text-sm bg-white" /></div></div>
-                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border"><div className="flex items-center gap-2"><Checkbox checked={item.gstApplicable} onCheckedChange={(v) => updateItem(idx, { gstApplicable: v === true })} /><span className="text-xs font-bold text-slate-700">GST {item.gstApplicable ? `${item.gstRate}%` : 'No'}</span></div><div className="text-right"><div className="text-xs text-slate-500">Total</div><div className="text-sm font-bold text-slate-900">{formatCurrency(computed.total)}</div><div className="text-[10px] text-emerald-600 font-bold">Profit {formatCurrency(computed.profit)}</div></div></div>
+                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border"><div className="flex items-center gap-2"><Checkbox checked={item.gstApplicable} onCheckedChange={(v) => updateItem(idx, { gstApplicable: v === true })} /><span className="text-xs font-bold text-slate-700">GST</span>{item.gstApplicable && <select value={item.gstRate} onChange={(e) => updateItem(idx, { gstRate: Number(e.target.value) })} className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded px-1.5 py-0.5 w-16 cursor-pointer"><option value={5}>5%</option><option value={12}>12%</option><option value={18}>18%</option><option value={28}>28%</option></select>}</div><div className="text-right"><div className="text-xs text-slate-500">Total</div><div className="text-sm font-bold text-slate-900">{formatCurrency(computed.total)}</div><div className="text-[10px] text-emerald-600 font-bold">Profit {formatCurrency(computed.profit)}</div></div></div>
                   </div>
                 )
               })}
@@ -388,7 +396,8 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                 <div className="flex-1 min-w-[160px]"><Input value={customItem.name} onChange={(e) => setCustomItem({ ...customItem, name: e.target.value })} className="h-10 text-sm bg-white border-slate-200" placeholder="Item name e.g. Service Charge" /></div>
                 <div className="w-20"><Input type="number" value={customItem.qty} onChange={(e) => setCustomItem({ ...customItem, qty: Number(e.target.value) })} className="h-10 text-sm bg-white border-slate-200" placeholder="Qty" /></div>
                 <div className="w-28"><Input type="number" value={customItem.rate} onChange={(e) => setCustomItem({ ...customItem, rate: Number(e.target.value) })} className="h-10 text-sm font-bold bg-white border-slate-200" placeholder="Rate Rs." /></div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 h-10"><input type="checkbox" checked={customItem.gst} onChange={(e) => setCustomItem({ ...customItem, gst: e.target.checked })} className="rounded" />GST 18%</label>
+                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-3 h-10"><input type="checkbox" checked={customItem.gst} onChange={(e) => setCustomItem({ ...customItem, gst: e.target.checked })} className="rounded" />GST</label>
+                {customItem.gst && <select value={customItem.gstRate} onChange={(e) => setCustomItem({ ...customItem, gstRate: Number(e.target.value) })} className="h-10 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 w-20 cursor-pointer"><option value={5}>5%</option><option value={12}>12%</option><option value={18}>18%</option><option value={28}>28%</option></select>}
                 <Button size="sm" onClick={addCustomItem} className="h-10 bg-slate-900 hover:bg-slate-800 text-white font-bold"><Plus className="w-4 h-4 mr-1" /> Add</Button>
               </div>
             </div>

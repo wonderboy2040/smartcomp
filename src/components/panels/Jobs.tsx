@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { ServiceInvoiceModal } from '@/components/ServiceInvoiceModal'
+import { usePdfPreview } from '@/lib/preview-context'
 import { ServiceWhatsAppModal } from '@/components/ServiceWhatsAppModal'
 import {
   Wrench, Plus, Search, Laptop, Printer, Monitor, Battery, ScanLine,
@@ -58,6 +58,7 @@ const PRIORITY_BADGE: Record<string, string> = {
 
 export function JobsPanel() {
   const { toast } = useToast()
+  const { openPreview } = usePdfPreview()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [priorityFilter, setPriorityFilter] = useState('all')
@@ -83,6 +84,14 @@ export function JobsPanel() {
       return true
     })
   }, [jobs, statusFilter, priorityFilter, search])
+
+  // Open service invoice preview when invoiceJobId changes
+  useEffect(() => {
+    if (invoiceJobId) {
+      openPreview(invoiceJobId, 'service', 'Service Invoice')
+      setInvoiceJobId(null)
+    }
+  }, [invoiceJobId, openPreview])
 
   const stats = useMemo(() => {
     const list = jobs || []
@@ -177,7 +186,7 @@ export function JobsPanel() {
 
       {dialogOpen && <NewJobDialog key={editing?.id || 'new'} open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} onSaved={() => { setDialogOpen(false); refetch() }} />}
       {detailJob && <JobDetailDialog key={detailJob.id} job={detailJob} onClose={() => setDetailJob(null)} onUpdated={() => { refetch(); setDetailJob(null) }} onOpenInvoice={(id) => { setDetailJob(null); setInvoiceJobId(id) }} onOpenWhatsApp={(id) => { setDetailJob(null); setWhatsappJobId(id) }} />}
-      {invoiceJobId && <ServiceInvoiceModal jobId={invoiceJobId} onClose={() => setInvoiceJobId(null)} />}
+
       {whatsappJobId && <ServiceWhatsAppModal jobId={whatsappJobId} onClose={() => setWhatsappJobId(null)} />}
     </div>
   )
