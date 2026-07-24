@@ -34,7 +34,6 @@ function read(): RuntimeConfig {
     cache = {}
   } else {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const fs = require('fs')
       if (fs.existsSync(path)) {
         const raw = fs.readFileSync(path, 'utf-8')

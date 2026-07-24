@@ -3,15 +3,84 @@ import { getRow, updateRow, deleteRow, listRows, createRow, bulkUpdate, complete
 import { safeJsonParse } from '@/lib/utils'
 import { sendJobStatusNotification } from '@/lib/notifications'
 
+const VALID_STATUSES = new Set(['Pending', 'In Progress', 'Completed', 'Delivered'])
+
+type ServicePart = {
+  name: string
+  qty: number
+  costPrice: number
+  sellPrice: number
+  itemId?: string
+  sku?: string
+}
+
+const money = (value: any) => Math.round((Number(value) || 0) * 100) / 100
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
+
+function normalizeParts(parts: any): ServicePart[] {
+  if (!Array.isArray(parts)) return []
+  return parts
+    .map((p) => ({
+      name: String(p?.name || '').trim(),
+      qty: Math.max(1, Number(p?.qty) || 1),
+      costPrice: money(p?.costPrice),
+      sellPrice: money(p?.sellPrice ?? p?.price),
+      itemId: p?.itemId ? String(p.itemId) : '',
+      sku: p?.sku ? String(p.sku) : '',
+    }))
+    .filter((p) => p.name)
+}
+
+function getPartsTotals(parts: ServicePart[]) {
+  const cost = money(parts.reduce((s, p) => s + p.costPrice * p.qty, 0))
+  const sell = money(parts.reduce((s, p) => s + p.sellPrice * p.qty, 0))
+  return { cost, sell, profit: money(sell - cost) }
+}
+
+function getLedger(job: any, totalOverride?: number) {
+  const total = money(totalOverride ?? (Number(job?.finalAmount) || Number(job?.estimatedAmount) || 0))
+  const advance = money(job?.advanceAmount)
+  const paid = money(job?.paidAmount)
+  const paidTotal = money(advance + paid)
+  const balanceDue = money(Math.max(0, total - paidTotal))
+  return { total, advance, paid, paidTotal, balanceDue }
+}
+
+async function validateStockAvailability(stockUpdates: { id: string; deductQty: number }[]) {
+  if (stockUpdates.length === 0) return null
+  const dbItems = await Promise.all(stockUpdates.map((s) => getRow<any>('Items', s.id).catch(() => null)))
+  const problems: string[] = []
+
+  for (const upd of stockUpdates) {
+    const item = dbItems.find((d: any) => d && String(d.id) === String(upd.id))
+    if (!item) {
+      problems.push(`Stock item ${upd.id} not found`)
+      continue
+    }
+    const available = Number(item.quantity) || 0
+    if (available < upd.deductQty) {
+      problems.push(`${item.name || upd.id}: available ${available}, required ${upd.deductQty}`)
+    }
+  }
+
+  return problems.length > 0 ? problems : null
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const job = await getRow<any>('Jobs', id)
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const partsUsed = safeJsonParse<any[]>(job.partsUsedJson, [])
+    const ledger = getLedger(job)
     return NextResponse.json({
       ...job,
-      partsUsed: safeJsonParse<any[]>(job.partsUsedJson, []),
+      ...ledger,
+      partsUsed,
       statusHistory: safeJsonParse<any[]>(job.statusHistoryJson, []),
+      feedbackRating: Number(job.feedbackRating) || 0,
+      feedbackComment: String(job.feedbackComment || ''),
+      feedbackAt: String(job.feedbackAt || ''),
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
@@ -27,12 +96,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     async function appendStatusAndNotify(jobId: string, job: any, newStatus: string, note: string, updatedJob: any) {
       try {
         const history = safeJsonParse<any[]>(job?.statusHistoryJson, [])
-        history.push({ status: newStatus, timestamp: new Date().toISOString(), note })
-        await updateRow('Jobs', jobId, { statusHistoryJson: JSON.stringify(history) }).catch(() => {})
+        const last = history[history.length - 1]
+        if (!last || String(last.status) !== newStatus || String(last.note || '') !== note) {
+          history.push({ status: newStatus, timestamp: new Date().toISOString(), note })
+          await updateRow('Jobs', jobId, { statusHistoryJson: JSON.stringify(history) }).catch(() => {})
+        }
 
         const shopRows = await listRows<any>('Shop', { useCache: true })
         const shopName = String(shopRows[0]?.name || 'Smart Computers')
-        const trackUrl = job?.trackToken ? `${process.env.NEXT_PUBLIC_BASE_URL || ''}/track/${job.jobId}-${job.trackToken}` : undefined
+        const baseUrl = String(process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '')
+        const trackUrl = job?.trackToken ? `${baseUrl}/track/${job.jobId}-${job.trackToken}` : undefined
         const notif = await sendJobStatusNotification(
           { ...job, ...updatedJob },
           newStatus,
@@ -50,11 +123,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
       const newStatus = String(body?.status || 'Pending')
-      const updated = await updateRow('Jobs', id, {
-        status: newStatus,
-        notes: String(body?.notes || ''),
-        assignedEngineer: String(body?.assignedEngineer || ''),
-      })
+      if (!VALID_STATUSES.has(newStatus)) {
+        return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+      }
+
+      // Completion is a financial transaction. Force the dedicated action so
+      // parts, warranty, stock, payment, and profit share stay consistent.
+      if (newStatus === 'Completed' && String(existing.status) !== 'Completed' && String(existing.status) !== 'Delivered') {
+        return NextResponse.json({ error: 'Use Complete Job action to mark a job completed.' }, { status: 400 })
+      }
+
+      const data: any = { status: newStatus, updatedAt: new Date().toISOString() }
+      if (body.notes !== undefined) data.notes = String(body.notes || '')
+      if (body.assignedEngineer !== undefined) data.assignedEngineer = String(body.assignedEngineer || '')
+      if (newStatus === 'Delivered' && !existing.deliveredAt) data.deliveredAt = new Date().toISOString()
+
+      const updated = await updateRow('Jobs', id, data)
 
       let notifResult: any = null
       if (String(existing.status) !== newStatus) {
@@ -69,70 +153,95 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const existing = await getRow<any>('Jobs', id)
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-      const partsUsed = body?.partsUsed || []
-      const finalAmount = Number(body?.finalAmount) || 0
+      if (String(existing.status) === 'Delivered') {
+        return NextResponse.json({ error: 'Delivered job cannot be completed again' }, { status: 400 })
+      }
+
+      const partsUsed = normalizeParts(body?.partsUsed)
+      const finalAmount = money(body?.finalAmount)
+      if (finalAmount <= 0) {
+        return NextResponse.json({ error: 'Final amount must be greater than 0' }, { status: 400 })
+      }
+
       const paymentMode = String(body?.paymentMode || 'Cash')
-      const engineerSharePct = Number(body?.engineerSharePct) || 50
-      const warrantyDays = Number(body?.warrantyDays) || Number(existing?.warrantyDays) || 30
+      const engineerSharePct = clamp(Number(body?.engineerSharePct) || 50, 0, 100)
+      const warrantyDays = clamp(Number(body?.warrantyDays) || Number(existing?.warrantyDays) || 30, 0, 3650)
       const deductStock = body?.deductStock !== false
 
-      const partsProfit = partsUsed.reduce((s: number, p: any) => s + ((Number(p?.sellPrice) || 0) - (Number(p?.costPrice) || 0)) * (Number(p?.qty) || 1), 0)
-      const svcCharge = Number(body?.serviceCharge) || 0
+      const totals = getPartsTotals(partsUsed)
+      const svcCharge = money(body?.serviceCharge)
       const actualServiceProfit = svcCharge
-      const engineerShare = Math.round((actualServiceProfit * engineerSharePct / 100) + (partsProfit * engineerSharePct / 100))
-      const adminShare = (actualServiceProfit + partsProfit) - engineerShare
-      const warrantyExpiry = new Date(Date.now() + warrantyDays * 24 * 60 * 60 * 1000).toISOString()
+      const grossProfit = money(actualServiceProfit + totals.profit)
+      const engineerShare = Math.round(grossProfit * engineerSharePct / 100)
+      const adminShare = money(grossProfit - engineerShare)
+      const warrantyExpiry = warrantyDays > 0
+        ? new Date(Date.now() + warrantyDays * 24 * 60 * 60 * 1000).toISOString()
+        : ''
 
-      // Prepare stock updates for ultra fast transaction
+      // Prepare stock updates for ultra-fast transaction.
       const stockUpdates: { id: string; deductQty: number }[] = []
       if (deductStock && partsUsed.length > 0) {
         const qtyMap = new Map<string, number>()
         for (const p of partsUsed) {
-          if (p.itemId) {
-            qtyMap.set(p.itemId, (qtyMap.get(p.itemId) || 0) + (Number(p.qty) || 1))
-          }
+          if (p.itemId) qtyMap.set(p.itemId, (qtyMap.get(p.itemId) || 0) + p.qty)
         }
-        for (const [itemId, qty] of qtyMap.entries()) {
-          stockUpdates.push({ id: itemId, deductQty: qty })
+        for (const [itemId, qty] of qtyMap.entries()) stockUpdates.push({ id: itemId, deductQty: qty })
+
+        const stockProblems = await validateStockAvailability(stockUpdates)
+        if (stockProblems) {
+          return NextResponse.json({
+            error: 'Insufficient stock for selected parts',
+            details: stockProblems,
+          }, { status: 400 })
         }
       }
 
-      const advance = Number(existing.advanceAmount) || 0
-      const balanceDue = Math.max(0, finalAmount - advance)
-      const payment = balanceDue > 0 ? {
+      const advance = money(existing.advanceAmount)
+      const alreadyPaid = money(existing.paidAmount)
+      const outstandingBeforePayment = money(Math.max(0, finalAmount - advance - alreadyPaid))
+      const requestedPayment = body?.paymentReceivedNow !== undefined
+        ? money(body?.paymentReceivedNow)
+        : outstandingBeforePayment
+      const paymentReceivedNow = money(clamp(requestedPayment, 0, outstandingBeforePayment))
+      const newPaidAmount = money(alreadyPaid + paymentReceivedNow)
+      const balanceDueAfter = money(Math.max(0, finalAmount - advance - newPaidAmount))
+
+      const payment = paymentReceivedNow > 0 ? {
         jobId: String(existing.jobId || ''),
         customerName: String(existing.customerName || ''),
-        amount: balanceDue,
+        amount: paymentReceivedNow,
         mode: paymentMode,
-        type: 'Final',
+        type: balanceDueAfter <= 0 ? 'Final' : 'Partial',
         date: new Date().toISOString(),
-        engineerShare,
-        adminShare,
-        notes: 'Final payment at job completion',
+        engineerShare: balanceDueAfter <= 0 ? engineerShare : 0,
+        adminShare: balanceDueAfter <= 0 ? adminShare : paymentReceivedNow,
+        notes: balanceDueAfter <= 0 ? 'Final payment at job completion' : 'Partial payment at job completion',
       } : null
 
-      // ULTRA FAST: Single Apps Script call does job update + stock deduction + payment
+      const completedPayload = {
+        id,
+        status: 'Completed',
+        partsUsedJson: JSON.stringify(partsUsed),
+        finalAmount,
+        serviceCharge: svcCharge,
+        paidAmount: newPaidAmount,
+        paymentMode,
+        engineerShare,
+        adminShare,
+        partsProfit: totals.profit,
+        serviceProfit: actualServiceProfit,
+        warrantyDays,
+        warrantyExpiry,
+        completedDate: new Date().toISOString(),
+        diagnosisNotes: String(body?.diagnosisNotes || existing?.diagnosisNotes || ''),
+        notes: String(body?.notes || existing?.notes || ''),
+        stockUpdates: stockUpdates.length > 0 ? stockUpdates : undefined,
+        payment: payment || undefined,
+      }
+
+      // ULTRA FAST: Single Apps Script call does job update + stock deduction + payment.
       try {
-        const result = await completeJobFull({
-          id,
-          status: 'Completed',
-          partsUsedJson: JSON.stringify(partsUsed),
-          finalAmount,
-          serviceCharge: svcCharge,
-          paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
-          paymentMode,
-          engineerShare,
-          adminShare,
-          partsProfit,
-          serviceProfit: actualServiceProfit,
-          warrantyDays,
-          warrantyExpiry,
-          completedDate: new Date().toISOString(),
-          diagnosisNotes: String(body?.diagnosisNotes || ''),
-          notes: String(body?.notes || ''),
-          stockUpdates: stockUpdates.length > 0 ? stockUpdates : undefined,
-          payment: payment || undefined,
-        })
+        const result = await completeJobFull(completedPayload)
 
         const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', result.data)
         const elapsed = Date.now() - startTime
@@ -142,10 +251,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           job: result.data,
           engineerShare,
           adminShare,
-          partsProfit,
+          partsProfit: totals.profit,
           serviceProfit: actualServiceProfit,
           warrantyExpiry,
-          stockDeducted: deductStock,
+          paymentReceivedNow,
+          paidAmount: newPaidAmount,
+          balanceDue: balanceDueAfter,
+          stockDeducted: deductStock && stockUpdates.length > 0,
           notification: notifResult,
           ultraFast: true,
           elapsedMs: elapsed,
@@ -156,24 +268,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           }
         })
       } catch (err: any) {
-        // Fallback to old multi-call method if ultra fast fails
+        // Fallback to old multi-call method if ultra fast fails.
         console.error('Ultra fast complete failed, falling back:', err)
         const updated = await updateRow('Jobs', id, {
           status: 'Completed',
           partsUsedJson: JSON.stringify(partsUsed),
           finalAmount,
           serviceCharge: svcCharge,
-          paidAmount: Number(body?.paidAmount) || Number(existing?.paidAmount) || 0,
+          paidAmount: newPaidAmount,
           paymentMode,
           engineerShare,
           adminShare,
-          partsProfit,
+          partsProfit: totals.profit,
           serviceProfit: actualServiceProfit,
           warrantyDays,
           warrantyExpiry,
           completedDate: new Date().toISOString(),
-          diagnosisNotes: String(body?.diagnosisNotes || ''),
-          notes: String(body?.notes || ''),
+          diagnosisNotes: String(body?.diagnosisNotes || existing?.diagnosisNotes || ''),
+          notes: String(body?.notes || existing?.notes || ''),
         })
 
         if (deductStock && stockUpdates.length > 0) {
@@ -194,9 +306,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           } catch {}
         }
 
-        if (balanceDue > 0 && payment) {
-          await createRow('ServicePayments', payment).catch(() => {})
-        }
+        if (payment) await createRow('ServicePayments', payment).catch(() => {})
 
         const notifResult = await appendStatusAndNotify(id, existing, 'Completed', 'Job completed', updated)
         return NextResponse.json({
@@ -204,10 +314,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           job: updated,
           engineerShare,
           adminShare,
-          partsProfit,
+          partsProfit: totals.profit,
           serviceProfit: actualServiceProfit,
           warrantyExpiry,
-          stockDeducted: deductStock,
+          paymentReceivedNow,
+          paidAmount: newPaidAmount,
+          balanceDue: balanceDueAfter,
+          stockDeducted: deductStock && stockUpdates.length > 0,
           notification: notifResult,
           ultraFast: false,
           fallback: true,
@@ -218,6 +331,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (action === 'deliver') {
       const existing = await getRow<any>('Jobs', id)
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      if (String(existing.status) !== 'Completed') {
+        return NextResponse.json({ error: 'Only completed jobs can be marked delivered' }, { status: 400 })
+      }
 
       const updated = await updateRow('Jobs', id, {
         status: 'Delivered',
@@ -231,9 +347,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (action === 'addPart') {
       const job = await getRow<any>('Jobs', id)
       if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      const existing = safeJsonParse<any[]>(job.partsUsedJson, [])
-      existing.push(body?.part)
-      const updated = await updateRow('Jobs', id, { partsUsedJson: JSON.stringify(existing) })
+      const existing = normalizeParts(safeJsonParse<any[]>(job.partsUsedJson, []))
+      existing.push(...normalizeParts([body?.part]))
+      await updateRow('Jobs', id, { partsUsedJson: JSON.stringify(existing) })
       return NextResponse.json({ success: true, partsUsed: existing })
     }
 
@@ -245,9 +361,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
       if (body.serviceCharge !== undefined) {
         const existing = await getRow<any>('Jobs', id)
-        const partsUsed = safeJsonParse<any[]>(existing?.partsUsedJson, [])
+        const partsUsed = normalizeParts(safeJsonParse<any[]>(existing?.partsUsedJson, []))
         const partsTotal = partsUsed.reduce((s: number, p: any) => s + (Number(p?.sellPrice) || 0) * (Number(p?.qty) || 1), 0)
-        data.finalAmount = (Number(body.serviceCharge) || 0) + partsTotal
+        data.finalAmount = money((Number(body.serviceCharge) || 0) + partsTotal)
       }
       const updated = await updateRow('Jobs', id, data)
       return NextResponse.json({ success: true, job: updated })
@@ -256,11 +372,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (action === 'recordPayment') {
       const existing = await getRow<any>('Jobs', id)
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      const amount = Number(body?.amount) || 0
+      const amount = money(body?.amount)
       const mode = String(body?.mode || 'Cash')
       if (amount <= 0) return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
 
-      const newPaid = (Number(existing.paidAmount) || 0) + amount
+      const ledger = getLedger(existing)
+      if (ledger.total > 0 && amount > ledger.balanceDue) {
+        return NextResponse.json({
+          error: `Payment exceeds balance due (${ledger.balanceDue})`,
+          balanceDue: ledger.balanceDue,
+        }, { status: 400 })
+      }
+
+      const newPaid = money((Number(existing.paidAmount) || 0) + amount)
       const updated = await updateRow('Jobs', id, {
         paidAmount: newPaid,
         paymentMode: mode,
@@ -276,10 +400,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         date: new Date().toISOString(),
         engineerShare: 0,
         adminShare: amount,
-        notes: 'Partial payment recorded',
+        notes: 'Partial service payment recorded',
       }).catch(() => {})
 
-      return NextResponse.json({ success: true, job: updated })
+      return NextResponse.json({ success: true, job: updated, paidAmount: newPaid, balanceDue: money(Math.max(0, ledger.total - ledger.advance - newPaid)) })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

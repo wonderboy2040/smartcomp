@@ -56,6 +56,22 @@ const PRIORITY_BADGE: Record<string, string> = {
   Low: 'bg-green-50 text-green-700 border-green-200',
 }
 
+const money = (value: any) => Math.round((Number(value) || 0) * 100) / 100
+const jobTotal = (job: any) => money(Number(job?.finalAmount) || Number(job?.estimatedAmount) || 0)
+const jobPaidTotal = (job: any) => money((Number(job?.advanceAmount) || 0) + (Number(job?.paidAmount) || 0))
+const jobBalance = (job: any) => money(Math.max(0, jobTotal(job) - jobPaidTotal(job)))
+const isActiveJob = (job: any) => job?.status === 'Pending' || job?.status === 'In Progress'
+const jobAgeDays = (job: any) => {
+  const ts = job?.createdAt ? new Date(job.createdAt).getTime() : 0
+  return ts && !Number.isNaN(ts) ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0
+}
+const formatDateTime = (value: any) => {
+  if (!value) return '-'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
 export function JobsPanel() {
   const { toast } = useToast()
   const { openPreview } = usePdfPreview()
@@ -101,7 +117,8 @@ export function JobsPanel() {
       progress: list.filter((j) => j.status === 'In Progress').length,
       completed: list.filter((j) => j.status === 'Completed').length,
       delivered: list.filter((j) => j.status === 'Delivered').length,
-      highPriority: list.filter((j) => j.priority === 'High' && (j.status === 'Pending' || j.status === 'In Progress')).length,
+      highPriority: list.filter((j) => j.priority === 'High' && isActiveJob(j)).length,
+      overdue: list.filter((j) => isActiveJob(j) && jobAgeDays(j) >= 3).length,
     }
   }, [jobs])
 
@@ -123,9 +140,9 @@ export function JobsPanel() {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Wrench className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" />
             <span className="truncate">Service Jobs</span>
-            <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">v3.0.3 Upgraded</span>
+            <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-full">v3.0.4 Upgraded</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage repairs with stock-linked parts & professional invoices</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage repairs with stock-linked parts, due tracking, customer links & professional invoices</p>
         </div>
         <Button onClick={() => { setEditing(null); setDialogOpen(true) }} className="bg-blue-600 hover:bg-blue-700 h-11">
           <Plus className="w-4 h-4 mr-1.5" /> <span className="hidden sm:inline">New Job</span><span className="sm:hidden">New</span>
@@ -159,6 +176,12 @@ export function JobsPanel() {
             {stats.highPriority} High Priority
           </Badge>
         )}
+        {stats.overdue > 0 && (
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 px-3 h-11 flex items-center gap-1.5 font-semibold">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            {stats.overdue} Overdue
+          </Badge>
+        )}
       </div>
 
       <div className="sm:hidden space-y-3">
@@ -175,14 +198,14 @@ export function JobsPanel() {
                   <div className="flex flex-col items-end gap-1 flex-shrink-0"><Badge variant="outline" className={`${STATUS_COLORS[j.status] || ''} text-[9px] font-semibold`}>{j.status}</Badge>{j.priority && <Badge variant="outline" className={`${PRIORITY_BADGE[j.priority] || ''} text-[8px] px-1.5 py-0 font-semibold`}>{j.priority}</Badge>}</div>
                 </div>
                 <div className="text-xs space-y-0.5 text-slate-700"><p className="truncate"><span className="font-semibold">{j.deviceType}</span>{j.brandModel ? ` · ${j.brandModel}` : ''}</p><p className="truncate text-slate-500 text-[11px]">{j.problemDesc}</p></div>
-                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100"><p className="text-sm font-bold text-slate-900">{formatCurrency(j.finalAmount || j.estimatedAmount)}</p><div className="flex gap-1"><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setWhatsappJobId(j.id)}><MessageSquare className="w-3.5 h-3.5 text-green-600" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setInvoiceJobId(j.id)}><FileText className="w-3.5 h-3.5 text-purple-600" /></Button><Button size="sm" variant="outline" className="h-8 px-2 bg-white" onClick={() => setDetailJob(j)}><Eye className="w-3.5 h-3.5" /></Button></div></div>
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100"><div><p className="text-sm font-bold text-slate-900">{formatCurrency(jobTotal(j))}</p>{jobBalance(j) > 0 && <p className="text-[10px] text-orange-600 font-semibold">Due {formatCurrency(jobBalance(j))}</p>}{isActiveJob(j) && jobAgeDays(j) >= 3 && <p className="text-[10px] text-red-600 font-semibold">Overdue {jobAgeDays(j)}d</p>}</div><div className="flex gap-1"><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setWhatsappJobId(j.id)}><MessageSquare className="w-3.5 h-3.5 text-green-600" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setInvoiceJobId(j.id)}><FileText className="w-3.5 h-3.5 text-purple-600" /></Button><Button size="sm" variant="outline" className="h-8 px-2 bg-white" onClick={() => setDetailJob(j)}><Eye className="w-3.5 h-3.5" /></Button></div></div>
               </CardContent>
             </Card>
           )
         })}
       </div>
 
-      <Card className="hidden sm:block"><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Job ID</TableHead><TableHead>Customer</TableHead><TableHead>Device</TableHead><TableHead>Problem</TableHead><TableHead className="text-center">Priority</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-600">Loading...</TableCell></TableRow> : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-600">No jobs found</TableCell></TableRow> : filtered.map((j) => { const Icon = DEVICE_ICONS[j.deviceType] || Smartphone; return (<TableRow key={j.id} className={`hover:bg-slate-50 cursor-pointer ${PRIORITY_BORDER[j.priority] || ''}`} onClick={() => setDetailJob(j)}><TableCell className="font-mono text-xs font-semibold text-slate-900">{j.jobId}</TableCell><TableCell><div className="font-semibold text-slate-900">{j.customerName || 'Unknown'}</div><div className="text-[10px] text-slate-500">{j.customerMobile}</div></TableCell><TableCell><div className="flex items-center gap-1.5"><Icon className="w-3.5 h-3.5 text-slate-500" /><span className="text-sm font-medium text-slate-800">{j.deviceType}</span></div><div className="text-[10px] text-slate-500">{j.brandModel}</div></TableCell><TableCell className="text-xs text-slate-700 max-w-[200px] truncate">{j.problemDesc}</TableCell><TableCell className="text-center">{j.priority ? <Badge variant="outline" className={`${PRIORITY_BADGE[j.priority] || ''} text-[9px] font-semibold`}>{j.priority}</Badge> : '-'}</TableCell><TableCell className="text-center"><Badge variant="outline" className={`${STATUS_COLORS[j.status] || ''} text-[10px] font-semibold`}>{j.status}</Badge></TableCell><TableCell className="text-right font-bold text-slate-900">{formatCurrency(j.finalAmount || j.estimatedAmount)}</TableCell><TableCell className="text-right" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1"><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setWhatsappJobId(j.id)}><MessageSquare className="w-3.5 h-3.5 text-green-600" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setInvoiceJobId(j.id)}><FileText className="w-3.5 h-3.5 text-purple-600" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setDetailJob(j)}><Eye className="w-3.5 h-3.5" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white text-red-500" onClick={() => handleDelete(j.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div></TableCell></TableRow>) })}</TableBody></Table></div></CardContent></Card>
+      <Card className="hidden sm:block"><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead>Job ID</TableHead><TableHead>Customer</TableHead><TableHead>Device</TableHead><TableHead>Problem</TableHead><TableHead className="text-center">Priority</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{loading ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-600">Loading...</TableCell></TableRow> : filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-600">No jobs found</TableCell></TableRow> : filtered.map((j) => { const Icon = DEVICE_ICONS[j.deviceType] || Smartphone; return (<TableRow key={j.id} className={`hover:bg-slate-50 cursor-pointer ${PRIORITY_BORDER[j.priority] || ''}`} onClick={() => setDetailJob(j)}><TableCell className="font-mono text-xs font-semibold text-slate-900">{j.jobId}</TableCell><TableCell><div className="font-semibold text-slate-900">{j.customerName || 'Unknown'}</div><div className="text-[10px] text-slate-500">{j.customerMobile}</div></TableCell><TableCell><div className="flex items-center gap-1.5"><Icon className="w-3.5 h-3.5 text-slate-500" /><span className="text-sm font-medium text-slate-800">{j.deviceType}</span></div><div className="text-[10px] text-slate-500">{j.brandModel}</div></TableCell><TableCell className="text-xs text-slate-700 max-w-[200px] truncate">{j.problemDesc}</TableCell><TableCell className="text-center">{j.priority ? <Badge variant="outline" className={`${PRIORITY_BADGE[j.priority] || ''} text-[9px] font-semibold`}>{j.priority}</Badge> : '-'}</TableCell><TableCell className="text-center"><Badge variant="outline" className={`${STATUS_COLORS[j.status] || ''} text-[10px] font-semibold`}>{j.status}</Badge></TableCell><TableCell className="text-right"><div className="font-bold text-slate-900">{formatCurrency(jobTotal(j))}</div>{jobBalance(j) > 0 && <div className="text-[10px] text-orange-600 font-semibold">Due {formatCurrency(jobBalance(j))}</div>}{isActiveJob(j) && jobAgeDays(j) >= 3 && <div className="text-[10px] text-red-600 font-semibold">{jobAgeDays(j)}d overdue</div>}</TableCell><TableCell className="text-right" onClick={(e) => e.stopPropagation()}><div className="flex justify-end gap-1"><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setWhatsappJobId(j.id)}><MessageSquare className="w-3.5 h-3.5 text-green-600" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setInvoiceJobId(j.id)}><FileText className="w-3.5 h-3.5 text-purple-600" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white" onClick={() => setDetailJob(j)}><Eye className="w-3.5 h-3.5" /></Button><Button size="sm" variant="outline" className="h-8 w-8 p-0 bg-white text-red-500" onClick={() => handleDelete(j.id)}><Trash2 className="w-3.5 h-3.5" /></Button></div></TableCell></TableRow>) })}</TableBody></Table></div></CardContent></Card>
 
       {dialogOpen && <NewJobDialog key={editing?.id || 'new'} open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} onSaved={() => { setDialogOpen(false); refetch() }} />}
       {detailJob && <JobDetailDialog key={detailJob.id} job={detailJob} onClose={() => setDetailJob(null)} onUpdated={() => { refetch(); setDetailJob(null) }} onOpenInvoice={(id) => { setDetailJob(null); setInvoiceJobId(id) }} onOpenWhatsApp={(id) => { setDetailJob(null); setWhatsappJobId(id) }} />}
@@ -393,7 +416,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   return (
     <Dialog open={!!job} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto bg-white">
-        <DialogHeader><DialogTitle className="flex items-center gap-2 flex-wrap text-slate-900"><Icon className="w-5 h-5 text-blue-600" /><span className="font-mono text-sm">{job.jobId}</span><Badge variant="outline" className={`${STATUS_COLORS[job.status] || ''} text-[10px] font-semibold`}>{job.status}</Badge>{job.priority && <Badge variant="outline" className={`${PRIORITY_BADGE[job.priority] || ''} text-[9px] font-semibold`}>{job.priority}</Badge>}<span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.3 Stock Linked</span></DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2 flex-wrap text-slate-900"><Icon className="w-5 h-5 text-blue-600" /><span className="font-mono text-sm">{job.jobId}</span><Badge variant="outline" className={`${STATUS_COLORS[job.status] || ''} text-[10px] font-semibold`}>{job.status}</Badge>{job.priority && <Badge variant="outline" className={`${PRIORITY_BADGE[job.priority] || ''} text-[9px] font-semibold`}>{job.priority}</Badge>}<span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.4 Stock + Due Linked</span></DialogTitle></DialogHeader>
 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 text-sm">
@@ -402,6 +425,13 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
           </div>
 
           <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl"><p className="text-xs font-bold text-amber-800 mb-1">Problem</p><p className="text-sm font-medium text-slate-900">{job.problemDesc}</p>{job.accessories && <p className="text-xs text-slate-600 mt-1">Accessories: {job.accessories}</p>}</div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div className="bg-slate-50 border rounded-xl p-3"><p className="text-[10px] uppercase font-bold text-slate-500">Total</p><p className="text-sm font-black text-slate-900">{formatCurrency(jobTotal(job))}</p></div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3"><p className="text-[10px] uppercase font-bold text-emerald-700">Paid</p><p className="text-sm font-black text-emerald-700">{formatCurrency(jobPaidTotal(job))}</p></div>
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3"><p className="text-[10px] uppercase font-bold text-orange-700">Balance</p><p className="text-sm font-black text-orange-700">{formatCurrency(jobBalance(job))}</p></div>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3"><p className="text-[10px] uppercase font-bold text-blue-700">Opened</p><p className="text-sm font-black text-blue-700">{formatDateTime(job.createdAt)}</p></div>
+          </div>
 
           {job.trackUrl && (
             <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl">
@@ -491,7 +521,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
               <Select value={quickPayMode} onValueChange={(v) => setQuickPayMode(v as 'Cash' | 'UPI')}><SelectTrigger className="h-10 text-sm bg-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem></SelectContent></Select>
               <Button onClick={handleQuickPayment} disabled={saving} size="sm" className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"><IndianRupee className="w-4 h-4 mr-1" /> Pay</Button>
             </div>
-            <p className="text-[10px] text-emerald-700 mt-2 font-medium">Paid: Rs.{Number(job.paidAmount) || 0} · Advance: Rs.{Number(job.advanceAmount) || 0} · Balance: Rs.{Math.max(0, (Number(job.finalAmount)||0) - (Number(job.paidAmount)||0) - (Number(job.advanceAmount)||0))}</p>
+            <p className="text-[10px] text-emerald-700 mt-2 font-medium">Paid: {formatCurrency(Number(job.paidAmount) || 0)} · Advance: {formatCurrency(Number(job.advanceAmount) || 0)} · Balance: {formatCurrency(jobBalance(job))}</p>
           </div>
 
           {job.status !== 'Completed' && job.status !== 'Delivered' && (

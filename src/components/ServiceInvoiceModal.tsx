@@ -117,7 +117,6 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
       return (
         <div style={{ ...fullBleed, marginTop: '22px' }}>
           <div style={{ borderTop: `3px solid ${accent}`, borderBottom: `3px solid ${accent}`, background: '#fff', lineHeight: 0 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={poster} alt="Smart Computers latest offers" style={{ width: '100%', height: 'auto', aspectRatio: '1000 / 285', objectFit: 'contain', display: 'block', borderRadius: '4px' }} />
           </div>
           {caption}
@@ -137,8 +136,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
               {AD_IMGS.map((p) => (
                 <div key={p.label} style={{ flex: 1, textAlign: 'center' }}>
                   <div style={{ background: '#fff', border: `1px solid ${accent}40`, borderRadius: '8px', padding: '4px', height: '84px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={p.src} alt={p.label} style={{ maxHeight: '74px', maxWidth: '100%', objectFit: 'contain' }} />
+                            <img src={p.src} alt={p.label} style={{ maxHeight: '74px', maxWidth: '100%', objectFit: 'contain' }} />
                   </div>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>{p.label}</div>
                 </div>
@@ -155,8 +153,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
         <div style={{ display: 'flex', gap: '16px', flex: 1, justifyContent: 'space-between' }}>
           {AD_IMGS.map((p) => (
             <div key={p.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.src} alt={p.label} style={{ height: '34px', width: '34px', objectFit: 'contain' }} />
+                <img src={p.src} alt={p.label} style={{ height: '34px', width: '34px', objectFit: 'contain' }} />
               <span style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a' }}>{p.label}</span>
             </div>
           ))}

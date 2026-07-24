@@ -48,7 +48,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose 
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [iframeError, setIframeError] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const loadTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const loadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Build the iframe URL for the server-rendered HTML document
   const buildIframeUrl = useCallback((tpl: string, banner: string) => {
@@ -74,17 +74,19 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose 
         setIframeLoaded(true)
       }
     }, 5000)
-    return () => clearTimeout(loadTimerRef.current)
+    return () => {
+      if (loadTimerRef.current) clearTimeout(loadTimerRef.current)
+    }
   }, [iframeUrl])
 
   const handleIframeLoad = useCallback(() => {
-    clearTimeout(loadTimerRef.current)
+    if (loadTimerRef.current) clearTimeout(loadTimerRef.current)
     setIframeLoaded(true)
     setIframeError(false)
   }, [])
 
   const handleIframeError = useCallback(() => {
-    clearTimeout(loadTimerRef.current)
+    if (loadTimerRef.current) clearTimeout(loadTimerRef.current)
     setIframeError(true)
     setIframeLoaded(true)
   }, [])

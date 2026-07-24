@@ -34,9 +34,7 @@ export async function POST(req: NextRequest) {
   // If the desktop app is sending a save request, persist to the runtime config file
   if (configPath && body && (body.appsScriptUrl !== undefined || body.appPin !== undefined)) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const fs = require('fs')
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const path = require('path')
       const dir = path.dirname(configPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })

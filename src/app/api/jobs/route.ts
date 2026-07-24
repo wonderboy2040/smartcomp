@@ -3,6 +3,23 @@ import { listRows, createRow, isConfigured } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
 import { generateTrackToken } from '@/lib/notifications'
 
+const money = (value: any) => Math.round((Number(value) || 0) * 100) / 100
+
+function jobLedger(j: any) {
+  const total = money(Number(j?.finalAmount) || Number(j?.estimatedAmount) || 0)
+  const advance = money(j?.advanceAmount)
+  const paid = money(j?.paidAmount)
+  const paidTotal = money(advance + paid)
+  const balanceDue = money(Math.max(0, total - paidTotal))
+  return { total, advance, paid, paidTotal, balanceDue }
+}
+
+function ageDays(createdAt: any) {
+  const created = createdAt ? new Date(createdAt).getTime() : 0
+  if (!created || Number.isNaN(created)) return 0
+  return Math.max(0, Math.floor((Date.now() - created) / (24 * 60 * 60 * 1000)))
+}
+
 /**
  * GET /api/jobs — list all service jobs
  * Query: ?status=Pending ?engineer=xxx ?search=xxx
@@ -26,7 +43,8 @@ export async function GET(req: NextRequest) {
         String(j?.customerMobile || '').includes(q) ||
         String(j?.brandModel || '').toLowerCase().includes(q) ||
         String(j?.deviceType || '').toLowerCase().includes(q) ||
-        String(j?.serialNumber || '').toLowerCase().includes(q)
+        String(j?.serialNumber || '').toLowerCase().includes(q) ||
+        String(j?.problemDesc || '').toLowerCase().includes(q)
       )
     }
 
@@ -34,36 +52,48 @@ export async function GET(req: NextRequest) {
     jobs.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
 
     // Defensive coercion + parse status history + build track URL
-    const result = jobs.map((j) => ({
-      ...j,
-      jobId: String(j?.jobId || ''),
-      trackToken: String(j?.trackToken || ''),
-      customerName: String(j?.customerName || ''),
-      customerMobile: String(j?.customerMobile || ''),
-      deviceType: String(j?.deviceType || ''),
-      brandModel: String(j?.brandModel || ''),
-      serialNumber: String(j?.serialNumber || ''),
-      problemDesc: String(j?.problemDesc || ''),
-      accessories: String(j?.accessories || ''),
-      serviceType: String(j?.serviceType || 'InShop'),
-      priority: String(j?.priority || 'Low'),
-      status: String(j?.status || 'Pending'),
-      estimatedAmount: Number(j?.estimatedAmount) || 0,
-      advanceAmount: Number(j?.advanceAmount) || 0,
-      finalAmount: Number(j?.finalAmount) || 0,
-      serviceCharge: Number(j?.serviceCharge) || 0,
-      paidAmount: Number(j?.paidAmount) || 0,
-      engineerShare: Number(j?.engineerShare) || 0,
-      adminShare: Number(j?.adminShare) || 0,
-      partsProfit: Number(j?.partsProfit) || 0,
-      serviceProfit: Number(j?.serviceProfit) || 0,
-      warrantyDays: Number(j?.warrantyDays) || 0,
-      warrantyExpiry: j?.warrantyExpiry || '',
-      diagnosisNotes: String(j?.diagnosisNotes || ''),
-      partsUsed: safeJsonParse<any[]>(j?.partsUsedJson, []),
-      statusHistory: safeJsonParse<any[]>(j?.statusHistoryJson, []),
-      trackUrl: j?.trackToken ? `/track/${j.jobId}-${j.trackToken}` : '',
-    }))
+    const result = jobs.map((j) => {
+      const ledger = jobLedger(j)
+      const daysOpen = ageDays(j?.createdAt)
+      const active = String(j?.status || 'Pending') === 'Pending' || String(j?.status || '') === 'In Progress'
+      return {
+        ...j,
+        jobId: String(j?.jobId || ''),
+        trackToken: String(j?.trackToken || ''),
+        customerName: String(j?.customerName || ''),
+        customerMobile: String(j?.customerMobile || ''),
+        deviceType: String(j?.deviceType || ''),
+        brandModel: String(j?.brandModel || ''),
+        serialNumber: String(j?.serialNumber || ''),
+        problemDesc: String(j?.problemDesc || ''),
+        accessories: String(j?.accessories || ''),
+        serviceType: String(j?.serviceType || 'InShop'),
+        priority: String(j?.priority || 'Low'),
+        status: String(j?.status || 'Pending'),
+        estimatedAmount: money(j?.estimatedAmount),
+        advanceAmount: money(j?.advanceAmount),
+        finalAmount: money(j?.finalAmount),
+        serviceCharge: money(j?.serviceCharge),
+        paidAmount: money(j?.paidAmount),
+        paymentMode: String(j?.paymentMode || ''),
+        engineerShare: money(j?.engineerShare),
+        adminShare: money(j?.adminShare),
+        partsProfit: money(j?.partsProfit),
+        serviceProfit: money(j?.serviceProfit),
+        warrantyDays: Number(j?.warrantyDays) || 0,
+        warrantyExpiry: j?.warrantyExpiry || '',
+        diagnosisNotes: String(j?.diagnosisNotes || ''),
+        feedbackRating: Number(j?.feedbackRating) || 0,
+        feedbackComment: String(j?.feedbackComment || ''),
+        feedbackAt: String(j?.feedbackAt || ''),
+        partsUsed: safeJsonParse<any[]>(j?.partsUsedJson, []),
+        statusHistory: safeJsonParse<any[]>(j?.statusHistoryJson, []),
+        trackUrl: j?.trackToken ? `/track/${j.jobId}-${j.trackToken}` : '',
+        ageDays: daysOpen,
+        isOverdue: active && daysOpen >= 3,
+        ...ledger,
+      }
+    })
 
     return NextResponse.json(result)
   } catch (e: any) {
@@ -79,6 +109,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    const customerName = String(body?.customerName || '').trim()
+    const customerMobile = String(body?.customerMobile || '').trim()
+    const problemDesc = String(body?.problemDesc || '').trim()
+    if (!customerName || !customerMobile || !problemDesc) {
+      return NextResponse.json({ error: 'Customer name, mobile, and problem are required' }, { status: 400 })
+    }
 
     // Generate job ID
     const now = new Date()
@@ -107,20 +144,21 @@ export async function POST(req: NextRequest) {
       note: 'Job created',
     }]
 
+    const advanceAmount = money(body?.advanceAmount)
     const job = await createRow('Jobs', {
       jobId,
       trackToken,
-      customerName: String(body?.customerName || ''),
-      customerMobile: String(body?.customerMobile || ''),
-      deviceType: String(body?.deviceType || ''),
+      customerName,
+      customerMobile,
+      deviceType: String(body?.deviceType || 'Laptop'),
       brandModel: String(body?.brandModel || ''),
       serialNumber: String(body?.serialNumber || ''),
-      problemDesc: String(body?.problemDesc || ''),
+      problemDesc,
       accessories: String(body?.accessories || ''),
       serviceType: String(body?.serviceType || 'InShop'),
       priority: String(body?.priority || 'Low'),
-      estimatedAmount: Number(body?.estimatedAmount) || 0,
-      advanceAmount: Number(body?.advanceAmount) || 0,
+      estimatedAmount: money(body?.estimatedAmount),
+      advanceAmount,
       advanceMode: String(body?.advanceMode || ''),
       status: 'Pending',
       assignedEngineer: String(body?.assignedEngineer || ''),
@@ -141,19 +179,23 @@ export async function POST(req: NextRequest) {
       statusHistoryJson: JSON.stringify(statusHistory),
       completedDate: '',
       deliveredAt: '',
+      feedbackRating: 0,
+      feedbackComment: '',
+      feedbackAt: '',
     })
 
-    // If advance was paid, record a ServicePayment
-    if (Number(body?.advanceAmount) > 0) {
+    // If advance was paid, record a ServicePayment. The job's paidAmount field
+    // intentionally excludes advanceAmount so invoice paid total = advance + paidAmount.
+    if (advanceAmount > 0) {
       await createRow('ServicePayments', {
         jobId,
-        customerName: String(body?.customerName || ''),
-        amount: Number(body?.advanceAmount),
+        customerName,
+        amount: advanceAmount,
         mode: String(body?.advanceMode || 'Cash'),
         type: 'Advance',
         date: new Date().toISOString(),
         engineerShare: 0,
-        adminShare: Number(body?.advanceAmount),
+        adminShare: advanceAmount,
         notes: 'Advance payment at job creation',
       }).catch(() => {})
     }
@@ -161,6 +203,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...job,
       trackUrl: `/track/${jobId}-${trackToken}`,
+      balanceDue: money(Math.max(0, (Number(body?.estimatedAmount) || 0) - advanceAmount)),
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })

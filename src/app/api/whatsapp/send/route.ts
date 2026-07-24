@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getRow, listRows, isConfigured } from '@/lib/sheets-client'
+import { getRow, listRows, isConfigured, updateRow } from '@/lib/sheets-client'
 import { generateWhatsAppLink, buildInvoiceShareMessage, buildPaymentReminderMessage } from '@/lib/whatsapp'
+import { generateShareToken } from '@/lib/share-tokens'
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,6 +27,15 @@ export async function POST(req: NextRequest) {
       const phone = String(record.customerPhone || '')
       if (!phone) return NextResponse.json({ error: 'Customer has no phone' }, { status: 400 })
 
+      let shareToken = String(record.shareToken || '')
+      if (!shareToken) {
+        shareToken = generateShareToken()
+        await updateRow(sheet, id, { shareToken }).catch(() => {})
+      }
+
+      const baseUrl = (process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin).replace(/\/$/, '')
+      const viewUrl = `${baseUrl}/track/doc/${encodeURIComponent(id)}?type=${docType}&token=${encodeURIComponent(shareToken)}`
+
       const message = buildInvoiceShareMessage(
         shopName,
         String(record.customerName || ''),
@@ -33,10 +43,10 @@ export async function POST(req: NextRequest) {
         String(record.number || ''),
         Number(record.grandTotal) || 0,
         docType === 'quotation' && record.validTill ? new Date(record.validTill) : undefined
-      )
+      ) + `\n\nView online: ${viewUrl}`
       const link = generateWhatsAppLink(phone, message)
 
-      return NextResponse.json({ success: true, link, message, phone })
+      return NextResponse.json({ success: true, link, message, phone, viewUrl })
     }
 
     if (action === 'paymentReminder') {
