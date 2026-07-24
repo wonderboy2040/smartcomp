@@ -210,10 +210,15 @@ function TrackInner() {
                     <div className="flex-1 pb-2">
                       <p className={`text-sm font-medium ${cfg.color}`}>{cfg.label}</p>
                       <p className="text-xs text-slate-500">
-                        {h.timestamp ? new Date(h.timestamp).toLocaleString('en-IN', {
-                          day: '2-digit', month: 'short', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        }) : ''}
+                        {(() => {
+                          if (!h.timestamp) return ''
+                          const d = new Date(h.timestamp)
+                          if (isNaN(d.getTime())) return ''
+                          return d.toLocaleString('en-IN', {
+                            day: '2-digit', month: 'short', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit',
+                          })
+                        })()}
                       </p>
                       {h.note && <p className="text-xs text-slate-500 mt-0.5">{h.note}</p>}
                     </div>

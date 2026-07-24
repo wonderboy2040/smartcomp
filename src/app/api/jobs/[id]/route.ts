@@ -355,15 +355,30 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (action === 'update') {
       const data: any = {}
-      const fields = ['customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes', 'warrantyDays', 'serviceCharge', 'status']
+      const fields = [
+        'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber',
+        'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount',
+        'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes',
+        'warrantyDays', 'serviceCharge', 'finalAmount', 'status', 'partsProfit', 'serviceProfit'
+      ]
       for (const f of fields) {
         if (body[f] !== undefined) data[f] = body[f]
       }
-      if (body.serviceCharge !== undefined) {
-        const existing = await getRow<any>('Jobs', id)
-        const partsUsed = normalizeParts(safeJsonParse<any[]>(existing?.partsUsedJson, []))
-        const partsTotal = partsUsed.reduce((s: number, p: any) => s + (Number(p?.sellPrice) || 0) * (Number(p?.qty) || 1), 0)
-        data.finalAmount = money((Number(body.serviceCharge) || 0) + partsTotal)
+      if (body.partsUsed !== undefined || body.partsUsedJson !== undefined) {
+        const parts = normalizeParts(body.partsUsed || safeJsonParse(body.partsUsedJson, []))
+        data.partsUsedJson = JSON.stringify(parts)
+        const totals = getPartsTotals(parts)
+        data.partsProfit = totals.profit
+        const svcCharge = body.serviceCharge !== undefined ? money(body.serviceCharge) : undefined
+        if (svcCharge !== undefined) {
+          data.serviceCharge = svcCharge
+          data.serviceProfit = svcCharge
+          data.finalAmount = money(svcCharge + totals.sell)
+        } else {
+          const existing = await getRow<any>('Jobs', id)
+          const existingSvc = money(existing?.serviceCharge)
+          data.finalAmount = money(existingSvc + totals.sell)
+        }
       }
       const updated = await updateRow('Jobs', id, data)
       return NextResponse.json({ success: true, job: updated })
