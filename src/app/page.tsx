@@ -85,7 +85,7 @@ function HomeInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
-  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab, ...CORE_PRIORITY_PANELS]))
+  const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab]))
   const { theme, toggleTheme } = useTheme()
 
   const { data: shop } = useFetch<any>('/api/shop', undefined)
@@ -106,7 +106,7 @@ function HomeInner() {
     if ('requestIdleCallback' in window) {
       ;(window as any).requestIdleCallback(preload)
     } else {
-      setTimeout(preload, 100)
+      setTimeout(preload, 300)
     }
   }, [])
 
@@ -117,7 +117,7 @@ function HomeInner() {
     PREFETCH_URLS.forEach((url, i) => {
       const t = setTimeout(() => {
         if (!cancelled) prefetch(url)
-      }, 50 + i * 50)
+      }, 600 + i * 250)
       timers.push(t)
     })
     return () => {

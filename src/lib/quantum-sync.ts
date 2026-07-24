@@ -354,16 +354,10 @@ export function startQuantumLiveSync() {
     await pushToCloud()
     const result = await pullFromCloud(false)
     if (result.changed && result.data) {
-      // Merge and update local caches
-      // This is simplified - in real app we'd merge into api cache
       console.log('[Quantum Sync] New data from cloud', result.data)
       invalidate('/api/dashboard')
-      // Show notification for new jobs if engineer (like index.html)
-      if (result.data.jobs && Array.isArray(result.data.jobs)) {
-        // Could show notification for new job IDs not in local cache
-      }
     }
-  }, 1000) // 1s like index.html
+  }, 15000) // 15s interval for smooth lag-free background sync
 }
 
 export function stopQuantumLiveSync() {
