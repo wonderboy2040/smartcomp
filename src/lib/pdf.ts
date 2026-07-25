@@ -288,7 +288,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   const pageWidth = 210
   const pageHeight = 297
-  const margin = 12
+  const margin = 10
   const usableWidth = pageWidth - margin * 2
 
   // ===== EXACT FULL UNCROPPED AD BANNER GEOMETRY (1000x285 ASPECT RATIO) =====

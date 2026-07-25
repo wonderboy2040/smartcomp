@@ -303,15 +303,13 @@ export async function generateInvoiceHtml(
       <tr class="item-row">
         <td class="num">${i + 1}</td>
         <td class="name">
-          <div class="iname">${escapeHtml(item.name)}</div>
-          ${item.sku ? `<div class="isku">SKU: ${escapeHtml(item.sku)}</div>` : ''}
+          <div class="iname">${escapeHtml(item.name)}${item.sku ? ` <span style="font-size:8px;color:#94a3b8;">SKU: ${escapeHtml(item.sku)}</span>` : ''}</div>
         </td>
         <td class="center">${escapeHtml(item.hsnCode || '-')}</td>
         <td class="center">${item.quantity}</td>
-        <td class="center">${escapeHtml((item as any).unit || 'Nos')}</td>
-        <td class="right">${item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') : '-'}</td>
-        <td class="right">${formatCurrency(item.amount).replace('Rs. ', '')}</td>
         <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
+        <td class="right">${formatCurrency(item.amount).replace('Rs. ', '')}</td>
+        <td class="right">${item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') + (item.gstRate ? ` (${item.gstRate}%)` : '') : '-'}</td>
         <td class="right bold">${formatCurrency(item.total).replace('Rs. ', '')}</td>
       </tr>`,
     )
@@ -678,8 +676,8 @@ export async function generateInvoiceHtml(
   .items-table tbody td.name { text-align: left; width: auto; }
   .items-table tbody td.name .iname { font-weight: 600; }
   .items-table tbody td.name .isku { font-size: 8.5px; color: #94a3b8; margin-top: 1px; }
-  .items-table tbody td.center { text-align: center; }
-  .items-table tbody td.right { text-align: right; }
+  .items-table tbody td.center { text-align: center; width: 8%; }
+  .items-table tbody td.right { text-align: right; width: 14%; }
   .items-table tbody td.bold { font-weight: 700; }
   .items-table tbody tr:nth-child(even) { background: #f8fafc; }
   .items-table tbody tr.item-row:hover { background: #f1f5f9; }
@@ -1022,13 +1020,12 @@ export async function generateInvoiceHtml(
       <thead>
         <tr>
           <th>#</th>
-          <th class="left">Item name</th>
-          <th>HSN/SAC</th>
+          <th class="left">Item / Description (SKU)</th>
+          <th>HSN / SAC</th>
           <th>Qty</th>
-          <th>Unit</th>
-          <th class="right">GST (Rs.)</th>
-          <th class="right">Taxable</th>
           <th class="right">Rate (Rs.)</th>
+          <th class="right">Taxable (Rs.)</th>
+          <th class="right">GST (Rs.)</th>
           <th class="right">Amount (Rs.)</th>
         </tr>
       </thead>
