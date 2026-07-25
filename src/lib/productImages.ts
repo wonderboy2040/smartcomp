@@ -49,31 +49,19 @@ async function readAndCompressImage(searchDirs: string[], baseName: string, maxW
 export async function loadProductImages(): Promise<ProductImageSet> {
   if (CACHE) return CACHE
 
-  // FAST PATH (v7.0.5): Read files async without blocking sharp compression
-  // This eliminates server freeze when opening invoices/service-pdf
   const publicDir = path.join(process.cwd(), 'public')
   const postersDir = path.join(publicDir, 'posters')
-  const adsDir = path.join(publicDir, 'ads')
 
-  async function readFileToBase64(filePath: string): Promise<string> {
-    return new Promise((resolve) => {
-      fs.readFile(filePath, (err, data) => {
-        if (err) return resolve('')
-        const ext = path.extname(filePath)
-        const mime = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : 'image/jpeg'
-        resolve(`data:${mime};base64,${data.toString('base64')}`)
-      })
-    })
-  }
-
+  // Use readAndCompressImage for all images — sharp compresses WebP/PNG → JPEG
+  // This keeps PDF output at 150–200 KB instead of 500 KB+
   const [computers, laptop, printers, accessories, flyer, productgrid, logo] = await Promise.all([
-    readFileToBase64(path.join(postersDir, 'gaming-pc.webp')).catch(() => ''),
-    readFileToBase64(path.join(postersDir, 'laptop-sale.webp')).catch(() => ''),
-    readFileToBase64(path.join(postersDir, 'printer-offer.webp')).catch(() => ''),
-    readFileToBase64(path.join(postersDir, 'accessories.webp')).catch(() => ''),
-    readFileToBase64(path.join(postersDir, 'smartcomputers-a4-flyer-landscape.webp')).catch(() => ''),
-    readFileToBase64(path.join(postersDir, 'smartcomputers-product-grid.webp')).catch(() => ''),
-    readFileToBase64(path.join(publicDir, 'logo.svg')).catch(() => ''),
+    readAndCompressImage([postersDir], 'gaming-pc', 400, 50).catch(() => ''),
+    readAndCompressImage([postersDir], 'laptop-sale', 400, 50).catch(() => ''),
+    readAndCompressImage([postersDir], 'printer-offer', 400, 50).catch(() => ''),
+    readAndCompressImage([postersDir], 'accessories', 400, 50).catch(() => ''),
+    readAndCompressImage([postersDir], 'smartcomputers-a4-flyer-landscape', 800, 55).catch(() => ''),
+    readAndCompressImage([postersDir], 'smartcomputers-product-grid', 800, 55).catch(() => ''),
+    readAndCompressImage([publicDir], 'logo', 200, 85).catch(() => ''),
   ])
 
   const result: ProductImageSet = {
@@ -88,3 +76,4 @@ export async function loadProductImages(): Promise<ProductImageSet> {
   CACHE = result
   return result
 }
+

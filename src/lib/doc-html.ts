@@ -577,7 +577,15 @@ export async function generateInvoiceHtml(
     border-bottom: 3px solid ${tpl.accent};
     margin: -4px -6px 8px -6px;
   }
-  .header .shop-block { flex: 1; min-width: 0; }
+  .header .shop-block { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; }
+  .header .shop-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+  .header .shop-text { flex: 1; min-width: 0; }
   .header .shop-name {
     font-size: 19px;
     font-weight: 800;
@@ -929,10 +937,18 @@ export async function generateInvoiceHtml(
       box-shadow: none !important;
       border: none !important;
       border-radius: 0 !important;
-      padding: 0 !important;
+      padding: 4mm 6mm !important;
       margin: 0 !important;
     }
-    .header { margin: 0 0 10px 0; border-radius: 0; }
+    .header {
+      margin: -4mm -6mm 8px -6mm !important;
+      padding: 8px 12px !important;
+      border-radius: 0 !important;
+    }
+    .shop-logo {
+      width: 40px !important;
+      height: 40px !important;
+    }
     /* Avoid breaking inside these blocks */
     .items-table tbody tr,
     .bill-box,
@@ -946,6 +962,10 @@ export async function generateInvoiceHtml(
     .footer {
       break-inside: avoid !important;
       page-break-inside: avoid !important;
+    }
+    /* Keep bottom section together on same page if possible */
+    .bottom-split {
+      break-before: avoid !important;
     }
     /* Repeat table header on each printed page */
     thead { display: table-header-group; }
@@ -983,12 +1003,15 @@ export async function generateInvoiceHtml(
   <div class="sheet">
     <div class="header">
       <div class="shop-block">
-        <h1 class="shop-name">${escapeHtml(data.shop.name || 'Smart Computers')}</h1>
-        <div class="shop-info">
-          ${data.shop.address ? `<div>${escapeHtml(data.shop.address)}</div>` : ''}
-          ${data.shop.state ? `<div>${escapeHtml(data.shop.state)}${shopStateCode ? ` (${shopStateCode})` : ''}</div>` : ''}
-          ${data.shop.phone || data.shop.email ? `<div>${data.shop.phone ? `Ph: ${escapeHtml(data.shop.phone)}` : ''}${data.shop.phone && data.shop.email ? ' &nbsp;|&nbsp; ' : ''}${data.shop.email ? escapeHtml(data.shop.email) : ''}</div>` : ''}
-          ${data.shop.gstNumber ? `<div class="gst">GSTIN: ${escapeHtml(data.shop.gstNumber)}</div>` : ''}
+        <img src="/logo.webp" alt="Logo" class="shop-logo" onerror="this.style.display='none'" />
+        <div class="shop-text">
+          <h1 class="shop-name">${escapeHtml(data.shop.name || 'Smart Computers')}</h1>
+          <div class="shop-info">
+            ${data.shop.address ? `<div>${escapeHtml(data.shop.address)}</div>` : ''}
+            ${data.shop.state ? `<div>${escapeHtml(data.shop.state)}${shopStateCode ? ` (${shopStateCode})` : ''}</div>` : ''}
+            ${data.shop.phone || data.shop.email ? `<div>${data.shop.phone ? `Ph: ${escapeHtml(data.shop.phone)}` : ''}${data.shop.phone && data.shop.email ? ' &nbsp;|&nbsp; ' : ''}${data.shop.email ? escapeHtml(data.shop.email) : ''}</div>` : ''}
+            ${data.shop.gstNumber ? `<div class="gst">GSTIN: ${escapeHtml(data.shop.gstNumber)}</div>` : ''}
+          </div>
         </div>
       </div>
       <div class="doc-meta">
