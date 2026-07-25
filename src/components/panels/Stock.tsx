@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload, Tag, FolderTag, Layers } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload, Tag, Folder, Layers } from 'lucide-react'
 import { toCSV, downloadCSV } from '@/lib/utils'
 
 export const PRESET_CATEGORIES = [
@@ -122,7 +122,7 @@ export function StockPanel() {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             Stock & Inventory
             <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border-violet-200 dark:border-violet-800">
-              <FolderTag className="w-3 h-3 mr-1" /> {categoryStats.length} Categories
+              <Folder className="w-3 h-3 mr-1" /> {categoryStats.length} Categories
             </Badge>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage items, category tags, GST rates, prices and quantities</p>
