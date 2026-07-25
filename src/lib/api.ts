@@ -79,23 +79,34 @@ function trackDeleted(type: 'jobs' | 'payments', id: string) {
   } catch {}
 }
 
+function loadDeletedExpiryFromStorage() {
+  if (typeof window === 'undefined') return
+  try {
+    const dj = JSON.parse(localStorage.getItem('deletedJobs') || '{}')
+    const dp = JSON.parse(localStorage.getItem('deletedPayments') || '{}')
+    const now = Date.now()
+    Object.keys(dj).forEach((id) => {
+      if (now - dj[id] < 5 * 60 * 1000) {
+        deletedExpiry.set(`jobs:${id}`, dj[id] + 5 * 60 * 1000)
+        recentlyDeletedJobs.add(id)
+      }
+    })
+    Object.keys(dp).forEach((id) => {
+      if (now - dp[id] < 5 * 60 * 1000) {
+        deletedExpiry.set(`payments:${id}`, dp[id] + 5 * 60 * 1000)
+        recentlyDeletedPayments.add(id)
+      }
+    })
+  } catch {}
+}
+if (typeof window !== 'undefined') {
+  loadDeletedExpiryFromStorage()
+}
+
 function isRecentlyDeleted(type: 'jobs' | 'payments', id: string): boolean {
   const key = `${type}:${id}`
   const exp = deletedExpiry.get(key)
-  if (!exp) {
-    // Check localStorage persistence like index.html loadDeletedTracking
-    try {
-      const lsKey = type === 'jobs' ? 'deletedJobs' : 'deletedPayments'
-      const stored = JSON.parse(localStorage.getItem(lsKey) || '{}')
-      if (stored[id] && Date.now() - stored[id] < 5 * 60 * 1000) {
-        deletedExpiry.set(key, stored[id] + 5 * 60 * 1000)
-        const set = type === 'jobs' ? recentlyDeletedJobs : recentlyDeletedPayments
-        set.add(id)
-        return true
-      }
-    } catch {}
-    return false
-  }
+  if (!exp) return false
   if (exp < Date.now()) {
     deletedExpiry.delete(key)
     const set = type === 'jobs' ? recentlyDeletedJobs : recentlyDeletedPayments
@@ -162,11 +173,14 @@ function notifyPattern(prefix: string) {
 }
 
 function setCache(key: string, data: any) {
+  const prevHash = lastDataHash.get(key)
+  const newHash = setQuantumMem(key, data)
   cache.set(key, data)
   timestamps.set(key, Date.now())
-  // Quantum: also stash in 5s mem cache
-  setQuantumMem(key, data)
-  notify(key)
+  if (prevHash !== newHash) {
+    lastDataHash.set(key, newHash)
+    notify(key)
+  }
 }
 
 export function mutate<T>(key: string, dataOrUpdater: T | Updater<T>) {
