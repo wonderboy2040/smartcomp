@@ -105,8 +105,8 @@ function setQuantumMem(key: string, data: any): string {
 const STALE_MS = 120 * 1000 // 120s — matches Apps Script 60s cache + extra 60s window
 const RETRY_ATTEMPTS = 1
 const RETRY_DELAY = 400
-const FETCH_TIMEOUT_MS = 8000 // 8s for writes — Apps Script cold start can take 6-8s
-const QUANTUM_FETCH_TIMEOUT = 8000 // 8s for GET — was 3s, far too short for cold starts
+const FETCH_TIMEOUT_MS = 15000 // 15s for writes — server-side Apps Script needs 10s, add network buffer
+const QUANTUM_FETCH_TIMEOUT = 12000 // 12s for GET — server-side Apps Script needs 8s, add network buffer
 const DASHBOARD_INVALIDATE_DEBOUNCE = 600
 
 // Offline detection
@@ -114,6 +114,17 @@ let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => { isOnline = true })
   window.addEventListener('offline', () => { isOnline = false })
+}
+
+// Normalize abort/timeout errors into user-friendly messages
+function normalizeError(e: any): Error {
+  if (e?.name === 'AbortError' || e?.name === 'TimeoutError' || e?.message?.includes('aborted') || e?.message?.includes('signal')) {
+    return new Error('Request timed out — server is slow, please try again')
+  }
+  if (e?.message?.includes('Failed to fetch') || e?.message?.includes('NetworkError') || e?.message?.includes('fetch')) {
+    return new Error('Network error — check your internet connection')
+  }
+  return e
 }
 
 function notify(key: string) {
@@ -287,7 +298,7 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
     // Quantum: use 3s for GET ultra-fast, 5s for others
     const isGet = !options?.method || options.method === 'GET'
     const timeoutMs = isGet ? QUANTUM_FETCH_TIMEOUT : FETCH_TIMEOUT_MS
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    const timeout = setTimeout(() => controller.abort('Request timed out — server took too long'), timeoutMs)
     
     const res = await fetch(url, {
       ...options,
@@ -331,9 +342,10 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
       await new Promise(r => setTimeout(r, RETRY_DELAY * attempt))
       return doFetchWithRetry(url, options, attempt + 1)
     }
-    cache.set(`__error:${url}`, e?.message || 'Failed')
+    const normalized = normalizeError(e)
+    cache.set(`__error:${url}`, normalized?.message || 'Failed')
     notify(url)
-    throw e
+    throw normalized
   }
 }
 
@@ -388,7 +400,7 @@ export async function apiPost(url: string, body: any) {
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    const timeout = setTimeout(() => controller.abort('Request timed out — server took too long'), FETCH_TIMEOUT_MS)
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -411,7 +423,7 @@ export async function apiPost(url: string, body: any) {
     for (const key of affectedKeys) {
       mutate<any[]>(key, (prev) => (prev ? prev.filter((x) => x.id !== tempId) : []))
     }
-    throw e
+    throw normalizeError(e)
   }
 }
 
@@ -562,7 +574,7 @@ export async function apiPut(url: string, body: any) {
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    const timeout = setTimeout(() => controller.abort('Request timed out — server took too long'), FETCH_TIMEOUT_MS)
     const r = await fetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -597,7 +609,7 @@ export async function apiPut(url: string, body: any) {
     for (const [key, snap] of snapshots) {
       setCache(key, snap)
     }
-    throw e
+    throw normalizeError(e)
   }
 }
 
@@ -638,7 +650,7 @@ export async function apiDelete(url: string) {
 
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    const timeout = setTimeout(() => controller.abort('Request timed out — server took too long'), FETCH_TIMEOUT_MS)
     const r = await fetch(url, { method: 'DELETE', signal: controller.signal })
     clearTimeout(timeout)
     const data = await r.json().catch(() => ({}))
@@ -649,7 +661,7 @@ export async function apiDelete(url: string) {
     for (const [key, snap] of snapshots) {
       setCache(key, snap)
     }
-    throw e
+    throw normalizeError(e)
   }
 }
 
