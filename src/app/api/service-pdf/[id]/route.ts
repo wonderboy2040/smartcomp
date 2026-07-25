@@ -76,7 +76,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       discount: 0,
     })
 
-    const jobTotal = finalTotal > 0 ? finalTotal : calc.grandTotal
+    const jobTotal = calc.grandTotal
     const paid = (Number(job.paidAmount) || 0) + (Number(job.advanceAmount) || 0)
     const amountDue = Math.max(0, jobTotal - paid)
     

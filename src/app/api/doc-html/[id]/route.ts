@@ -230,7 +230,7 @@ export async function GET(
           sku: 'SERVICE',
           hsnCode: '9983',
           quantity: 1,
-          rate: Number(job.serviceCharge) || Number(job.finalAmount) || 0,
+          rate: Number(job.serviceCharge) || Math.max(0, (Number(job.finalAmount) || 0) - partsUsed.reduce((s: number, p: any) => s + (Number(p.sellPrice || p.price || p.costPrice || 0) * Number(p.qty || 1)), 0)) || 0,
           gstApplicable: false,
           gstRate: 0,
           costPrice: 0,

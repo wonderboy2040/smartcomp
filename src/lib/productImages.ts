@@ -49,21 +49,42 @@ async function readAndCompressImage(searchDirs: string[], baseName: string, maxW
 export async function loadProductImages(): Promise<ProductImageSet> {
   if (CACHE) return CACHE
 
+  // FAST PATH (v7.0.5): Read files async without blocking sharp compression
+  // This eliminates server freeze when opening invoices/service-pdf
   const publicDir = path.join(process.cwd(), 'public')
-  const adsDir = path.join(publicDir, 'ads')
   const postersDir = path.join(publicDir, 'posters')
-  const searchDirs = [postersDir, adsDir, publicDir]
+  const adsDir = path.join(publicDir, 'ads')
 
-  const result: ProductImageSet = {
-    computers: await readAndCompressImage(searchDirs, 'computers', 400, 65) || await readAndCompressImage(searchDirs, 'gaming-pc', 400, 65),
-    laptop: await readAndCompressImage(searchDirs, 'laptop', 400, 65) || await readAndCompressImage(searchDirs, 'laptop-sale', 400, 65),
-    printers: await readAndCompressImage(searchDirs, 'printers', 400, 65) || await readAndCompressImage(searchDirs, 'printer-offer', 400, 65),
-    accessories: await readAndCompressImage(searchDirs, 'accessories', 400, 65),
-    flyer: await readAndCompressImage(searchDirs, 'smartcomputers-a4-flyer-landscape', 1000, 70) || await readAndCompressImage(searchDirs, 'smartcomputers-a4-flyer', 1000, 70),
-    productgrid: await readAndCompressImage(searchDirs, 'smartcomputers-product-grid', 1000, 70),
-    logo: await readAndCompressImage([publicDir], 'logo', 300, 75),
+  async function readFileToBase64(filePath: string): Promise<string> {
+    return new Promise((resolve) => {
+      fs.readFile(filePath, (err, data) => {
+        if (err) return resolve('')
+        const ext = path.extname(filePath)
+        const mime = ext === '.webp' ? 'image/webp' : ext === '.png' ? 'image/png' : 'image/jpeg'
+        resolve(`data:${mime};base64,${data.toString('base64')}`)
+      })
+    })
   }
 
+  const [computers, laptop, printers, accessories, flyer, productgrid, logo] = await Promise.all([
+    readFileToBase64(path.join(postersDir, 'gaming-pc.webp')).catch(() => ''),
+    readFileToBase64(path.join(postersDir, 'laptop-sale.webp')).catch(() => ''),
+    readFileToBase64(path.join(postersDir, 'printer-offer.webp')).catch(() => ''),
+    readFileToBase64(path.join(postersDir, 'accessories.webp')).catch(() => ''),
+    readFileToBase64(path.join(postersDir, 'smartcomputers-a4-flyer-landscape.webp')).catch(() => ''),
+    readFileToBase64(path.join(postersDir, 'smartcomputers-product-grid.webp')).catch(() => ''),
+    readFileToBase64(path.join(publicDir, 'logo.svg')).catch(() => ''),
+  ])
+
+  const result: ProductImageSet = {
+    computers: computers || '',
+    laptop: laptop || '',
+    printers: printers || '',
+    accessories: accessories || '',
+    flyer: flyer || '',
+    productgrid: productgrid || '',
+    logo: logo || '',
+  }
   CACHE = result
   return result
 }

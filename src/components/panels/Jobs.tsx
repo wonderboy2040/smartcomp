@@ -382,12 +382,15 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   }
 
   const handleComplete = async () => {
+    // AUTO-FIX (v3.0.4 Pro): Recalculate final amount from parts + service charge
+    // to ensure invoice always shows correct total matching saved details
+    const calculatedTotal = serviceCharge > 0 ? (serviceCharge + partsTotalSell) : (finalAmount > 0 ? finalAmount : partsTotalSell)
     setSaving(true)
     try {
       await apiPut(`/api/jobs/${job.id}`, {
         action: 'complete',
         partsUsed,
-        finalAmount,
+        finalAmount: calculatedTotal,
         serviceCharge,
         paidAmount: Number(job?.paidAmount) || 0,
         paymentMode,
