@@ -367,7 +367,7 @@ export async function shareWhatsAppPdf({
       URL.revokeObjectURL(downloadUrl)
     }, 2000)
 
-    const fullMsg = `${messageText}\n\n📎 *PDF File Downloaded (${filename})* — Please attach the downloaded PDF file in this WhatsApp chat window.`
+    const fullMsg = messageText
     const waUrl = targetPhone
       ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(fullMsg)}`
       : `https://wa.me/?text=${encodeURIComponent(fullMsg)}`

@@ -1003,7 +1003,7 @@ export async function generateInvoiceHtml(
   <div class="sheet">
     <div class="header">
       <div class="shop-block">
-        <img src="/logo.webp" alt="Logo" class="shop-logo" onerror="this.style.display='none'" />
+        <img src="${data.productImages?.logo || data.shop?.logoUrl || '/logo.webp'}" alt="Logo" class="shop-logo" onerror="this.src='/logo.webp';this.onerror=null;" />
         <div class="shop-text">
           <h1 class="shop-name">${escapeHtml(data.shop.name || 'Smart Computers')}</h1>
           <div class="shop-info">
