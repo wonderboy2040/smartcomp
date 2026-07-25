@@ -15,19 +15,19 @@ interface ThemeContextType {
 const STORAGE_KEY = 'smartcomp-theme'
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'light',
-  resolvedTheme: 'light',
+  theme: 'dark',
+  resolvedTheme: 'dark',
   toggleTheme: () => {},
   setTheme: () => {},
 })
 
 function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'light'
+  if (typeof window === 'undefined') return 'dark'
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === 'light' || stored === 'dark') return stored
   } catch {}
-  return 'light'
+  return 'dark'
 }
 
 function applyTheme(nextTheme: Theme) {
@@ -45,7 +45,7 @@ function applyTheme(nextTheme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeState, setThemeState] = useState<Theme>('light')
+  const [themeState, setThemeState] = useState<Theme>('dark')
 
   useEffect(() => {
     const initialTheme = getInitialTheme()

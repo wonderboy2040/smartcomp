@@ -17,8 +17,29 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload, Tag, FolderTag, Layers } from 'lucide-react'
 import { toCSV, downloadCSV } from '@/lib/utils'
+
+export const PRESET_CATEGORIES = [
+  'Laptop',
+  'Desktop PC',
+  'Processor / CPU',
+  'Motherboard',
+  'RAM / Memory',
+  'SSD / Hard Drive',
+  'Graphics Card',
+  'Power Supply (SMPS)',
+  'Cabinet / Case',
+  'Monitor / Display',
+  'Keyboard & Mouse',
+  'Printer & Scanner',
+  'Networking & Wifi',
+  'CCTV & Security',
+  'Accessories & Cables',
+  'Software & OS',
+  'Repair Parts & Spares',
+  'General',
+]
 
 export function StockPanel() {
   const [search, setSearch] = useState('')
@@ -41,13 +62,24 @@ export function StockPanel() {
   )
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
 
+  // Merge items' actual categories with preset categories
   const categories = useMemo(() => {
-    return Array.from(new Set((items || []).map((i) => i.category).filter(Boolean)))
+    const itemCats = (items || []).map((i) => i.category).filter(Boolean)
+    return Array.from(new Set([...itemCats, ...PRESET_CATEGORIES]))
+  }, [items])
+
+  const categoryStats = useMemo(() => {
+    const counts = new Map<string, number>()
+    ;(items || []).forEach((i) => {
+      const cat = i.category || 'General'
+      counts.set(cat, (counts.get(cat) || 0) + 1)
+    })
+    return Array.from(counts.entries()).map(([category, count]) => ({ category, count }))
   }, [items])
 
   const filtered = useMemo(() => {
     return (items || []).filter((i) => {
-      if (categoryFilter !== 'all' && i.category !== categoryFilter) return false
+      if (categoryFilter !== 'all' && (i.category || 'General') !== categoryFilter) return false
       if (showLowOnly && Number(i.quantity) > Number(i.minQuantity)) return false
       return true
     })
@@ -87,8 +119,13 @@ export function StockPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Stock & Inventory</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage items, GST rates, prices and quantities</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            Stock & Inventory
+            <Badge variant="outline" className="text-xs bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 border-violet-200 dark:border-violet-800">
+              <FolderTag className="w-3 h-3 mr-1" /> {categoryStats.length} Categories
+            </Badge>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage items, category tags, GST rates, prices and quantities</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => {
@@ -97,14 +134,14 @@ export function StockPanel() {
           }} className="h-11" size="sm">
             <Download className="w-4 h-4 mr-1" /> Export CSV
           </Button>
-          <Button onClick={handleAdd} className="bg-slate-900 hover:bg-slate-800 h-11">
+          <Button onClick={handleAdd} className="bg-slate-900 hover:bg-slate-800 dark:bg-violet-600 dark:hover:bg-violet-700 text-white h-11">
             <Plus className="w-4 h-4 mr-1.5" /> Add Item
           </Button>
         </div>
       </div>
 
-      <Card className="border-slate-200">
-        <CardContent className="p-3">
+      <Card className="border-slate-200 dark:border-slate-800">
+        <CardContent className="p-3 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="w-4 h-4 absolute left-2.5 top-3 text-slate-400" />
@@ -116,11 +153,11 @@ export function StockPanel() {
               />
             </div>
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-40 h-11">
+              <SelectTrigger className="w-full sm:w-48 h-11">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="all">All Categories ({items?.length || 0})</SelectItem>
                 {categories.map((c) => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
@@ -129,13 +166,47 @@ export function StockPanel() {
             <Button
               variant={showLowOnly ? 'default' : 'outline'}
               onClick={() => setShowLowOnly(!showLowOnly)}
-              className={`h-11 flex-1 sm:flex-none ${showLowOnly ? 'bg-red-500 hover:bg-red-600' : ''}`}
+              className={`h-11 flex-1 sm:flex-none ${showLowOnly ? 'bg-red-500 hover:bg-red-600 text-white' : ''}`}
             >
               <AlertTriangle className="w-4 h-4 sm:mr-1.5" />
               <span className="sm:inline">Low Stock Only</span>
               <span className="sm:hidden">Low Stock</span>
             </Button>
           </div>
+
+          {/* Quick Category Chips Bar */}
+          {categoryStats.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-1 scrollbar-thin">
+              <button
+                onClick={() => setCategoryFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1 flex-shrink-0 ${
+                  categoryFilter === 'all'
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <Tag className="w-3 h-3" /> All ({items?.length || 0})
+              </button>
+              {categoryStats.map(({ category, count }) => (
+                <button
+                  key={category}
+                  onClick={() => setCategoryFilter(category === categoryFilter ? 'all' : category)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                    categoryFilter === category
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span>{category}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    categoryFilter === category ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -402,13 +473,51 @@ function ItemDialog({
               placeholder="e.g. LAP-HP-15S"
             />
           </div>
-          <div>
-            <Label>Category</Label>
-            <Input
-              value={form.category || ''}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              placeholder="e.g. Laptop"
-            />
+          <div className="sm:col-span-2 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Category</Label>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">Select preset or type custom</span>
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={PRESET_CATEGORIES.includes(form.category) ? form.category : 'custom'}
+                onValueChange={(val) => {
+                  if (val !== 'custom') setForm({ ...form, category: val })
+                }}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Preset Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom">✍️ Custom Category...</SelectItem>
+                  {PRESET_CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={form.category || ''}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                placeholder="Category name..."
+                className="flex-1"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1 pt-1">
+              {['Laptop', 'Desktop PC', 'RAM / Memory', 'SSD / Hard Drive', 'Printer & Scanner', 'General'].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setForm({ ...form, category: c })}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border transition-all ${
+                    form.category === c
+                      ? 'bg-violet-600 text-white border-violet-600 font-medium'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  + {c}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <Label>HSN Code</Label>

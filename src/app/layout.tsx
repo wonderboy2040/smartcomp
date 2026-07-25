@@ -54,7 +54,7 @@ const themeScript = `
 (function() {
   try {
     var stored = localStorage.getItem('smartcomp-theme');
-    var theme = stored === 'dark' ? 'dark' : 'light';
+    var theme = stored === 'light' ? 'light' : 'dark';
     var root = document.documentElement;
     if (theme === 'dark') {
       root.classList.add('dark');
