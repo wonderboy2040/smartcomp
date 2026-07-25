@@ -96,34 +96,22 @@ function LoginInner() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Smart Computers</h1>
           <p className="text-sm text-muted-foreground mt-1 font-medium">Sales & Service Panel</p>
-          <div className="mt-3 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              SECURE ACCESS
-            </span>
-            <span className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground border font-medium">v6.2 Secure</span>
-          </div>
         </div>
 
-        {/* Login Card - Theme aware, secure, no PIN disclosure */}
+        {/* Login Card */}
         <div className="rounded-2xl border bg-card text-card-foreground shadow-xl shadow-black/[0.05] overflow-hidden">
           <div className="p-6 sm:p-7">
-            <div className="flex items-start gap-3 mb-6">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/10 flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <Lock className="w-5 h-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-[15px] font-bold text-foreground">Authentication Required</h2>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Enter your secure PIN to access the panel. Your PIN is never displayed or stored in plain text.</p>
+                <h2 className="text-base font-bold text-foreground">Enter PIN</h2>
               </div>
             </div>
 
             <form onSubmit={submit} className="space-y-5">
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                  <span>PIN Code</span>
-                  <span className="text-[10px] font-normal text-muted-foreground">{pin.length}/8 digits</span>
-                </label>
                 <div className="relative">
                   <input
                     ref={inputRef}
@@ -152,17 +140,13 @@ function LoginInner() {
                     {showPin ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  Encrypted & secure • Never share your PIN
-                </p>
               </div>
 
               {error && (
                 <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3 flex items-start gap-2.5 animate-in slide-in-from-top-1">
                   <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-destructive">Authentication Failed</p>
+                    <p className="text-[13px] font-semibold text-destructive">Incorrect PIN</p>
                     <p className="text-xs text-destructive/80 mt-0.5">{error}</p>
                   </div>
                 </div>
@@ -173,7 +157,7 @@ function LoginInner() {
                   <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">Access Granted</p>
-                    <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Redirecting to dashboard...</p>
+                    <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">Redirecting...</p>
                   </div>
                   <Loader2 className="w-4 h-4 animate-spin text-emerald-500" />
                 </div>
@@ -187,71 +171,28 @@ function LoginInner() {
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Verifying PIN...
+                    Verifying...
                   </>
                 ) : success ? (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    Verified - Redirecting
+                    Redirecting...
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="w-4 h-4" />
-                    Unlock Secure Access
+                    <Lock className="w-4 h-4" />
+                    Login
                   </>
                 )}
               </button>
 
-              <div className="pt-2 border-t border-border/50 space-y-3">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-muted-foreground">Forgot PIN?</span>
-                  <span className="font-medium text-foreground">Check secure environment variables</span>
-                </div>
-                <details className="group">
-                  <summary className="text-[11px] text-primary hover:text-primary/80 cursor-pointer font-medium list-none flex items-center gap-1">
-                    <span className="group-open:rotate-90 transition-transform">▶</span>
-                    Troubleshooting & Security Info
-                  </summary>
-                  <div className="mt-2 p-3 rounded-xl bg-muted/50 border text-[11px] text-muted-foreground space-y-1.5 leading-relaxed">
-                    <p>• PIN is set via <code className="px-1 py-0.5 bg-background border rounded text-[10px] font-mono">APP_PIN</code> env var on Render - never in code</p>
-                    <p>• This page never displays your actual PIN - secure by design</p>
-                    <p>• If you forgot PIN, check Render Dashboard → Environment → APP_PIN</p>
-                    <p>• To reset: Update APP_PIN env var and redeploy - all sessions invalidated</p>
-                    <p>• Clear browser cookies if you see loop issues</p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        document.cookie = 'smartcomp_auth=; path=/; max-age=0'
-                        localStorage.clear()
-                        sessionStorage.clear()
-                        window.location.reload()
-                      }}
-                      className="mt-2 w-full py-2 rounded-lg bg-background border hover:bg-muted text-[11px] font-semibold text-foreground transition-colors"
-                    >
-                      Clear Secure Cache & Reload
-                    </button>
-                  </div>
-                </details>
-              </div>
             </form>
-          </div>
-
-          <div className="px-6 py-3 bg-muted/30 border-t flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <ShieldCheck className="w-3 h-3" />
-              <span className="font-medium">Protected & Encrypted</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground">Data safe in Google Sheets</span>
           </div>
         </div>
 
-        <div className="mt-6 text-center space-y-2">
-          <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-            <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Secure connection • Encrypted • No PIN displayed</span>
-          </div>
-          <p className="text-[10px] text-muted-foreground/70">
-            Smart Computers © {new Date().getFullYear()} • Sales & Service Panel • v6.2 Secure Pro
+        <div className="mt-6 text-center">
+          <p className="text-xs text-muted-foreground/70 font-medium">
+            Smart Computers © {new Date().getFullYear()}
           </p>
         </div>
       </div>
