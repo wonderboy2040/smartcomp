@@ -365,7 +365,8 @@ export function startQuantumLiveSync() {
     await pushToCloud()
     const result = await pullFromCloud(false)
     if (result.changed && result.data) {
-      console.log('[Quantum Sync] New data from cloud', result.data)
+      // Data merged silently
+      // (console.log removed for production cleanliness)
       invalidate('/api/dashboard')
     }
   }, 15000) // 15s interval for smooth lag-free background sync

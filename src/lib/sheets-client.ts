@@ -467,6 +467,7 @@ export async function updateRow<T = any>(sheet: string, id: string, data: any): 
 
 // SOFT-DELETE ONLY
 export async function deleteRow(sheet: string, id: string): Promise<boolean> {
+  trackDeleted(sheet, id)
   const res = await callAppsScript({ action: 'delete', sheet, id })
   if (!res.success) throw new Error(res.error || 'Failed to delete')
   invalidateCache(sheet)
