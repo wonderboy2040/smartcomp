@@ -50,7 +50,7 @@ export function InvoicesPanel() {
       docType: 'invoice',
       docNumber: String(invoice.number || ''),
       customerName: String(invoice.customer?.name || invoice.customerName || 'Customer'),
-      customerPhone: String(invoice.customer?.phone || invoice.customerPhone || ''),
+      customerPhone: String(invoice.customerPhone || invoice.customer?.phone || invoice.phone || invoice.mobile || ''),
       grandTotal: Number(invoice.grandTotal) || 0,
       amountDue: Number(invoice.amountDue) || 0,
       notes: invoice.notes,

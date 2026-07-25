@@ -61,7 +61,7 @@ export function QuotationsPanel() {
       docType: 'quotation',
       docNumber: String(q.number || ''),
       customerName: String(q.customer?.name || q.customerName || 'Customer'),
-      customerPhone: String(q.customer?.phone || q.customerPhone || ''),
+      customerPhone: String(q.customerPhone || q.customer?.phone || q.phone || q.mobile || ''),
       grandTotal: Number(q.grandTotal) || 0,
       notes: q.notes,
       toast,

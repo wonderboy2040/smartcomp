@@ -78,7 +78,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
       docType: 'service',
       docNumber: `INV-${job.jobId || job.id}`,
       customerName: job.customerName || 'Customer',
-      customerPhone: job.customerMobile || '',
+      customerPhone: String(job.customerMobile || job.customerPhone || job.phone || job.mobile || ''),
       grandTotal: tot,
       amountDue: bal,
       notes: job.notes || job.diagnosisNotes,

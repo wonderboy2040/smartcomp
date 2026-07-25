@@ -35,6 +35,21 @@ function setCachedHtml(key: string, html: string) {
   HTML_CACHE.set(key, { html, expires: Date.now() + HTML_CACHE_TTL })
 }
 
+// Fast Shop cache (5 min TTL)
+type ShopCacheEntry = { shop: any; expires: number }
+let shopCache: ShopCacheEntry | null = null
+const SHOP_CACHE_TTL = 5 * 60 * 1000
+
+async function getShopFast(): Promise<any> {
+  if (shopCache && shopCache.expires > Date.now()) {
+    return shopCache.shop
+  }
+  const shopRows = await listRows<any>('Shop').catch(() => [])
+  const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '', termsQuotation: '' }
+  shopCache = { shop, expires: Date.now() + SHOP_CACHE_TTL }
+  return shop
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -69,13 +84,8 @@ export async function GET(
       })
     }
 
-    // Shop info
-    const shopRows = await listRows<any>('Shop')
-    const shop = shopRows[0] || {
-      name: 'Smart Computers',
-      termsInvoice: '',
-      termsQuotation: '',
-    }
+    // Fast shop info with 5-min memory cache
+    const shop = await getShopFast()
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)

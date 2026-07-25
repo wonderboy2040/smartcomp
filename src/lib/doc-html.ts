@@ -577,12 +577,12 @@ export async function generateInvoiceHtml(
     border-bottom: 3px solid ${tpl.accent};
     margin: -4px -6px 8px -6px;
   }
-  .header .shop-block { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 10px; }
+  .header .shop-block { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
   .header .shop-logo {
-    width: 48px;
-    height: 48px;
+    width: 72px;
+    height: 72px;
     object-fit: contain;
-    border-radius: 4px;
+    border-radius: 6px;
     flex-shrink: 0;
   }
   .header .shop-text { flex: 1; min-width: 0; }
@@ -946,8 +946,8 @@ export async function generateInvoiceHtml(
       border-radius: 0 !important;
     }
     .shop-logo {
-      width: 40px !important;
-      height: 40px !important;
+      width: 60px !important;
+      height: 60px !important;
     }
     /* Avoid breaking inside these blocks */
     .items-table tbody tr,

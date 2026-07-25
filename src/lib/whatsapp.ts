@@ -318,19 +318,21 @@ export async function shareWhatsAppPdf({
     const pdfFile = new File([blob], filename, { type: 'application/pdf' })
 
     const cleanPhone = String(customerPhone || '').replace(/[^\d]/g, '')
-    const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone
+    const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone.length > 10 ? cleanPhone : ''
 
     const isPaid = (amountDue ?? 0) <= 0
     const statusText = isPaid ? 'PAID ✓' : `Balance Due: Rs. ${Number(amountDue).toFixed(2)}`
     const titleLabel = docType === 'invoice' ? 'Invoice' : docType === 'quotation' ? 'Quotation' : 'Service Invoice'
 
-    const messageText = `📄 *Smart Computers — ${titleLabel}*\n\n` +
-      `*Doc No:* ${docNumber}\n` +
-      `*Customer:* ${customerName}\n` +
+    const messageText = `*Smart Computers*\n\n` +
+      `Dear *${customerName || 'Customer'}*,\n\n` +
+      `Please find attached ${titleLabel.toLowerCase()}:\n\n` +
+      `*${titleLabel} No:* ${docNumber}\n` +
       `*Total Amount:* Rs. ${Number(grandTotal).toFixed(2)}\n` +
       `*Status:* ${statusText}\n` +
       `${notes ? `*Notes:* ${notes}\n` : ''}\n` +
-      `Thank you for choosing Smart Computers!`
+      `For any queries, please contact us.\n\n` +
+      `Thank you for your business! 🙏`
 
     // 1. Try Native Web Share API (Passes actual PDF file attachment on mobile Chrome/Safari)
     // Note: navigator.share requires a "user gesture" (direct click). The async

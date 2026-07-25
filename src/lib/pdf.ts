@@ -351,13 +351,13 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const logoImg = data.productImages?.logo || data.shop?.logoUrl
   const hasLogo = !!logoImg
 
-  const logoW = 22
-  const logoH = 22
+  const logoW = 28
+  const logoH = 28
   const logoX = margin
-  const logoY = 6
+  const logoY = 5
 
-  const shopNameX = hasLogo ? margin + logoW + 4 : margin // 38mm if logo present
-  const maxInfoWidth = hasLogo ? 78 : 96
+  const shopNameX = hasLogo ? margin + logoW + 4 : margin // 42mm if logo present
+  const maxInfoWidth = hasLogo ? 72 : 96
 
   const shopNameText = data.shop.name || 'Smart Computers'
   const nameFontSize = shopNameText.length > 22 ? 14 : 17
