@@ -33,12 +33,28 @@ const recentlyDeletedPayments = new Set<string>()
 const deletedExpiry = new Map<string, number>()
 
 function computeHash(data: any): string {
+  if (!data) return 'null'
   try {
-    const str = JSON.stringify(data)
+    if (Array.isArray(data)) {
+      if (data.length === 0) return 'empty_0'
+      const first = data[0]?.id || data[0]?.updatedAt || data[0]?.number || ''
+      const last = data[data.length - 1]?.id || data[data.length - 1]?.updatedAt || data[data.length - 1]?.number || ''
+      const mid = data[Math.floor(data.length / 2)]?.id || ''
+      return `arr_${data.length}_${first}_${mid}_${last}`
+    }
+    const str = typeof data === 'string' ? data : JSON.stringify(data)
+    const len = str.length
+    if (len === 0) return 'str_0'
     let h = 0
-    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h = h & h }
-    return h.toString(36) + '_' + str.length
-  } catch { return Date.now().toString(36) }
+    const step = len > 250 ? Math.floor(len / 250) : 1
+    for (let i = 0; i < len; i += step) {
+      h = ((h << 5) - h) + str.charCodeAt(i)
+      h = h & h
+    }
+    return `h_${h.toString(36)}_${len}`
+  } catch {
+    return Date.now().toString(36)
+  }
 }
 
 function trackDeleted(type: 'jobs' | 'payments', id: string) {

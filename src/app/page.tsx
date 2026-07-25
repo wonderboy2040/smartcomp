@@ -114,14 +114,28 @@ function HomeInner() {
     if (!isConfigured) return
     let cancelled = false
     const timers: ReturnType<typeof setTimeout>[] = []
-    PREFETCH_URLS.forEach((url, i) => {
-      const t = setTimeout(() => {
-        if (!cancelled) prefetch(url)
-      }, 600 + i * 250)
-      timers.push(t)
-    })
+    
+    const startPrefetch = () => {
+      PREFETCH_URLS.forEach((url, i) => {
+        const t = setTimeout(() => {
+          if (!cancelled) prefetch(url)
+        }, i * 500)
+        timers.push(t)
+      })
+    }
+
+    const initTimer = setTimeout(() => {
+      if (cancelled) return
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        ;(window as any).requestIdleCallback(startPrefetch)
+      } else {
+        startPrefetch()
+      }
+    }, 1500)
+
     return () => {
       cancelled = true
+      clearTimeout(initTimer)
       timers.forEach(clearTimeout)
     }
   }, [isConfigured])
