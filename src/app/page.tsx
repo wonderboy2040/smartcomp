@@ -324,7 +324,7 @@ function HomeInner() {
       <PdfPreviewProvider>
         <main className="flex-1 min-w-0 flex flex-col w-full premium-main">
           {/* Top bar - mobile only */}
-          <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card/90 backdrop-blur-xl border-b border-border shadow-sm">
+          <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card border-b border-border shadow-sm">
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
@@ -352,7 +352,7 @@ function HomeInner() {
           </header>
 
           {/* Premium desktop command bar */}
-          <header className="hidden lg:block sticky top-0 z-30 border-b border-border/70 bg-background/72 backdrop-blur-2xl">
+          <header className="hidden lg:block sticky top-0 z-30 border-b border-border/70 bg-background/95">
             <div className="max-w-7xl mx-auto w-full px-6 py-4">
               <div className="premium-topbar rounded-[1.75rem] border border-border/70 bg-card/78 px-5 py-4 shadow-sm">
                 <div className="flex items-center justify-between gap-5">

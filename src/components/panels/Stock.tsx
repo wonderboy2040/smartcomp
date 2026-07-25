@@ -43,23 +43,13 @@ export const PRESET_CATEGORIES = [
 
 export function StockPanel() {
   const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [showLowOnly, setShowLowOnly] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const { toast } = useToast()
 
-  // Debounce search to avoid hammering the API on every keystroke
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300)
-    return () => clearTimeout(t)
-  }, [search])
-
-  const { data: items, loading, refetch } = useFetch<any[]>(
-    debouncedSearch ? `/api/items?search=${encodeURIComponent(debouncedSearch)}` : '/api/items',
-    undefined
-  )
+  const { data: items, loading, refetch } = useFetch<any[]>('/api/items', undefined)
   const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
 
   // Merge items' actual categories with preset categories
@@ -81,9 +71,19 @@ export function StockPanel() {
     return (items || []).filter((i) => {
       if (categoryFilter !== 'all' && (i.category || 'General') !== categoryFilter) return false
       if (showLowOnly && Number(i.quantity) > Number(i.minQuantity)) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return (
+          String(i.name || '').toLowerCase().includes(q) ||
+          String(i.sku || '').toLowerCase().includes(q) ||
+          String(i.category || '').toLowerCase().includes(q) ||
+          String(i.brand || '').toLowerCase().includes(q) ||
+          String(i.hsnCode || '').toLowerCase().includes(q)
+        )
+      }
       return true
     })
-  }, [items, categoryFilter, showLowOnly])
+  }, [items, categoryFilter, showLowOnly, search])
 
   const handleAdd = () => {
     setEditing(null)
