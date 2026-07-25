@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const shop = shopRows[0] || { name: 'Smart Computers', termsInvoice: '' }
 
     const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
-    const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'grid'
+    const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'flyer'
 
     const job = await getRow<any>('Jobs', id)
     if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })

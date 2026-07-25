@@ -85,7 +85,7 @@ function ShopSettings() {
   const { data: recentInvoices } = useFetch<any[]>('/api/invoices?limit=1', undefined)
 
   const designTemplate = form.pdfTemplate || 'tally-classic'
-  const designBanner = form.adBannerVariant || 'grid'
+  const designBanner = form.adBannerVariant || 'flyer'
   const previewInvoiceId = (recentInvoices && recentInvoices[0] && recentInvoices[0].id) || null
   // Debounce the live preview so rapid template/banner toggles don't each
   // trigger a full (heavy) server-side PDF regeneration + iframe reload.
@@ -99,7 +99,7 @@ function ShopSettings() {
     : null
 
   useEffect(() => {
-    if (shop) setForm({ ...shop, pdfTemplate: shop.pdfTemplate || 'tally-classic', adBannerVariant: shop.adBannerVariant || 'grid' })
+    if (shop) setForm({ ...shop, pdfTemplate: shop.pdfTemplate || 'tally-classic', adBannerVariant: shop.adBannerVariant || 'flyer' })
   }, [shop])
 
   const handleSave = async () => {
@@ -232,7 +232,7 @@ function ShopSettings() {
               <p className="text-xs font-semibold text-slate-700 mb-2">Ad Banner (bottom showcase)</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {AD_BANNER_VARIANTS.map((v) => {
-                  const active = (form.adBannerVariant || 'grid') === v.id
+                  const active = (form.adBannerVariant || 'flyer') === v.id
                   return (
                     <button
                       key={v.id}

@@ -298,7 +298,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   const [engineerSharePct, setEngineerSharePct] = useState(50)
   const [stockSearch, setStockSearch] = useState('')
   const [showStock, setShowStock] = useState(false)
-  const [newPart, setNewPart] = useState({ name: '', costPrice: 0, sellPrice: 0, qty: 1, itemId: '', sku: '' })
+  const [newPart, setNewPart] = useState({ name: '', costPrice: 0, sellPrice: 0, qty: 1, itemId: '', sku: '', warranty: 'No Warranty' })
   const [quickPayAmount, setQuickPayAmount] = useState('')
   const [quickPayMode, setQuickPayMode] = useState<'Cash' | 'UPI'>('Cash')
   const [saving, setSaving] = useState(false)
@@ -355,13 +355,14 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
       return
     }
     setPartsUsed([...partsUsed, { ...newPart }])
-    setNewPart({ name: '', costPrice: 0, sellPrice: 0, qty: 1, itemId: '', sku: '' })
+    setNewPart({ name: '', costPrice: 0, sellPrice: 0, qty: 1, itemId: '', sku: '', warranty: 'No Warranty' })
     setStockSearch('')
     setShowStock(false)
-    toast({ title: 'Part added', description: `${newPart.name} x${newPart.qty}` })
+    toast({ title: 'Part added', description: `${newPart.name} x${newPart.qty} (${newPart.warranty})` })
   }
 
   const handleSelectStock = (item: any) => {
+    const itemWarranty = item.warrantyDays ? `${item.warrantyDays} Days` : (item.warranty || 'Testing Warranty')
     setNewPart({
       name: String(item.name || ''),
       costPrice: Number(item.costPrice) || 0,
@@ -369,10 +370,11 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
       qty: 1,
       itemId: String(item.id || ''),
       sku: String(item.sku || ''),
+      warranty: itemWarranty,
     })
     setShowStock(false)
     setStockSearch('')
-    toast({ title: `Selected from stock: ${item.name}`, description: `Stock: ${item.quantity} ${item.unit || 'pcs'} | Cost: Rs.${item.costPrice} Sell: Rs.${item.sellingPrice}` })
+    toast({ title: `Selected from stock: ${item.name}`, description: `Stock: ${item.quantity} ${item.unit || 'pcs'} | Warranty: ${itemWarranty}` })
   }
 
   const handleRemovePart = (i: number) => {
@@ -483,7 +485,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
                     <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 border border-blue-200"><ShoppingCart className="w-4 h-4 text-blue-600" /></div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900 truncate">{p.name} {p.sku ? `(${p.sku})` : ''}</p>
-                      <p className="text-[10px] text-slate-500">Qty: {p.qty} | Cost: Rs.{p.costPrice} | Sell: Rs.{p.sellPrice} {p.itemId ? `| Stock ID: ${String(p.itemId).slice(0,6)}` : ''}</p>
+                      <p className="text-[10px] text-slate-500">Qty: {p.qty} | Cost: Rs.{p.costPrice} | Sell: Rs.{p.sellPrice} | <span className="font-semibold text-emerald-700">🛡️ {p.warranty || 'No Warranty'}</span> {p.itemId ? `| Stock ID: ${String(p.itemId).slice(0,6)}` : ''}</p>
                     </div>
                     <div className="text-right flex-shrink-0"><p className="font-bold text-slate-900">Rs.{Number(p.sellPrice || 0) * Number(p.qty || 1)}</p><p className="text-[10px] text-emerald-600 font-semibold">+Rs.{(Number(p.sellPrice||0)-Number(p.costPrice||0))*Number(p.qty||1)} profit</p></div>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 flex-shrink-0" onClick={() => handleRemovePart(i)}><Trash2 className="w-4 h-4" /></Button>
@@ -519,12 +521,13 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
                 </div>
               )}
 
-              <div className="grid grid-cols-12 gap-2 bg-slate-50 p-2.5 rounded-xl border">
-                <div className="col-span-5"><Label className="text-[10px] font-semibold text-slate-600">Part Name *</Label><Input placeholder="e.g., 8GB RAM" value={newPart.name} onChange={(e) => setNewPart({ ...newPart, name: e.target.value })} className="h-9 text-xs bg-white mt-1" /></div>
-                <div className="col-span-2"><Label className="text-[10px] font-semibold text-slate-600">Qty</Label><Input type="number" min={1} value={newPart.qty} onChange={(e) => setNewPart({ ...newPart, qty: Number(e.target.value) || 1 })} className="h-9 text-xs bg-white mt-1" /></div>
+              <div className="grid grid-cols-12 gap-1.5 bg-slate-50 p-2.5 rounded-xl border">
+                <div className="col-span-4"><Label className="text-[10px] font-semibold text-slate-600">Part Name *</Label><Input placeholder="e.g., 8GB RAM" value={newPart.name} onChange={(e) => setNewPart({ ...newPart, name: e.target.value })} className="h-9 text-xs bg-white mt-1" /></div>
+                <div className="col-span-1"><Label className="text-[10px] font-semibold text-slate-600">Qty</Label><Input type="number" min={1} value={newPart.qty} onChange={(e) => setNewPart({ ...newPart, qty: Number(e.target.value) || 1 })} className="h-9 text-xs bg-white mt-1 px-1 text-center" /></div>
                 <div className="col-span-2"><Label className="text-[10px] font-semibold text-slate-600">Cost</Label><Input type="number" placeholder="Cost" value={newPart.costPrice} onChange={(e) => setNewPart({ ...newPart, costPrice: Number(e.target.value) })} className="h-9 text-xs bg-white mt-1" /></div>
                 <div className="col-span-2"><Label className="text-[10px] font-semibold text-slate-600">Sell</Label><Input type="number" placeholder="Sell" value={newPart.sellPrice} onChange={(e) => setNewPart({ ...newPart, sellPrice: Number(e.target.value) })} className="h-9 text-xs bg-white mt-1" /></div>
-                <div className="col-span-1 flex items-end"><Button size="sm" onClick={handleAddPart} className="h-9 w-full bg-blue-600 hover:bg-blue-700 text-white"><Plus className="w-4 h-4" /></Button></div>
+                <div className="col-span-2"><Label className="text-[10px] font-semibold text-slate-600">Warranty</Label><Input placeholder="No Warranty" value={newPart.warranty} onChange={(e) => setNewPart({ ...newPart, warranty: e.target.value })} className="h-9 text-xs bg-white mt-1" /></div>
+                <div className="col-span-1 flex items-end"><Button size="sm" onClick={handleAddPart} className="h-9 w-full bg-blue-600 hover:bg-blue-700 text-white p-0"><Plus className="w-4 h-4" /></Button></div>
               </div>
               {newPart.itemId && <div className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 rounded-lg p-2 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5" />Selected from stock: <strong>{newPart.name}</strong> ({newPart.sku}) - Will deduct from stock if enabled</div>}
               <div className="flex items-center gap-2 text-[11px]"><input type="checkbox" id="deductStock" checked={deductStock} onChange={(e) => setDeductStock(e.target.checked)} className="rounded" /><label htmlFor="deductStock" className="text-slate-700">Auto-deduct from stock when job completed (recommended)</label></div>

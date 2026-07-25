@@ -31,7 +31,7 @@ interface Props {
 export function ServiceInvoiceModal({ jobId, onClose }: Props) {
   const { toast } = useToast()
   const [selectedTemplate, setSelectedTemplate] = useState('tally-classic')
-  const [bannerStyle, setBannerStyle] = useState('grid')
+  const [bannerStyle, setBannerStyle] = useState('flyer')
   
   const { data: job } = useFetch<any>(`/api/jobs/${jobId}`, undefined)
   const { data: shop } = useFetch<any>('/api/shop', undefined)
@@ -351,8 +351,12 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '12px', color: '#6b7280', textAlign: 'center' }}>{i + 1}</td>
                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6' }}>
                               <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{p.name}</div>
-                              {p.sku && <div style={{ fontSize: '10px', color: '#6b7280' }}>{p.sku}</div>}
-                              {p.itemId && <div style={{ fontSize: '9px', color: '#9ca3af' }}>Stock ID: {p.itemId.slice(0,8)}</div>}
+                              <div style={{ fontSize: '10px', display: 'flex', gap: '8px', marginTop: '2px', color: '#6b7280', flexWrap: 'wrap', alignItems: 'center' }}>
+                                {p.sku && <span>SKU: {p.sku}</span>}
+                                <span style={{ color: p.warranty && p.warranty !== 'No Warranty' ? '#059669' : '#6b7280', fontWeight: p.warranty && p.warranty !== 'No Warranty' ? 600 : 400 }}>
+                                  🛡️ Warranty: {p.warranty || (p.warrantyDays ? `${p.warrantyDays} Days` : 'As per Manufacturer')}
+                                </span>
+                              </div>
                             </td>
                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '12px', textAlign: 'center', color: '#374151' }}>{qty}</td>
                             <td style={{ padding: '10px 12px', borderBottom: '1px solid #f3f4f6', fontSize: '12px', textAlign: 'right', color: '#374151' }}>Rs.{rate.toFixed(2)}</td>
@@ -366,7 +370,9 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px' }}></td>
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 700, color: '#111827' }}>
                           Service & Repair Charge
-                          <div style={{ fontSize: '10px', fontWeight: 400, color: '#6b7280' }}>{job.serviceType || 'Service'}</div>
+                          <div style={{ fontSize: '10px', fontWeight: 400, color: '#dc2626', marginTop: '2px' }}>
+                            {job.serviceType || 'Service'} &bull; <span style={{ fontWeight: 600 }}>🛡️ Warranty: No Warranty (Labor Only)</span>
+                          </div>
                         </td>
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', textAlign: 'center' }}>1</td>
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', textAlign: 'right' }}>Rs.{svc.toFixed(2)}</td>
@@ -418,15 +424,15 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                   <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '12px' }}>
                     <div style={{ fontSize: '10px', fontWeight: 700, color: '#92400e', textTransform: 'uppercase', marginBottom: '6px' }}>Notes</div>
                     <div style={{ fontSize: '11px', color: '#78350f', lineHeight: '1.4' }}>
-                      {job.diagnosisNotes || job.notes || `Service completed for ${job.deviceType}. ${Number(job.warrantyDays) || 30} days warranty.`}
+                      {job.diagnosisNotes || job.notes || `Service completed for ${job.deviceType}.`}
                     </div>
                   </div>
                   <div style={{ background: '#f0fdf4', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '12px' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#065f46', textTransform: 'uppercase', marginBottom: '6px' }}>Terms & Warranty</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#065f46', textTransform: 'uppercase', marginBottom: '6px' }}>Terms & Warranty Policy</div>
                     <div style={{ fontSize: '10px', color: '#064e3b', lineHeight: '1.4' }}>
-                      • {Number(job.warrantyDays) || 30} days service warranty<br/>
-                      • Parts warranty as per manufacturer<br/>
-                      • Collect within 30 days<br/>
+                      • Spare parts carry warranty as specified above<br/>
+                      • Service & labor charges carry <strong>No Warranty</strong><br/>
+                      • Please collect device within 30 days<br/>
                       • {shop?.termsInvoice || 'Goods once sold will not be taken back.'}
                     </div>
                   </div>

@@ -54,7 +54,7 @@ export async function GET(
       url.searchParams.get('template') ||
       'tally-classic'
     const bannerVariant =
-      url.searchParams.get('banner') || 'grid'
+      url.searchParams.get('banner') || 'flyer'
 
     // Cache key — if we've rendered this exact combo in the last 10 min, return it
     const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}`

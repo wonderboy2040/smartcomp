@@ -52,7 +52,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const shop = await getShopFast()
 
     const finalTemplateId = templateId || String(shop.pdfTemplate || '') || 'tally-classic'
-    const finalBannerVariant = bannerVariant || String(shop.adBannerVariant || '') || 'grid'
+    const finalBannerVariant = bannerVariant || String(shop.adBannerVariant || '') || 'flyer'
 
     let docData: any = null
     const productImages = getProductImagesFast()

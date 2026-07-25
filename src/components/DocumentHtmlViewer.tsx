@@ -44,7 +44,7 @@ export interface DocumentHtmlViewerProps {
  */
 export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose }: DocumentHtmlViewerProps) {
   const [templateId, setTemplateId] = useState<string>('tally-classic')
-  const [bannerVariant, setBannerVariant] = useState<string>('grid')
+  const [bannerVariant, setBannerVariant] = useState<string>('flyer')
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [iframeError, setIframeError] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)

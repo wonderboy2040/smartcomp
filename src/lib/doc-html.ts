@@ -438,7 +438,7 @@ export async function generateInvoiceHtml(
 
   // Ad banner variant — uses STATIC image URLs (no base64 bloat)
   // Browser caches these once and they are reused across all invoices.
-  const adVariant = data.adBannerVariant || 'grid'
+  const adVariant = data.adBannerVariant || 'flyer'
   const adBanner = buildAdBanner(adVariant, data.shop, tpl, data.productImages)
 
   // Right-side "ship to / payment" box content
@@ -976,8 +976,8 @@ export async function generateInvoiceHtml(
     <div class="title">${escapeHtml(docTitle)} &middot; ${escapeHtml(data.number)}</div>
     <div class="actions">
       <button onclick="window.print()" class="primary">🖨 Print / Save as PDF</button>
-      <a href="/api/pdf/${encodeURIComponent(data.docId || '')}?type=${isService ? 'service' : data.docType}&template=${encodeURIComponent(tpl.id)}&banner=${encodeURIComponent(data.adBannerVariant || 'grid')}" download>⬇ Download PDF</a>
-      <a href="/api/pdf/${encodeURIComponent(data.docId || '')}?type=${isService ? 'service' : data.docType}&template=${encodeURIComponent(tpl.id)}&banner=${encodeURIComponent(data.adBannerVariant || 'grid')}" target="_blank">↗ Open PDF</a>
+      <a href="/api/pdf/${encodeURIComponent(data.docId || '')}?type=${isService ? 'service' : data.docType}&template=${encodeURIComponent(tpl.id)}&banner=${encodeURIComponent(data.adBannerVariant || 'flyer')}" download>⬇ Download PDF</a>
+      <a href="/api/pdf/${encodeURIComponent(data.docId || '')}?type=${isService ? 'service' : data.docType}&template=${encodeURIComponent(tpl.id)}&banner=${encodeURIComponent(data.adBannerVariant || 'flyer')}" target="_blank">↗ Open PDF</a>
     </div>
   </div>
 
