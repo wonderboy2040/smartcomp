@@ -104,7 +104,7 @@ function HomeInner() {
       import('@/components/panels/Settings')
     }
     if ('requestIdleCallback' in window) {
-      ;(window as any).requestIdleCallback(preload)
+      ; (window as any).requestIdleCallback(preload)
     } else {
       setTimeout(preload, 300)
     }
@@ -160,7 +160,7 @@ function HomeInner() {
     if (!seeded) {
       fetch('/api/seed/init', { method: 'POST' })
         .then(() => localStorage.setItem('seeded', 'true'))
-        .catch(() => {})
+        .catch(() => { })
     }
   }, [isConfigured])
 
@@ -202,9 +202,8 @@ function HomeInner() {
     <div className="min-h-screen flex bg-background premium-app-shell">
       {/* Sidebar */}
       <aside
-        className={`${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[300px] sm:w-80 h-[100dvh] safe-top clay-sidebar premium-sidebar text-white flex flex-col transition-transform duration-300`}
+        className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[300px] sm:w-80 h-[100dvh] safe-top clay-sidebar premium-sidebar text-white flex flex-col transition-transform duration-300`}
       >
         {/* Logo/Header */}
         <div className="p-4 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -247,9 +246,8 @@ function HomeInner() {
               <button
                 key={item.id}
                 onClick={() => handleNavigate(item.id)}
-                className={`w-full flex items-center gap-3 px-3.5 py-3 lg:py-3 rounded-2xl text-sm font-medium transition-all min-h-[48px] lg:min-h-[44px] ${
-                  isActive ? 'clay-nav-active' : 'clay-nav-item text-slate-300'
-                }`}
+                className={`w-full flex items-center gap-3 px-3.5 py-3 lg:py-3 rounded-2xl text-sm font-medium transition-all min-h-[48px] lg:min-h-[44px] ${isActive ? 'clay-nav-active' : 'clay-nav-item text-slate-300'
+                  }`}
               >
                 <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-white' : item.color}`} />
                 <span className="flex-1 text-left">{item.label}</span>
@@ -285,7 +283,7 @@ function HomeInner() {
             <button
               onClick={async () => {
                 if (confirm('Logout? You will need to enter PIN again to access the panel.')) {
-                  try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
+                  try { await fetch('/api/auth/logout', { method: 'POST' }) } catch { }
                   window.location.href = '/login'
                 }
               }}
@@ -311,151 +309,151 @@ function HomeInner() {
       {/* Main Content */}
       <PdfPreviewProvider>
         <main className="flex-1 min-w-0 flex flex-col w-full premium-main">
-        {/* Top bar - mobile only */}
-        <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card/90 backdrop-blur-xl border-b border-border shadow-sm">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
-            aria-label="Open menu"
-          >
-            <Menu className="w-5 h-5 text-foreground" />
-          </button>
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '2px 2px 6px rgba(99,102,241,0.3)' }}
+          {/* Top bar - mobile only */}
+          <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card/90 backdrop-blur-xl border-b border-border shadow-sm">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
+              aria-label="Open menu"
             >
-              <Store className="w-4 h-4 text-white" />
+              <Menu className="w-5 h-5 text-foreground" />
+            </button>
+            <div className="flex items-center gap-2 min-w-0">
+              <div
+                className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)', boxShadow: '2px 2px 6px rgba(99,102,241,0.3)' }}
+              >
+                <Store className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-semibold text-sm truncate text-foreground">{shopName}</span>
             </div>
-            <span className="font-semibold text-sm truncate text-foreground">{shopName}</span>
-          </div>
-          <button
-            onClick={toggleTheme}
-            className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
-            aria-label="Toggle light and dark theme"
-            title="Toggle light/dark theme"
-          >
-            {theme === 'dark' ? <Sun className="w-5 h-5 text-foreground" /> : <Moon className="w-5 h-5 text-foreground" />}
-          </button>
-        </header>
+            <button
+              onClick={toggleTheme}
+              className="p-2 h-11 w-11 rounded-xl flex items-center justify-center bg-muted hover:bg-muted/80 transition-colors"
+              aria-label="Toggle light and dark theme"
+              title="Toggle light/dark theme"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-foreground" /> : <Moon className="w-5 h-5 text-foreground" />}
+            </button>
+          </header>
 
-        {/* Premium desktop command bar */}
-        <header className="hidden lg:block sticky top-0 z-30 border-b border-border/70 bg-background/72 backdrop-blur-2xl">
-          <div className="max-w-7xl mx-auto w-full px-6 py-4">
-            <div className="premium-topbar rounded-[1.75rem] border border-border/70 bg-card/78 px-5 py-4 shadow-sm">
-              <div className="flex items-center justify-between gap-5">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="premium-icon-orb w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-600 to-indigo-600">
-                    <ActiveIcon className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-bold">{todayLabel} · Live Workspace</p>
-                      <Badge className="premium-soft-badge border-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white">SmartComp</Badge>
+          {/* Premium desktop command bar */}
+          <header className="hidden lg:block sticky top-0 z-30 border-b border-border/70 bg-background/72 backdrop-blur-2xl">
+            <div className="max-w-7xl mx-auto w-full px-6 py-4">
+              <div className="premium-topbar rounded-[1.75rem] border border-border/70 bg-card/78 px-5 py-4 shadow-sm">
+                <div className="flex items-center justify-between gap-5">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="premium-icon-orb w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-600 to-indigo-600">
+                      <ActiveIcon className="w-5 h-5 text-white" />
                     </div>
-                    <h2 className="text-xl font-black tracking-tight text-foreground truncate flex items-center gap-2">{activeItem.label}</h2>
-                    <p className="text-sm text-muted-foreground truncate">{shopName} business control center</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-bold">{todayLabel} · Live Workspace</p>
+                        <Badge className="premium-soft-badge border-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white">SmartComp</Badge>
+                      </div>
+                      <h2 className="text-xl font-black tracking-tight text-foreground truncate flex items-center gap-2">{activeItem.label}</h2>
+                      <p className="text-sm text-muted-foreground truncate">{shopName} business control center</p>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleNavigate('stock')}
-                    className="premium-mini-stat hidden xl:flex"
-                    title="Open stock alerts"
-                  >
-                    <Package className="w-4 h-4 text-amber-500" />
-                    <span>{lowStockCount} Low Stock</span>
-                  </button>
-                  <div className="premium-mini-stat">
-                    <Wifi className="w-4 h-4 text-emerald-500" />
-                    <span>Online</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleNavigate('stock')}
+                      className="premium-mini-stat hidden xl:flex"
+                      title="Open stock alerts"
+                    >
+                      <Package className="w-4 h-4 text-amber-500" />
+                      <span>{lowStockCount} Low Stock</span>
+                    </button>
+                    <div className="premium-mini-stat">
+                      <Wifi className="w-4 h-4 text-emerald-500" />
+                      <span>Online</span>
+                    </div>
+                    <button
+                      onClick={toggleTheme}
+                      className="premium-theme-toggle"
+                      aria-label="Toggle light and dark theme"
+                      title="Toggle light/dark theme"
+                    >
+                      {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                      <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+                    </button>
                   </div>
-                  <button
-                    onClick={toggleTheme}
-                    className="premium-theme-toggle"
-                    aria-label="Toggle light and dark theme"
-                    title="Toggle light/dark theme"
-                  >
-                    {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                    <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
-                  </button>
                 </div>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom premium-content">
-          <div className="premium-hero-strip hidden lg:flex items-center justify-between gap-4 mb-5 rounded-xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 px-4 py-2">
-            <div className="flex items-center gap-3 text-xs">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span className="text-slate-700 font-medium">SmartComp • Shop management • Invoicing • Service • Stock</span>
+          <div className="flex-1 p-3 sm:p-4 md:p-6 max-w-7xl mx-auto w-full safe-bottom premium-content">
+            <div className="premium-hero-strip hidden lg:flex items-center justify-between gap-4 mb-5 rounded-xl bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-100 px-4 py-2">
+              <div className="flex items-center gap-3 text-xs">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span className="text-slate-700 font-medium">SmartComp • Shop management • Invoicing • Service • Stock</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span className="text-slate-600">Lazy panels • 120s cache • Optimistic UI</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <Zap className="w-4 h-4 text-amber-500" />
-              <span className="text-slate-600">Lazy panels • 120s cache • Optimistic UI</span>
-            </div>
+            <PanelBoundary active={active} id="dashboard" mounted={mountedPanels.has('dashboard')}>
+              <DashboardView onNavigate={handleNavigate} sheetsConnected={isConfigured} />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="stock" mounted={mountedPanels.has('stock')}>
+              <StockPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="invoices" mounted={mountedPanels.has('invoices')}>
+              <InvoicesPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="quotations" mounted={mountedPanels.has('quotations')}>
+              <QuotationsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="payments" mounted={mountedPanels.has('payments')}>
+              <PaymentsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="customers" mounted={mountedPanels.has('customers')}>
+              <CustomersPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="suppliers" mounted={mountedPanels.has('suppliers')}>
+              <SuppliersPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="whatsapp" mounted={mountedPanels.has('whatsapp')}>
+              <WhatsAppPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="jobs" mounted={mountedPanels.has('jobs')}>
+              <JobsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="servicepayments" mounted={mountedPanels.has('servicepayments')}>
+              <ServicePaymentsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="serials" mounted={mountedPanels.has('serials')}>
+              <SerialsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="amc" mounted={mountedPanels.has('amc')}>
+              <AMCPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="expenses" mounted={mountedPanels.has('expenses')}>
+              <ExpensesPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="personal" mounted={mountedPanels.has('personal')}>
+              <PersonalExpenditurePanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="campaigns" mounted={mountedPanels.has('campaigns')}>
+              <CampaignsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="credit" mounted={mountedPanels.has('credit')}>
+              <CreditControlPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="financials" mounted={mountedPanels.has('financials')}>
+              <FinancialsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="reports" mounted={mountedPanels.has('reports')}>
+              <ReportsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="settings" mounted={mountedPanels.has('settings')}>
+              <SettingsPanel />
+            </PanelBoundary>
           </div>
-          <PanelBoundary active={active} id="dashboard" mounted={mountedPanels.has('dashboard')}>
-            <DashboardView onNavigate={handleNavigate} sheetsConnected={isConfigured} />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="stock" mounted={mountedPanels.has('stock')}>
-            <StockPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="invoices" mounted={mountedPanels.has('invoices')}>
-            <InvoicesPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="quotations" mounted={mountedPanels.has('quotations')}>
-            <QuotationsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="payments" mounted={mountedPanels.has('payments')}>
-            <PaymentsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="customers" mounted={mountedPanels.has('customers')}>
-            <CustomersPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="suppliers" mounted={mountedPanels.has('suppliers')}>
-            <SuppliersPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="whatsapp" mounted={mountedPanels.has('whatsapp')}>
-            <WhatsAppPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="jobs" mounted={mountedPanels.has('jobs')}>
-            <JobsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="servicepayments" mounted={mountedPanels.has('servicepayments')}>
-            <ServicePaymentsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="serials" mounted={mountedPanels.has('serials')}>
-            <SerialsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="amc" mounted={mountedPanels.has('amc')}>
-            <AMCPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="expenses" mounted={mountedPanels.has('expenses')}>
-            <ExpensesPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="personal" mounted={mountedPanels.has('personal')}>
-            <PersonalExpenditurePanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="campaigns" mounted={mountedPanels.has('campaigns')}>
-            <CampaignsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="credit" mounted={mountedPanels.has('credit')}>
-            <CreditControlPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="financials" mounted={mountedPanels.has('financials')}>
-            <FinancialsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="reports" mounted={mountedPanels.has('reports')}>
-            <ReportsPanel />
-          </PanelBoundary>
-          <PanelBoundary active={active} id="settings" mounted={mountedPanels.has('settings')}>
-            <SettingsPanel />
-          </PanelBoundary>
-        </div>
-      </main>
+        </main>
       </PdfPreviewProvider>
     </div>
   )
