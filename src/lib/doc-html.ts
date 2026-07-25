@@ -422,14 +422,15 @@ export async function generateInvoiceHtml(
     )
   }
 
-  // UPI QR code (optional, server-side via qrcode lib)
+  // UPI QR code (optional, server-side via qrcode lib) - only when unpaid
   let qrImg = ''
-  if (data.shop.upiId) {
-    const qrAmount = isInvoice ? Number(data.amountDue) || 0 : data.calc.grandTotal
+  const isPaidDoc = (isInvoice || isService) && ((Number(data.amountDue) || 0) <= 0 || data.paymentStatus === 'paid')
+  if (data.shop.upiId && !isPaidDoc) {
+    const qrAmount = (isInvoice || isService) ? Number(data.amountDue) || 0 : data.calc.grandTotal
     if (qrAmount > 0) {
       try {
         const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.number || '')}`
-        qrImg = await QRCode.toDataURL(upiLink, { width: 160, margin: 1 })
+        qrImg = await QRCode.toDataURL(upiLink, { width: 120, margin: 1 })
       } catch {
         qrImg = ''
       }

@@ -485,7 +485,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
                     <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 border border-blue-200"><ShoppingCart className="w-4 h-4 text-blue-600" /></div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-900 truncate">{p.name} {p.sku ? `(${p.sku})` : ''}</p>
-                      <p className="text-[10px] text-slate-500">Qty: {p.qty} | Cost: Rs.{p.costPrice} | Sell: Rs.{p.sellPrice} | <span className="font-semibold text-emerald-700">🛡️ {p.warranty || 'No Warranty'}</span> {p.itemId ? `| Stock ID: ${String(p.itemId).slice(0,6)}` : ''}</p>
+                      <p className="text-[10px] text-slate-500">Qty: {p.qty} | Cost: Rs.{p.costPrice} | Sell: Rs.{p.sellPrice} {p.warranty && p.warranty !== 'No Warranty' ? <span className="font-semibold text-emerald-700">| 🛡️ {p.warranty}</span> : ''} {p.itemId ? `| Stock ID: ${String(p.itemId).slice(0,6)}` : ''}</p>
                     </div>
                     <div className="text-right flex-shrink-0"><p className="font-bold text-slate-900">Rs.{Number(p.sellPrice || 0) * Number(p.qty || 1)}</p><p className="text-[10px] text-emerald-600 font-semibold">+Rs.{(Number(p.sellPrice||0)-Number(p.costPrice||0))*Number(p.qty||1)} profit</p></div>
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 flex-shrink-0" onClick={() => handleRemovePart(i)}><Trash2 className="w-4 h-4" /></Button>

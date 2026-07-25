@@ -53,7 +53,13 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
   const bal = Math.max(0, tot - paid)
   const parts = job.partsUsed || []
   const pt = parts.reduce((s: number, p: any) => s + (Number(p.sellPrice || p.price || 0) * Number(p.qty || 1)), 0)
-  const svc = Number(job.serviceCharge) || 0
+  let svc = Number(job.serviceCharge) || 0
+  if (svc <= 0 && tot > 0) {
+    svc = Math.max(0, tot - pt)
+  }
+  if (svc <= 0 && parts.length === 0 && tot > 0) {
+    svc = tot
+  }
   const invDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
   const jobDate = new Date(job.createdAt || job.date || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
@@ -370,8 +376,8 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px' }}></td>
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 700, color: '#111827' }}>
                           Service & Repair Charge
-                          <div style={{ fontSize: '10px', fontWeight: 400, color: '#dc2626', marginTop: '2px' }}>
-                            {job.serviceType || 'Service'} &bull; <span style={{ fontWeight: 600 }}>🛡️ Warranty: No Warranty (Labor Only)</span>
+                          <div style={{ fontSize: '10px', fontWeight: 400, color: '#6b7280', marginTop: '2px' }}>
+                            {job.serviceType || 'Service'}
                           </div>
                         </td>
                         <td style={{ padding: '12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', textAlign: 'center' }}>1</td>
@@ -430,8 +436,7 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
                   <div style={{ background: '#f0fdf4', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '12px' }}>
                     <div style={{ fontSize: '10px', fontWeight: 700, color: '#065f46', textTransform: 'uppercase', marginBottom: '6px' }}>Terms & Warranty Policy</div>
                     <div style={{ fontSize: '10px', color: '#064e3b', lineHeight: '1.4' }}>
-                      • Spare parts carry warranty as specified above<br/>
-                      • Service & labor charges carry <strong>No Warranty</strong><br/>
+                      • Parts warranty as per manufacturer/supplier (if specified)<br/>
                       • Please collect device within 30 days<br/>
                       • {shop?.termsInvoice || 'Goods once sold will not be taken back.'}
                     </div>

@@ -699,18 +699,21 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       leftY += 2.8
     }
 
-    if (data.shop.upiId) {
+    const isPaidDoc = (isInvoice || data.docType === 'service') && ((Number(data.amountDue) || 0) <= 0 || data.paymentStatus === 'paid')
+    if (data.shop.upiId && !isPaidDoc) {
       try {
-        const qrAmount = isInvoice ? (Number(data.amountDue) || 0) : data.calc.grandTotal
-        const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR`
-        const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 120, margin: 1 })
-        const qrSize = 14
-        doc.addImage(qrDataUrl, 'PNG', margin, leftY, qrSize, qrSize)
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...A)
-        doc.text('Scan & Pay via UPI', margin + qrSize + 3, leftY + 3.5)
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(...N.textMid)
-        doc.text(`UPI: ${data.shop.upiId}`, margin + qrSize + 3, leftY + 7)
-        leftY += qrSize + 2
+        const qrAmount = isInvoice || data.docType === 'service' ? (Number(data.amountDue) || 0) : data.calc.grandTotal
+        if (qrAmount > 0) {
+          const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR`
+          const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 100, margin: 1 })
+          const qrSize = 14
+          doc.addImage(qrDataUrl, 'JPEG', margin, leftY, qrSize, qrSize)
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...A)
+          doc.text('Scan & Pay via UPI', margin + qrSize + 3, leftY + 3.5)
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(...N.textMid)
+          doc.text(`UPI: ${data.shop.upiId}`, margin + qrSize + 3, leftY + 7)
+          leftY += qrSize + 2
+        }
       } catch {}
     }
   }

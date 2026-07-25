@@ -103,7 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         paymentStatus: String(invoice.paymentStatus || ''),
         docType: 'invoice',
         templateId,
-        productImages: loadProductImages(),
+        productImages: await loadProductImages(),
         adBannerVariant: bannerVariant,
       })
     } else if (type === 'quotation') {
@@ -149,7 +149,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         terms: String(shop.termsQuotation || ''),
         docType: 'quotation',
         templateId,
-        productImages: loadProductImages(),
+        productImages: await loadProductImages(),
         adBannerVariant: bannerVariant,
       })
     } else if (type === 'service') {
@@ -228,7 +228,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         paymentStatus: paid >= jobTotal ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
         docType: 'service',
         templateId,
-        productImages: loadProductImages(),
+        productImages: await loadProductImages(),
         adBannerVariant: bannerVariant,
         ...(job as any),
       })

@@ -28,8 +28,8 @@ async function getShopFast(): Promise<any> {
 
 // Product images are static — load once per process.
 let productImagesCache: any = null
-function getProductImagesFast(): any {
-  if (!productImagesCache) productImagesCache = loadProductImages()
+async function getProductImagesFast(): Promise<any> {
+  if (!productImagesCache) productImagesCache = await loadProductImages()
   return productImagesCache
 }
 
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const finalBannerVariant = bannerVariant || String(shop.adBannerVariant || '') || 'flyer'
 
     let docData: any = null
-    const productImages = getProductImagesFast()
+    const productImages = await getProductImagesFast()
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
