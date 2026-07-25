@@ -333,14 +333,25 @@ export async function shareWhatsAppPdf({
       `Thank you for choosing Smart Computers!`
 
     // 1. Try Native Web Share API (Passes actual PDF file attachment on mobile Chrome/Safari)
+    // Note: navigator.share requires a "user gesture" (direct click). The async
+    // fetch() above may break the gesture chain on some browsers, so we catch
+    // the "user activation" error and fall through to the desktop fallback.
     if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      await navigator.share({
-        files: [pdfFile],
-        title: `${titleLabel} ${docNumber}`,
-        text: messageText,
-      })
-      if (toast) toast({ title: 'PDF Shared to WhatsApp ✓', duration: 3500 })
-      return
+      try {
+        await navigator.share({
+          files: [pdfFile],
+          title: `${titleLabel} ${docNumber}`,
+          text: messageText,
+        })
+        if (toast) toast({ title: 'PDF Shared to WhatsApp ✓', duration: 3500 })
+        return
+      } catch (shareErr: any) {
+        // AbortError = user cancelled the share sheet — just silently return
+        if (shareErr?.name === 'AbortError') return
+        // Any other error (including "Must be handling a user gesture") —
+        // fall through to the download + WhatsApp Web fallback below.
+        console.warn('Native share failed, falling back to download:', shareErr?.message)
+      }
     }
 
     // 2. Fallback for Desktop Browsers: Auto-download PDF & Open WhatsApp Web
