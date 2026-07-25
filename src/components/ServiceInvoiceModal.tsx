@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { Printer, FileText, Share2, X, Download, Eye } from 'lucide-react'
 import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf'
+import { shareWhatsAppPdf } from '@/lib/whatsapp'
 
 interface Props {
   jobId: string
@@ -71,23 +72,18 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
     toast({ title: 'PDF opening...', description: 'Save from browser print dialog or download' })
   }
 
-  const shareWhatsApp = () => {
-    const msg = `🔧 *Service Invoice - ${bn}*\n\n` +
-      `*Invoice:* INV-${job.jobId}\n` +
-      `*Date:* ${invDate}\n` +
-      `*Customer:* ${job.customerName}\n` +
-      `*Device:* ${job.deviceType} ${job.brandModel ? '- ' + job.brandModel : ''}\n` +
-      `*Problem:* ${job.problemDesc}\n\n` +
-      `*Parts:*\n${parts.map((p: any) => `• ${p.name} x${p.qty} = Rs.${Number(p.sellPrice || 0) * Number(p.qty || 1)}`).join('\n') || 'No parts'}\n` +
-      `• Service Charge = Rs.${svc}\n\n` +
-      `*Total:* Rs.${tot}\n` +
-      `*Paid:* Rs.${paid}\n` +
-      `*Balance Due:* Rs.${bal}\n\n` +
-      `Thank you for your business!\n${bn} - ${shop?.phone || ''}`
-    
-    const phone = String(job.customerMobile || '').replace(/\D/g, '')
-    const waPhone = phone.length === 10 ? `91${phone}` : phone
-    window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, '_blank')
+  const shareWhatsApp = async () => {
+    await shareWhatsAppPdf({
+      docId: job.id || job.jobId,
+      docType: 'service',
+      docNumber: `INV-${job.jobId || job.id}`,
+      customerName: job.customerName || 'Customer',
+      customerPhone: job.customerMobile || '',
+      grandTotal: tot,
+      amountDue: bal,
+      notes: job.notes || job.diagnosisNotes,
+      toast,
+    })
   }
 
   const headerBg = `rgb(${template.headerBg.join(',')})`

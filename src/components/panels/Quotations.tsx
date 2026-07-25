@@ -15,6 +15,7 @@ import { formatCurrency } from '@/lib/calc'
 import { usePdfPreview } from '@/lib/preview-context'
 import { DocForm } from './DocForm'
 import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2, Edit3 } from 'lucide-react'
+import { shareWhatsAppPdf } from '@/lib/whatsapp'
 
 export function QuotationsPanel() {
   const { toast } = useToast()
@@ -55,24 +56,16 @@ export function QuotationsPanel() {
   }
 
   const handleShareWhatsApp = async (q: any) => {
-    try {
-      const res = await apiPost('/api/whatsapp/send', {
-        action: 'shareQuotation',
-        id: q.id,
-      })
-      window.open(res.link, '_blank')
-      toast({
-        title: 'WhatsApp opened with quotation details ✓',
-        duration: 3500,
-      })
-    } catch (e: any) {
-      toast({
-        title: 'Error',
-        description: e.message,
-        variant: 'destructive',
-        duration: 6000,
-      })
-    }
+    await shareWhatsAppPdf({
+      docId: q.id,
+      docType: 'quotation',
+      docNumber: String(q.number || ''),
+      customerName: String(q.customer?.name || q.customerName || 'Customer'),
+      customerPhone: String(q.customer?.phone || q.customerPhone || ''),
+      grandTotal: Number(q.grandTotal) || 0,
+      notes: q.notes,
+      toast,
+    })
   }
 
   const handleConvert = async (q: any) => {

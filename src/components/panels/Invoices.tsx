@@ -16,6 +16,8 @@ import { usePdfPreview } from '@/lib/preview-context'
 import { DocForm } from './DocForm'
 import { Plus, Search, FileText, Eye, Edit3, Share2, Trash2 } from 'lucide-react'
 
+import { shareWhatsAppPdf } from '@/lib/whatsapp'
+
 export function InvoicesPanel() {
   const { toast } = useToast()
   const [search, setSearch] = useState('')
@@ -43,21 +45,17 @@ export function InvoicesPanel() {
   const handleEdit = (invoice: any) => { setEditing(invoice); setDialogOpen(true) }
 
   const handleShareWhatsApp = async (invoice: any) => {
-    try {
-      const res = await apiPost('/api/whatsapp/send', { action: 'shareInvoice', id: invoice.id })
-      window.open(res.link, '_blank')
-      toast({
-        title: 'WhatsApp opened with invoice details ✓',
-        duration: 3500,
-      })
-    } catch (e: any) {
-      toast({
-        title: 'Error',
-        description: e.message,
-        variant: 'destructive',
-        duration: 6000,
-      })
-    }
+    await shareWhatsAppPdf({
+      docId: invoice.id,
+      docType: 'invoice',
+      docNumber: String(invoice.number || ''),
+      customerName: String(invoice.customer?.name || invoice.customerName || 'Customer'),
+      customerPhone: String(invoice.customer?.phone || invoice.customerPhone || ''),
+      grandTotal: Number(invoice.grandTotal) || 0,
+      amountDue: Number(invoice.amountDue) || 0,
+      notes: invoice.notes,
+      toast,
+    })
   }
 
   const handleDelete = async (id: string) => {

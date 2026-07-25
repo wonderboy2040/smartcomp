@@ -279,3 +279,100 @@ export function isEnquiryDay(date: Date = new Date()): boolean {
   const day = date.getDate()
   return day === 1 || day === 15
 }
+
+/**
+ * Shares an Invoice / Quotation / Service Invoice PDF on WhatsApp.
+ * - On Mobile / supporting browsers: uses Native Web Share API to attach actual .pdf file + details.
+ * - On Desktop browsers: automatically downloads the PDF file and opens WhatsApp with formatted details and instructions.
+ */
+export async function shareWhatsAppPdf({
+  docId,
+  docType,
+  docNumber,
+  customerName,
+  customerPhone,
+  grandTotal,
+  amountDue,
+  notes,
+  toast,
+}: {
+  docId: string
+  docType: 'invoice' | 'quotation' | 'service'
+  docNumber: string
+  customerName: string
+  customerPhone?: string
+  grandTotal: number
+  amountDue?: number
+  notes?: string
+  toast?: any
+}) {
+  try {
+    const filename = `${docType.toUpperCase()}-${docNumber || docId}.pdf`
+    const pdfUrl = docType === 'service' ? `/api/service-pdf/${docId}` : `/api/pdf/${docId}?type=${docType}`
+
+    if (toast) toast({ title: 'Preparing PDF for WhatsApp...', duration: 2500 })
+
+    const response = await fetch(pdfUrl)
+    if (!response.ok) throw new Error('Failed to generate PDF')
+    const blob = await response.blob()
+    const pdfFile = new File([blob], filename, { type: 'application/pdf' })
+
+    const cleanPhone = String(customerPhone || '').replace(/[^\d]/g, '')
+    const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone
+
+    const isPaid = (amountDue ?? 0) <= 0
+    const statusText = isPaid ? 'PAID ✓' : `Balance Due: Rs. ${Number(amountDue).toFixed(2)}`
+    const titleLabel = docType === 'invoice' ? 'Invoice' : docType === 'quotation' ? 'Quotation' : 'Service Invoice'
+
+    const messageText = `📄 *Smart Computers — ${titleLabel}*\n\n` +
+      `*Doc No:* ${docNumber}\n` +
+      `*Customer:* ${customerName}\n` +
+      `*Total Amount:* Rs. ${Number(grandTotal).toFixed(2)}\n` +
+      `*Status:* ${statusText}\n` +
+      `${notes ? `*Notes:* ${notes}\n` : ''}\n` +
+      `Thank you for choosing Smart Computers!`
+
+    // 1. Try Native Web Share API (Passes actual PDF file attachment on mobile Chrome/Safari)
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      await navigator.share({
+        files: [pdfFile],
+        title: `${titleLabel} ${docNumber}`,
+        text: messageText,
+      })
+      if (toast) toast({ title: 'PDF Shared to WhatsApp ✓', duration: 3500 })
+      return
+    }
+
+    // 2. Fallback for Desktop Browsers: Auto-download PDF & Open WhatsApp Web
+    const downloadUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    setTimeout(() => {
+      URL.revokeObjectURL(downloadUrl)
+    }, 2000)
+
+    const fullMsg = `${messageText}\n\n📎 *PDF File Downloaded (${filename})* — Please attach the downloaded PDF file in this WhatsApp chat window.`
+    const waUrl = targetPhone
+      ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(fullMsg)}`
+      : `https://wa.me/?text=${encodeURIComponent(fullMsg)}`
+    
+    window.open(waUrl, '_blank')
+
+    if (toast) {
+      toast({
+        title: 'PDF Downloaded & WhatsApp Opened ✓',
+        description: `Please attach ${filename} in the WhatsApp chat window`,
+        duration: 6000,
+      })
+    }
+  } catch (e: any) {
+    if (e?.name !== 'AbortError') {
+      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing PDF', variant: 'destructive', duration: 5000 })
+    }
+  }
+}
