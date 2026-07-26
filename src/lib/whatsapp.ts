@@ -8,8 +8,6 @@ export interface WhatsAppMessage {
 
 // Generate wa.me link for opening WhatsApp with prefilled message
 export function generateWhatsAppLink(phone: string, message: string): string {
-  // Defensive: Google Sheets may store phone as a number, not a string.
-  // Coerce to string before calling .replace(). Also handle null/undefined.
   const phoneStr = String(phone ?? '')
   const cleanPhone = phoneStr.replace(/[^\d]/g, '')
   const encoded = encodeURIComponent(message)
@@ -17,8 +15,6 @@ export function generateWhatsAppLink(phone: string, message: string): string {
 }
 
 // Build rate enquiry message for supplier
-// SIMPLE FORMAT — just shop name, item list, and "prices?"
-// Suppliers in the computer hardware trade prefer short messages.
 export function buildEnquiryMessage(
   shopName: string,
   items: { name: string; sku?: string }[],
@@ -49,7 +45,7 @@ export function buildInvoiceShareMessage(
   const amt = Number(amount) || 0
   let msg = `*${sn}*\n\n`
   msg += `Dear ${cn},\n\n`
-  msg += `Please find attached ${docType === 'invoice' ? 'invoice' : 'quotation'}:\n\n`
+  msg += `Here are your ${docType === 'invoice' ? 'invoice' : 'quotation'} details:\n\n`
   msg += `*${docType === 'invoice' ? 'Invoice' : 'Quotation'} No:* ${num}\n`
   msg += `*Amount:* Rs. ${amt.toFixed(2)}\n`
   if (docType === 'invoice' && dueDate) {
@@ -84,30 +80,14 @@ export function buildPaymentReminderMessage(
 }
 
 // Parse rate response from supplier (natural language to structured rates)
-//
-// Handles common Indian computer hardware trade reply formats:
-//   "3450+"            → rate=3450, gstType='extra'  (GST is ADDITIONAL, 18% on top)
-//   "3450 nett"        → rate=3450, gstType='inclusive' (GST is INCLUDED in price)
-//   "3450"             → rate=3450, gstType='unknown'
-//   "3450 + GST"       → rate=3450, gstType='extra'
-//   "3450 + 18%"       → rate=3450, gstType='extra', gstRate=18
-//   "3450 incl GST"    → rate=3450, gstType='inclusive'
-//   "3450 (GST extra)" → rate=3450, gstType='extra'
-//   "3450 (GST incl)"  → rate=3450, gstType='inclusive'
-//   "GST: 3450+"       → same as above
-//
-// totalCost = what you actually pay:
-//   - extra:     rate + (rate * gstRate/100), e.g. 3450 + 18% = 4071
-//   - inclusive: rate (already includes GST)
-//   - unknown:   rate (treated as inclusive for safety)
 export interface ParsedRate {
   itemName: string
-  rate: number          // the base rate as quoted
+  rate: number
   gstApplicable: boolean | null
   gstType: 'extra' | 'inclusive' | 'unknown' | null
   gstRate?: number
-  totalCost: number     // effective cost including GST if extra
-  raw: string           // original line text
+  totalCost: number
+  raw: string
 }
 
 export function parseRateResponse(
@@ -121,23 +101,16 @@ export function parseRateResponse(
     const trimmed = line.trim()
     if (!trimmed) continue
 
-    // Skip lines that are clearly not rate lines (greetings, thank you, etc.)
     const lowerTrim = trimmed.toLowerCase()
     if (/^(thank|hello|hi|ok|yes|no|sure|please|dear|regards|best)\b/.test(lowerTrim) && !/\d{2,}/.test(trimmed)) {
       continue
     }
 
-    // Patterns to extract item name + rate. Order matters — try most specific first.
     const patterns = [
-      // "1. Item Name: Rs.3450+" or "1. Item Name: 3450 nett"
       /^\d+\.?\s*(.+?):?\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
-      // "Item Name: Rs.3450+"
       /^(.+?):?\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
-      // "1. Item Name - 3450+"
       /^\d+\.?\s*(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)/,
-      // "Item Name: 3450+"
       /^(.+?):\s*(\d+(?:[.,]\d+)?)/,
-      // "3450+" (rate only, no item name — match by line number to original items)
       /^(\d+(?:[.,]\d+)?)\s*([+\-].*)?$/,
     ]
 
@@ -149,7 +122,6 @@ export function parseRateResponse(
       matched = trimmed.match(p)
       if (matched) {
         if (p.source.startsWith('^(\\d+')) {
-          // Rate-only pattern (last one) — no item name in the line
           rateStr = String(matched[1] || '')
           itemNameRaw = ''
         } else {
@@ -165,7 +137,6 @@ export function parseRateResponse(
     const rate = parseFloat(rateStr.replace(/[.,]/g, m => m === ',' ? '' : '.'))
     if (isNaN(rate)) continue
 
-    // Match item name to original items (or assign by line order if no name)
     let itemName = itemNameRaw
     let matchedItem: { name: string; sku?: string } | undefined
     if (itemNameRaw) {
@@ -179,59 +150,43 @@ export function parseRateResponse(
       )
       if (matchedItem) itemName = matchedItem.name
     } else {
-      // Rate-only line: assign to the next unmatched original item by order
       const usedNames = new Set(results.map(r => r.itemName))
       matchedItem = originalItems.find(i => !usedNames.has(i.name))
       if (matchedItem) itemName = matchedItem.name
     }
 
-    // Detect GST type from the line text
     const fullLine = trimmed.toLowerCase()
     let gstType: 'extra' | 'inclusive' | 'unknown' | null = null
     let gstRate: number | undefined
     let gstApplicable: boolean | null = null
 
-    // Extract GST rate if mentioned (e.g. "18%", "18 %", "GST 18")
     const gstRateMatch = fullLine.match(/(\d+)\s*%/) || fullLine.match(/gst\s*(\d+)/)
     if (gstRateMatch) gstRate = parseFloat(gstRateMatch[1])
 
-    // "3450+" → GST extra (the + suffix is trade shorthand for "plus GST")
-    // "3450 + GST", "3450 (GST extra)", "3450 GST extra", "3450 + 18%"
     if (/\d\s*\+/i.test(trimmed) || /\+\s*(gst|18%|18\s*%)/i.test(trimmed) || /gst\s*extra/i.test(fullLine) || /extra\s*gst/i.test(fullLine)) {
       gstType = 'extra'
       gstApplicable = true
-      if (!gstRate) gstRate = 18 // default to 18% for computer hardware
-    }
-    // "3450 nett" → GST inclusive ("nett" means final/all-inclusive price in trade)
-    // "3450 incl GST", "3450 including GST", "3450 (GST incl)"
-    else if (/\bnett\b/i.test(trimmed) || /incl/i.test(fullLine) || /including\s*gst/i.test(fullLine) || /gst\s*incl/i.test(fullLine)) {
+      if (!gstRate) gstRate = 18
+    } else if (/\bnett\b/i.test(trimmed) || /incl/i.test(fullLine) || /including\s*gst/i.test(fullLine) || /gst\s*incl/i.test(fullLine)) {
       gstType = 'inclusive'
       gstApplicable = true
       if (!gstRate) gstRate = 18
-    }
-    // "3450 without GST", "3450 no GST"
-    else if (/without\s*gst/i.test(fullLine) || /no\s*gst/i.test(fullLine) || /gst\s*no/i.test(fullLine)) {
+    } else if (/without\s*gst/i.test(fullLine) || /no\s*gst/i.test(fullLine) || /gst\s*no/i.test(fullLine)) {
       gstType = 'extra'
       gstApplicable = false
-    }
-    // "3450 with GST"
-    else if (/with\s*gst/i.test(fullLine) || /gst\s*yes/i.test(fullLine)) {
+    } else if (/with\s*gst/i.test(fullLine) || /gst\s*yes/i.test(fullLine)) {
       gstType = 'inclusive'
       gstApplicable = true
       if (!gstRate) gstRate = 18
-    }
-    // Bare number with no GST context
-    else {
+    } else {
       gstType = 'unknown'
       gstApplicable = null
     }
 
-    // Calculate totalCost (what the buyer actually pays)
     let totalCost = rate
     if (gstType === 'extra' && gstRate) {
       totalCost = rate + (rate * gstRate / 100)
     }
-    // inclusive or unknown → totalCost = rate
 
     results.push({
       itemName,
@@ -247,7 +202,7 @@ export function parseRateResponse(
   return results
 }
 
-// Build bulk enquiry payload (for sending to multiple suppliers)
+// Build bulk enquiry payload
 export function buildBulkEnquiry(
   shopName: string,
   suppliersWithItems: { supplier: { name: string; phone: string; whatsappNumber: string }; items: { name: string; sku?: string }[] }[]
@@ -258,38 +213,28 @@ export function buildBulkEnquiry(
   }))
 }
 
-// Schedule helper - returns dates for 2 monthly enquiries (1st and 15th)
+// Schedule helper
 export function getNextEnquiryDates(from: Date = new Date()): Date[] {
   const dates: Date[] = []
   const now = new Date(from)
   const day = now.getDate()
-  
-  // Next 1st
+
   const next1st = new Date(now.getFullYear(), now.getMonth() + (day >= 1 ? 1 : 0), 1)
-  // Next 15th
   const next15th = new Date(now.getFullYear(), now.getMonth() + (day >= 15 ? 1 : 0), 15)
-  
+
   dates.push(next1st, next15th)
   dates.sort((a, b) => a.getTime() - b.getTime())
   return dates
 }
 
-// Check if today is an enquiry day (1st or 15th)
 export function isEnquiryDay(date: Date = new Date()): boolean {
   const day = date.getDate()
   return day === 1 || day === 15
 }
 
 /**
- * Shares an Invoice / Quotation / Service Invoice details on WhatsApp.
- *
- * PER USER REQUIREMENT:
- * - NO PDF file attachment
- * - NO "View Link" / track link
- * - Only send a clean formatted text message with invoice details
- * - Opens WhatsApp (app on mobile / WhatsApp Web on desktop) instantly
- *   with the prefilled message — no server round-trip, no PDF generation,
- *   no download, no view link.
+ * Shares Invoice / Quotation / Service Invoice details on WhatsApp.
+ * NO PDF attachment. NO View Link. Only clean text message.
  */
 export async function shareWhatsAppPdf({
   docId,
@@ -320,7 +265,6 @@ export async function shareWhatsAppPdf({
     const statusText = isPaid ? 'PAID ✓' : `Balance Due: Rs. ${Number(amountDue).toFixed(2)}`
     const titleLabel = docType === 'invoice' ? 'Invoice' : docType === 'quotation' ? 'Quotation' : 'Service Invoice'
 
-    // Clean text-only message — NO PDF attachment, NO view link, NO track URL
     const messageText = `*Smart Computers*\n\n` +
       `Dear *${customerName || 'Customer'}*,\n\n` +
       `Here are your ${titleLabel.toLowerCase()} details:\n\n` +
@@ -331,7 +275,7 @@ export async function shareWhatsAppPdf({
       `For any queries, please contact us.\n\n` +
       `Thank you for your business! 🙏`
 
-    // Open WhatsApp directly with the prefilled text message
+    // Open WhatsApp directly with text only — NO PDF, NO View Link
     const waUrl = targetPhone
       ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(messageText)}`
       : `https://wa.me/?text=${encodeURIComponent(messageText)}`
@@ -341,13 +285,13 @@ export async function shareWhatsAppPdf({
     if (toast) {
       toast({
         title: 'WhatsApp Opened ✓',
-        description: 'Message ready to send',
-        duration: 3000,
+        description: `Message ready for ${customerName || 'Customer'}`,
+        duration: 3500,
       })
     }
   } catch (e: any) {
     if (e?.name !== 'AbortError') {
-      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing message', variant: 'destructive', duration: 5000 })
+      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing', variant: 'destructive', duration: 5000 })
     }
   }
 }

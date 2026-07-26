@@ -167,70 +167,8 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-2 sm:p-4 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <style>{`
-        /* ===== A4 PRINT LAYOUT for Service Invoice Modal ===== */
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 8mm;
-          }
-          html, body {
-            background: #ffffff !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .fixed.inset-0 {
-            position: static !important;
-            background: transparent !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            display: block !important;
-            overflow: visible !important;
-            backdrop-filter: none !important;
-          }
-          .bg-white.rounded-2xl {
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            max-height: none !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-          }
-          .no-print { display: none !important; }
-          .flex-1.overflow-y-auto { overflow: visible !important; }
-          /* Force the invoice content to fit a single A4 page */
-          .print-invoice {
-            position: static !important;
-            width: 194mm !important;
-            max-width: 194mm !important;
-            margin: 0 auto !important;
-            font-size: 10px !important;
-            line-height: 1.3 !important;
-          }
-          .print-invoice > div:first-child {
-            padding: 8px 12px !important;
-          }
-          .print-invoice > div:first-child > div:last-child {
-            margin-top: 6px !important;
-          }
-          .print-invoice > div:nth-child(2) {
-            padding: 8px 12px !important;
-          }
-          /* Tighten table rows for print */
-          .print-invoice table th,
-          .print-invoice table td {
-            padding: 4px 8px !important;
-            font-size: 10px !important;
-          }
-          /* Keep all blocks on the same page — no breaks */
-          .print-invoice * {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-          }
-        }
-      `}</style>
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[95vh] flex flex-col shadow-2xl overflow-hidden my-2">
+        
         {/* Template Selector - No Print */}
         <div className="no-print bg-slate-50 border-b p-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -285,72 +223,54 @@ export function ServiceInvoiceModal({ jobId, onClose }: Props) {
         {/* Invoice Content - Same design as regular invoices */}
         <div className="flex-1 overflow-y-auto p-0">
           <div id="serviceInvoiceContent" className="print-paper">
-            <div className="print-invoice" style={{ fontFamily: 'Inter, Arial, sans-serif', width: '210mm', maxWidth: '100%', margin: '0 auto', background: '#fff', color: '#000', fontSize: '12px' }}>
+            <div className="print-invoice" style={{ fontFamily: 'Inter, Arial, sans-serif', maxWidth: '210mm', margin: '0 auto', background: '#fff', color: '#000' }}>
               
               {/* Header - Same as regular invoice */}
-              <div style={{ background: headerBg, padding: '14px 18px', position: 'relative' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                    {/* Logo — uses /logo.webp (always available in /public) */}
-                    <img
-                      src="/logo.webp"
-                      alt="Logo"
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        objectFit: 'contain',
-                        borderRadius: '6px',
-                        background: headerBg.startsWith('rgb(255') ? '#fff' : 'rgba(255,255,255,0.1)',
-                        padding: '4px',
-                        flexShrink: 0,
-                        border: `1px solid ${accent}33`,
-                      }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                    />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: '20px', fontWeight: 800, color: headerText, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{bn}</div>
-                      <div style={{ fontSize: '10px', color: headerBg.startsWith('rgb(255') ? '#4b5563' : '#d1d5db', marginTop: '3px', lineHeight: 1.35 }}>
-                        {shop?.address || 'Computer, Laptop & Printer Service Center'}
-                        {shop?.state ? `, ${shop.state}` : ''}
-                      </div>
-                      {(shop?.phone || shop?.email) && (
-                        <div style={{ fontSize: '9.5px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af', marginTop: '2px' }}>
-                          {shop?.phone ? `${shop.phone}` : ''}{shop?.phone && shop?.email ? ' | ' : ''}{shop?.email || ''}
-                        </div>
-                      )}
-                      {shop?.gstNumber && (
-                        <div style={{ fontSize: '9.5px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af', marginTop: '2px', fontWeight: 600 }}>
-                          GSTIN: {shop.gstNumber}
-                        </div>
-                      )}
+              <div style={{ background: headerBg, padding: '16px 20px', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: '22px', fontWeight: 800, color: headerText, letterSpacing: '-0.5px' }}>{bn}</div>
+                    <div style={{ fontSize: '11px', color: headerBg.startsWith('rgb(255') ? '#4b5563' : '#d1d5db', marginTop: '4px', maxWidth: '300px' }}>
+                      {shop?.address || 'Computer, Laptop & Printer Service Center'}
+                      {shop?.state ? `, ${shop.state}` : ''}
                     </div>
+                    {(shop?.phone || shop?.email) && (
+                      <div style={{ fontSize: '10px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af', marginTop: '2px' }}>
+                        {shop?.phone ? `${shop.phone}` : ''}{shop?.phone && shop?.email ? ' | ' : ''}{shop?.email || ''}
+                      </div>
+                    )}
+                    {shop?.gstNumber && (
+                      <div style={{ fontSize: '10px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af', marginTop: '2px', fontWeight: 600 }}>
+                        GSTIN: {shop.gstNumber}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{
-                      fontSize: '17px',
-                      fontWeight: 800,
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ 
+                      fontSize: '20px', 
+                      fontWeight: 800, 
                       color: accent,
                       border: `2px solid ${accent}`,
-                      padding: '5px 14px',
+                      padding: '6px 16px',
                       borderRadius: '6px',
                       background: headerBg.startsWith('rgb(255') ? '#fff' : 'rgba(255,255,255,0.1)',
                       display: 'inline-block'
                     }}>
                       SERVICE INVOICE
                     </div>
-                    <div style={{ fontSize: '11px', color: headerBg.startsWith('rgb(255') ? '#374151' : '#e5e7eb', marginTop: '6px', fontWeight: 600 }}>
+                    <div style={{ fontSize: '11px', color: headerBg.startsWith('rgb(255') ? '#374151' : '#e5e7eb', marginTop: '8px', fontWeight: 600 }}>
                       INV-{job.jobId}
                     </div>
-                    <div style={{ fontSize: '9.5px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af', marginTop: '2px' }}>
+                    <div style={{ fontSize: '10px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af', marginTop: '2px' }}>
                       Date: {invDate}
                     </div>
-                    <div style={{ fontSize: '9.5px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af' }}>
+                    <div style={{ fontSize: '10px', color: headerBg.startsWith('rgb(255') ? '#6b7280' : '#9ca3af' }}>
                       Job Date: {jobDate}
                     </div>
                   </div>
                 </div>
                 {/* Accent strip */}
-                <div style={{ height: '3px', background: accent, marginTop: '10px', borderRadius: '2px' }} />
+                <div style={{ height: '3px', background: accent, marginTop: '12px', borderRadius: '2px' }} />
               </div>
 
               <div style={{ padding: '16px 20px' }}>
