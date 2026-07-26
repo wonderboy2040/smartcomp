@@ -281,9 +281,15 @@ export function isEnquiryDay(date: Date = new Date()): boolean {
 }
 
 /**
- * Shares an Invoice / Quotation / Service Invoice PDF on WhatsApp.
- * - On Mobile / supporting browsers: uses Native Web Share API to attach actual .pdf file + details.
- * - On Desktop browsers: automatically downloads the PDF file and opens WhatsApp with formatted details and instructions.
+ * Shares an Invoice / Quotation / Service Invoice details on WhatsApp.
+ *
+ * PER USER REQUIREMENT:
+ * - NO PDF file attachment
+ * - NO "View Link" / track link
+ * - Only send a clean formatted text message with invoice details
+ * - Opens WhatsApp (app on mobile / WhatsApp Web on desktop) instantly
+ *   with the prefilled message — no server round-trip, no PDF generation,
+ *   no download, no view link.
  */
 export async function shareWhatsAppPdf({
   docId,
@@ -307,16 +313,6 @@ export async function shareWhatsAppPdf({
   toast?: any
 }) {
   try {
-    const filename = `${docType.toUpperCase()}-${docNumber || docId}.pdf`
-    const pdfUrl = docType === 'service' ? `/api/service-pdf/${docId}` : `/api/pdf/${docId}?type=${docType}`
-
-    if (toast) toast({ title: 'Preparing PDF for WhatsApp...', duration: 2500 })
-
-    const response = await fetch(pdfUrl)
-    if (!response.ok) throw new Error('Failed to generate PDF')
-    const blob = await response.blob()
-    const pdfFile = new File([blob], filename, { type: 'application/pdf' })
-
     const cleanPhone = String(customerPhone || '').replace(/[^\d]/g, '')
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone.length > 10 ? cleanPhone : ''
 
@@ -324,9 +320,10 @@ export async function shareWhatsAppPdf({
     const statusText = isPaid ? 'PAID ✓' : `Balance Due: Rs. ${Number(amountDue).toFixed(2)}`
     const titleLabel = docType === 'invoice' ? 'Invoice' : docType === 'quotation' ? 'Quotation' : 'Service Invoice'
 
+    // Clean text-only message — NO PDF attachment, NO view link, NO track URL
     const messageText = `*Smart Computers*\n\n` +
       `Dear *${customerName || 'Customer'}*,\n\n` +
-      `Please find attached ${titleLabel.toLowerCase()}:\n\n` +
+      `Here are your ${titleLabel.toLowerCase()} details:\n\n` +
       `*${titleLabel} No:* ${docNumber}\n` +
       `*Total Amount:* Rs. ${Number(grandTotal).toFixed(2)}\n` +
       `*Status:* ${statusText}\n` +
@@ -334,58 +331,23 @@ export async function shareWhatsAppPdf({
       `For any queries, please contact us.\n\n` +
       `Thank you for your business! 🙏`
 
-    // 1. Try Native Web Share API (Passes actual PDF file attachment on mobile Chrome/Safari)
-    // Note: navigator.share requires a "user gesture" (direct click). The async
-    // fetch() above may break the gesture chain on some browsers, so we catch
-    // the "user activation" error and fall through to the desktop fallback.
-    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      try {
-        await navigator.share({
-          files: [pdfFile],
-          title: `${titleLabel} ${docNumber}`,
-          text: messageText,
-        })
-        if (toast) toast({ title: 'PDF Shared to WhatsApp ✓', duration: 3500 })
-        return
-      } catch (shareErr: any) {
-        // AbortError = user cancelled the share sheet — just silently return
-        if (shareErr?.name === 'AbortError') return
-        // Any other error (including "Must be handling a user gesture") —
-        // fall through to the download + WhatsApp Web fallback below.
-        console.warn('Native share failed, falling back to download:', shareErr?.message)
-      }
-    }
-
-    // 2. Fallback for Desktop Browsers: Auto-download PDF & Open WhatsApp Web
-    const downloadUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = downloadUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-
-    setTimeout(() => {
-      URL.revokeObjectURL(downloadUrl)
-    }, 2000)
-
-    const fullMsg = messageText
+    // Open WhatsApp directly with the prefilled text message
     const waUrl = targetPhone
-      ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(fullMsg)}`
-      : `https://wa.me/?text=${encodeURIComponent(fullMsg)}`
-    
+      ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(messageText)}`
+      : `https://wa.me/?text=${encodeURIComponent(messageText)}`
+
     window.open(waUrl, '_blank')
 
     if (toast) {
       toast({
-        title: 'PDF Downloaded & WhatsApp Opened ✓',
-        description: `Please attach ${filename} in the WhatsApp chat window`,
-        duration: 6000,
+        title: 'WhatsApp Opened ✓',
+        description: 'Message ready to send',
+        duration: 3000,
       })
     }
   } catch (e: any) {
     if (e?.name !== 'AbortError') {
-      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing PDF', variant: 'destructive', duration: 5000 })
+      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing message', variant: 'destructive', duration: 5000 })
     }
   }
 }

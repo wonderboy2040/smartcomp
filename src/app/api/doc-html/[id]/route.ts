@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRow, listRows, isConfigured } from '@/lib/sheets-client'
 import { generateInvoiceHtml } from '@/lib/doc-html'
+import { loadProductImages } from '@/lib/productImages'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { safeJsonParse } from '@/lib/utils'
 
@@ -86,6 +87,8 @@ export async function GET(
 
     // Fast shop info with 5-min memory cache
     const shop = await getShopFast()
+    // Pre-load product images (logo + ad banners) once for all doc types
+    const productImages = await loadProductImages()
 
     if (type === 'invoice') {
       const invoice = await getRow<any>('Invoices', id)
@@ -138,6 +141,7 @@ export async function GET(
           docType: 'invoice',
           templateId,
           adBannerVariant: bannerVariant,
+          productImages,
         },
         id,
       )
@@ -200,6 +204,7 @@ export async function GET(
           docType: 'quotation',
           templateId,
           adBannerVariant: bannerVariant,
+          productImages,
         },
         id,
       )
@@ -295,6 +300,7 @@ export async function GET(
           docType: 'service',
           templateId,
           adBannerVariant: bannerVariant,
+          productImages,
           ...(job as any),
         },
         id,
