@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Printer, Download, X, FileText, RefreshCw } from 'lucide-react'
+import { Printer, Download, X, FileText, RefreshCw, ExternalLink } from 'lucide-react'
 
 // ─── Template list (in sync with doc-html.ts) ───
 const TEMPLATES = [
@@ -184,6 +184,17 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose 
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">PDF</span>
+          </a>
+
+          {/* Open in New Tab */}
+          <a
+            href={iframeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-slate-400 hover:text-white text-xs px-2 py-1.5 rounded transition"
+            title="Open in new tab"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
           </a>
 
           {/* Close */}

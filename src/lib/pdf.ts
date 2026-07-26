@@ -389,21 +389,26 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     doc.rect(0, calculatedHeaderHeight + 1.2, pageWidth, 0.5, 'F')
   }
 
-  // Draw Logo on Top Left — explicit JPEG format for base64 data URLs
+  // Draw Official Crest Shield Logo on Top Left
   if (hasLogo) {
     try {
-      // Try auto-detect first (works with base64 data URLs)
-      doc.addImage(logoImg, logoX, logoY, logoW, logoH)
-    } catch {
+      // Detect image format from the data URL prefix.
+      // jsPDF's addImage signature is: addImage(imageData, format, x, y, w, h)
+      // The previous code passed logoX (a number) as the format, which
+      // silently failed and the logo was never rendered.
+      const logoStr = String(logoImg)
+      let fmt: 'JPEG' | 'PNG' | 'WEBP' = 'JPEG'
+      if (logoStr.startsWith('data:image/png')) fmt = 'PNG'
+      else if (logoStr.startsWith('data:image/webp')) fmt = 'WEBP'
+      else if (logoStr.startsWith('data:image/jpeg') || logoStr.startsWith('data:image/jpg')) fmt = 'JPEG'
+      // Default to JPEG (sharp compresses all images to JPEG in productImages.ts)
+
+      doc.addImage(logoStr, fmt, logoX, logoY, logoW, logoH, undefined, 'FAST')
+    } catch (e) {
+      // Last-resort fallback: try without compression / format spec
       try {
-        // Fallback: explicit JPEG since loadProductImages converts to JPEG
-        doc.addImage(logoImg, 'JPEG', logoX, logoY, logoW, logoH)
-      } catch {
-        try {
-          // Last resort: try PNG
-          doc.addImage(logoImg, 'PNG', logoX, logoY, logoW, logoH)
-        } catch {}
-      }
+        doc.addImage(String(logoImg), 'JPEG', logoX, logoY, logoW, logoH)
+      } catch {}
     }
   }
 
@@ -711,9 +716,11 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
         const qrAmount = isInvoice || data.docType === 'service' ? (Number(data.amountDue) || 0) : data.calc.grandTotal
         if (qrAmount > 0) {
           const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR`
-          const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 80, margin: 1, type: 'image/jpeg', quality: 0.5 })
+          // Generate QR as PNG (smaller than JPEG for B/W images)
+          const qrDataUrl = await QRCode.toDataURL(upiLink, { width: 80, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
           const qrSize = 14
-          doc.addImage(qrDataUrl, 'JPEG', margin, leftY, qrSize, qrSize)
+          // Add as PNG (correct format for QR codes)
+          doc.addImage(qrDataUrl, 'PNG', margin, leftY, qrSize, qrSize, undefined, 'FAST')
           doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.setTextColor(...A)
           doc.text('Scan & Pay via UPI', margin + qrSize + 3, leftY + 3.5)
           doc.setFont('helvetica', 'normal'); doc.setFontSize(5.5); doc.setTextColor(...N.textMid)
@@ -757,11 +764,15 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     if (variant === 'flyer') {
       if (imgs['flyer']) {
         try {
-          doc.addImage(imgs['flyer'], 'JPEG', posterX, by, posterW, bandH)
+          const src = String(imgs['flyer'])
+          let fmt: 'JPEG' | 'PNG' | 'WEBP' = 'JPEG'
+          if (src.startsWith('data:image/png')) fmt = 'PNG'
+          else if (src.startsWith('data:image/webp')) fmt = 'WEBP'
+          doc.addImage(src, fmt, posterX, by, posterW, bandH, undefined, 'FAST')
           return
         } catch {
           try {
-            doc.addImage(imgs['flyer'], posterX, by, posterW, bandH)
+            doc.addImage(String(imgs['flyer']), 'JPEG', posterX, by, posterW, bandH)
             return
           } catch {}
         }
@@ -772,11 +783,15 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     if (variant === 'grid') {
       if (imgs['productgrid']) {
         try {
-          doc.addImage(imgs['productgrid'], 'JPEG', posterX, by, posterW, bandH)
+          const src = String(imgs['productgrid'])
+          let fmt: 'JPEG' | 'PNG' | 'WEBP' = 'JPEG'
+          if (src.startsWith('data:image/png')) fmt = 'PNG'
+          else if (src.startsWith('data:image/webp')) fmt = 'WEBP'
+          doc.addImage(src, fmt, posterX, by, posterW, bandH, undefined, 'FAST')
           return
         } catch {
           try {
-            doc.addImage(imgs['productgrid'], posterX, by, posterW, bandH)
+            doc.addImage(String(imgs['productgrid']), 'JPEG', posterX, by, posterW, bandH)
             return
           } catch {}
         }

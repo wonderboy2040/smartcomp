@@ -498,7 +498,7 @@ export async function generateInvoiceHtml(
   /* ===================== A4 PRINT LAYOUT ===================== */
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm;
+    margin: 6mm 8mm;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -552,22 +552,16 @@ export async function generateInvoiceHtml(
   /* ===== A4 sheet ===== */
   .sheet {
     width: 210mm;
-    min-height: 297mm;
+    min-height: 275mm;
     max-width: 100%;
     background: #ffffff;
-    padding: 0;
+    padding: 8mm 10mm;
     box-shadow: 0 8px 28px rgba(15,23,42,0.18);
     border-radius: 4px;
     display: flex;
     flex-direction: column;
     position: relative;
     overflow: hidden;
-  }
-  .sheet-inner {
-    padding: 8mm 10mm;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
   }
 
   /* ===== Header ===== */
@@ -920,10 +914,10 @@ export async function generateInvoiceHtml(
     line-height: 1.4;
   }
 
-  /* ===== Print rules — perfect A4 ===== */
+  /* ===== Print rules — perfect A4 single-page fit ===== */
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm;
+    margin: 6mm;
   }
   @media print {
     html, body {
@@ -937,24 +931,83 @@ export async function generateInvoiceHtml(
     }
     .toolbar { display: none !important; }
     .sheet {
-      width: 100% !important;
-      max-width: 100% !important;
+      width: 198mm !important;
+      max-width: 198mm !important;
       min-height: auto !important;
       box-shadow: none !important;
       border: none !important;
       border-radius: 0 !important;
-      padding: 4mm 6mm !important;
+      padding: 4mm 5mm !important;
       margin: 0 !important;
+      /* Scale down slightly to ensure single-page fit on most content lengths */
+      font-size: 9.5px !important;
     }
     .header {
-      margin: -4mm -6mm 8px -6mm !important;
-      padding: 8px 12px !important;
+      margin: -4mm -5mm 6px -5mm !important;
+      padding: 6px 10px !important;
       border-radius: 0 !important;
     }
-    .shop-logo {
-      width: 60px !important;
-      height: 60px !important;
+    .header .shop-logo {
+      width: 52px !important;
+      height: 52px !important;
     }
+    .header .shop-name { font-size: 16px !important; margin-bottom: 2px !important; }
+    .header .shop-info { font-size: 9px !important; line-height: 1.35 !important; }
+    .header .doc-title { font-size: 15px !important; margin-bottom: 3px !important; }
+    .header .doc-meta .meta-line { font-size: 9px !important; line-height: 1.4 !important; }
+    .header .doc-meta .badge { font-size: 7.5px !important; padding: 1.5px 6px !important; margin-top: 3px !important; }
+
+    .bill-section { gap: 5px !important; margin-bottom: 4px !important; }
+    .bill-box { padding: 5px 7px !important; min-height: 50px !important; }
+    .bill-box h3 { font-size: 8px !important; margin-bottom: 4px !important; padding-bottom: 2px !important; }
+    .bill-box .cname { font-size: 12px !important; margin-bottom: 2px !important; }
+    .bill-box .cline { font-size: 9px !important; line-height: 1.4 !important; }
+
+    .items-table { font-size: 9px !important; margin-bottom: 4px !important; }
+    .items-table thead th { padding: 4px 3px !important; font-size: 8.5px !important; }
+    .items-table tbody td { padding: 3px 3px !important; }
+    .items-table tbody td.num { font-size: 8.5px !important; }
+    .items-table tbody td.name .iname { font-weight: 600 !important; }
+
+    .hsn-block { margin-top: 4px !important; }
+    .hsn-block h3 { font-size: 8px !important; margin-bottom: 3px !important; }
+    .hsn-table { font-size: 8.5px !important; margin-bottom: 4px !important; }
+    .hsn-table th { padding: 3px 3px !important; font-size: 8px !important; }
+    .hsn-table td { padding: 3px !important; }
+
+    .bottom-split { gap: 6px !important; margin-top: 4px !important; }
+    .words-block .label { font-size: 7px !important; margin-bottom: 1px !important; }
+    .words-block .text { font-size: 9.5px !important; line-height: 1.3 !important; }
+    .totals-table { font-size: 9px !important; }
+    .totals-table td { padding: 3px 5px !important; }
+    .totals-table tr.grand-total td { font-size: 11px !important; padding: 4px 6px !important; }
+
+    .info-row { gap: 6px !important; margin-top: 4px !important; padding-top: 4px !important; }
+    .info-block h4 { font-size: 7.5px !important; margin-bottom: 2px !important; }
+    .info-block div { font-size: 8px !important; line-height: 1.35 !important; }
+    .info-block .terms-text { font-size: 8px !important; line-height: 1.35 !important; }
+    .qr-block .qr-img { width: 48px !important; height: 48px !important; }
+    .qr-block .qr-amt { font-size: 10px !important; }
+    .qr-block .qr-text { font-size: 8px !important; }
+
+    .signature { margin-top: 6px !important; }
+    .signature .sig { width: 160px !important; }
+    .signature .sig-line { padding-top: 2px !important; }
+    .signature .sig-for { font-size: 9px !important; margin-bottom: 1px !important; }
+    .signature .sig-auth { font-size: 8px !important; }
+
+    .ad-banner { padding: 5px 8px !important; min-height: 40px !important; margin-bottom: 4px !important; }
+    .ad-banner img.ad-img { height: 40px !important; }
+    .ad-banner .ad-headline { font-size: 10px !important; margin-bottom: 1px !important; }
+    .ad-banner .ad-sub { font-size: 8px !important; line-height: 1.3 !important; }
+    .ad-banner.poster-banner img { max-height: 50px !important; object-fit: contain !important; }
+    .ad-banner.grid-4 .ad-tile img { height: 36px !important; }
+    .ad-banner.featured { grid-template-columns: 100px 1fr !important; gap: 8px !important; }
+    .ad-banner.featured .ad-left .ad-headline { font-size: 12px !important; }
+    .ad-banner.featured .ad-right .ad-tile img { height: 32px !important; }
+
+    .footer { margin-top: 4px !important; padding-top: 4px !important; font-size: 7.5px !important; }
+
     /* Avoid breaking inside these blocks */
     .items-table tbody tr,
     .bill-box,
@@ -1006,10 +1059,10 @@ export async function generateInvoiceHtml(
     </div>
   </div>
 
-  <div class="sheet"><div class="sheet-inner">
+  <div class="sheet">
     <div class="header">
       <div class="shop-block">
-        <img src="${data.productImages?.logo || data.shop?.logoUrl || '/logo.webp'}" alt="Logo" class="shop-logo" onerror="this.style.display='none'" />
+        <img src="${data.productImages?.logo || data.shop?.logoUrl || '/logo.webp'}" alt="Logo" class="shop-logo" onerror="this.src='/logo.webp';this.onerror=null;" />
         <div class="shop-text">
           <h1 class="shop-name">${escapeHtml(data.shop.name || 'Smart Computers')}</h1>
           <div class="shop-info">

@@ -8,6 +8,8 @@ export interface WhatsAppMessage {
 
 // Generate wa.me link for opening WhatsApp with prefilled message
 export function generateWhatsAppLink(phone: string, message: string): string {
+  // Defensive: Google Sheets may store phone as a number, not a string.
+  // Coerce to string before calling .replace(). Also handle null/undefined.
   const phoneStr = String(phone ?? '')
   const cleanPhone = phoneStr.replace(/[^\d]/g, '')
   const encoded = encodeURIComponent(message)
@@ -15,6 +17,8 @@ export function generateWhatsAppLink(phone: string, message: string): string {
 }
 
 // Build rate enquiry message for supplier
+// SIMPLE FORMAT — just shop name, item list, and "prices?"
+// Suppliers in the computer hardware trade prefer short messages.
 export function buildEnquiryMessage(
   shopName: string,
   items: { name: string; sku?: string }[],
@@ -45,7 +49,7 @@ export function buildInvoiceShareMessage(
   const amt = Number(amount) || 0
   let msg = `*${sn}*\n\n`
   msg += `Dear ${cn},\n\n`
-  msg += `Here are your ${docType === 'invoice' ? 'invoice' : 'quotation'} details:\n\n`
+  msg += `Please find attached ${docType === 'invoice' ? 'invoice' : 'quotation'}:\n\n`
   msg += `*${docType === 'invoice' ? 'Invoice' : 'Quotation'} No:* ${num}\n`
   msg += `*Amount:* Rs. ${amt.toFixed(2)}\n`
   if (docType === 'invoice' && dueDate) {
@@ -80,14 +84,30 @@ export function buildPaymentReminderMessage(
 }
 
 // Parse rate response from supplier (natural language to structured rates)
+//
+// Handles common Indian computer hardware trade reply formats:
+//   "3450+"            → rate=3450, gstType='extra'  (GST is ADDITIONAL, 18% on top)
+//   "3450 nett"        → rate=3450, gstType='inclusive' (GST is INCLUDED in price)
+//   "3450"             → rate=3450, gstType='unknown'
+//   "3450 + GST"       → rate=3450, gstType='extra'
+//   "3450 + 18%"       → rate=3450, gstType='extra', gstRate=18
+//   "3450 incl GST"    → rate=3450, gstType='inclusive'
+//   "3450 (GST extra)" → rate=3450, gstType='extra'
+//   "3450 (GST incl)"  → rate=3450, gstType='inclusive'
+//   "GST: 3450+"       → same as above
+//
+// totalCost = what you actually pay:
+//   - extra:     rate + (rate * gstRate/100), e.g. 3450 + 18% = 4071
+//   - inclusive: rate (already includes GST)
+//   - unknown:   rate (treated as inclusive for safety)
 export interface ParsedRate {
   itemName: string
-  rate: number
+  rate: number          // the base rate as quoted
   gstApplicable: boolean | null
   gstType: 'extra' | 'inclusive' | 'unknown' | null
   gstRate?: number
-  totalCost: number
-  raw: string
+  totalCost: number     // effective cost including GST if extra
+  raw: string           // original line text
 }
 
 export function parseRateResponse(
@@ -101,16 +121,23 @@ export function parseRateResponse(
     const trimmed = line.trim()
     if (!trimmed) continue
 
+    // Skip lines that are clearly not rate lines (greetings, thank you, etc.)
     const lowerTrim = trimmed.toLowerCase()
     if (/^(thank|hello|hi|ok|yes|no|sure|please|dear|regards|best)\b/.test(lowerTrim) && !/\d{2,}/.test(trimmed)) {
       continue
     }
 
+    // Patterns to extract item name + rate. Order matters — try most specific first.
     const patterns = [
+      // "1. Item Name: Rs.3450+" or "1. Item Name: 3450 nett"
       /^\d+\.?\s*(.+?):?\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
+      // "Item Name: Rs.3450+"
       /^(.+?):?\s*rs\.?\s*(\d+(?:[.,]\d+)?)/i,
+      // "1. Item Name - 3450+"
       /^\d+\.?\s*(.+?)\s*[-:]\s*(\d+(?:[.,]\d+)?)/,
+      // "Item Name: 3450+"
       /^(.+?):\s*(\d+(?:[.,]\d+)?)/,
+      // "3450+" (rate only, no item name — match by line number to original items)
       /^(\d+(?:[.,]\d+)?)\s*([+\-].*)?$/,
     ]
 
@@ -122,6 +149,7 @@ export function parseRateResponse(
       matched = trimmed.match(p)
       if (matched) {
         if (p.source.startsWith('^(\\d+')) {
+          // Rate-only pattern (last one) — no item name in the line
           rateStr = String(matched[1] || '')
           itemNameRaw = ''
         } else {
@@ -137,6 +165,7 @@ export function parseRateResponse(
     const rate = parseFloat(rateStr.replace(/[.,]/g, m => m === ',' ? '' : '.'))
     if (isNaN(rate)) continue
 
+    // Match item name to original items (or assign by line order if no name)
     let itemName = itemNameRaw
     let matchedItem: { name: string; sku?: string } | undefined
     if (itemNameRaw) {
@@ -150,43 +179,59 @@ export function parseRateResponse(
       )
       if (matchedItem) itemName = matchedItem.name
     } else {
+      // Rate-only line: assign to the next unmatched original item by order
       const usedNames = new Set(results.map(r => r.itemName))
       matchedItem = originalItems.find(i => !usedNames.has(i.name))
       if (matchedItem) itemName = matchedItem.name
     }
 
+    // Detect GST type from the line text
     const fullLine = trimmed.toLowerCase()
     let gstType: 'extra' | 'inclusive' | 'unknown' | null = null
     let gstRate: number | undefined
     let gstApplicable: boolean | null = null
 
+    // Extract GST rate if mentioned (e.g. "18%", "18 %", "GST 18")
     const gstRateMatch = fullLine.match(/(\d+)\s*%/) || fullLine.match(/gst\s*(\d+)/)
     if (gstRateMatch) gstRate = parseFloat(gstRateMatch[1])
 
+    // "3450+" → GST extra (the + suffix is trade shorthand for "plus GST")
+    // "3450 + GST", "3450 (GST extra)", "3450 GST extra", "3450 + 18%"
     if (/\d\s*\+/i.test(trimmed) || /\+\s*(gst|18%|18\s*%)/i.test(trimmed) || /gst\s*extra/i.test(fullLine) || /extra\s*gst/i.test(fullLine)) {
       gstType = 'extra'
       gstApplicable = true
-      if (!gstRate) gstRate = 18
-    } else if (/\bnett\b/i.test(trimmed) || /incl/i.test(fullLine) || /including\s*gst/i.test(fullLine) || /gst\s*incl/i.test(fullLine)) {
+      if (!gstRate) gstRate = 18 // default to 18% for computer hardware
+    }
+    // "3450 nett" → GST inclusive ("nett" means final/all-inclusive price in trade)
+    // "3450 incl GST", "3450 including GST", "3450 (GST incl)"
+    else if (/\bnett\b/i.test(trimmed) || /incl/i.test(fullLine) || /including\s*gst/i.test(fullLine) || /gst\s*incl/i.test(fullLine)) {
       gstType = 'inclusive'
       gstApplicable = true
       if (!gstRate) gstRate = 18
-    } else if (/without\s*gst/i.test(fullLine) || /no\s*gst/i.test(fullLine) || /gst\s*no/i.test(fullLine)) {
+    }
+    // "3450 without GST", "3450 no GST"
+    else if (/without\s*gst/i.test(fullLine) || /no\s*gst/i.test(fullLine) || /gst\s*no/i.test(fullLine)) {
       gstType = 'extra'
       gstApplicable = false
-    } else if (/with\s*gst/i.test(fullLine) || /gst\s*yes/i.test(fullLine)) {
+    }
+    // "3450 with GST"
+    else if (/with\s*gst/i.test(fullLine) || /gst\s*yes/i.test(fullLine)) {
       gstType = 'inclusive'
       gstApplicable = true
       if (!gstRate) gstRate = 18
-    } else {
+    }
+    // Bare number with no GST context
+    else {
       gstType = 'unknown'
       gstApplicable = null
     }
 
+    // Calculate totalCost (what the buyer actually pays)
     let totalCost = rate
     if (gstType === 'extra' && gstRate) {
       totalCost = rate + (rate * gstRate / 100)
     }
+    // inclusive or unknown → totalCost = rate
 
     results.push({
       itemName,
@@ -202,7 +247,7 @@ export function parseRateResponse(
   return results
 }
 
-// Build bulk enquiry payload
+// Build bulk enquiry payload (for sending to multiple suppliers)
 export function buildBulkEnquiry(
   shopName: string,
   suppliersWithItems: { supplier: { name: string; phone: string; whatsappNumber: string }; items: { name: string; sku?: string }[] }[]
@@ -213,28 +258,41 @@ export function buildBulkEnquiry(
   }))
 }
 
-// Schedule helper
+// Schedule helper - returns dates for 2 monthly enquiries (1st and 15th)
 export function getNextEnquiryDates(from: Date = new Date()): Date[] {
   const dates: Date[] = []
   const now = new Date(from)
   const day = now.getDate()
-
+  
+  // Next 1st
   const next1st = new Date(now.getFullYear(), now.getMonth() + (day >= 1 ? 1 : 0), 1)
+  // Next 15th
   const next15th = new Date(now.getFullYear(), now.getMonth() + (day >= 15 ? 1 : 0), 15)
-
+  
   dates.push(next1st, next15th)
   dates.sort((a, b) => a.getTime() - b.getTime())
   return dates
 }
 
+// Check if today is an enquiry day (1st or 15th)
 export function isEnquiryDay(date: Date = new Date()): boolean {
   const day = date.getDate()
   return day === 1 || day === 15
 }
 
 /**
- * Shares Invoice / Quotation / Service Invoice details on WhatsApp.
- * NO PDF attachment. NO View Link. Only clean text message.
+ * Shares an Invoice / Quotation / Service Invoice PDF on WhatsApp.
+ *
+ * PER USER REQUIREMENT:
+ * - ✅ PDF file attachment IS attached (mobile Native Web Share API)
+ * - ✅ PDF is auto-downloaded on desktop + WhatsApp Web opened with details
+ * - ❌ NO "View Link" / track URL / public doc link in the message text
+ * - Message text is clean: shop name, doc number, amount, status, notes
+ *
+ * Flow:
+ *   1. Fetch the PDF from the server (/api/pdf or /api/service-pdf)
+ *   2. On mobile (Chrome/Safari): navigator.share() with the PDF file
+ *   3. On desktop: auto-download the PDF + open wa.me with text message
  */
 export async function shareWhatsAppPdf({
   docId,
@@ -258,6 +316,16 @@ export async function shareWhatsAppPdf({
   toast?: any
 }) {
   try {
+    const filename = `${docType.toUpperCase()}-${docNumber || docId}.pdf`
+    const pdfUrl = docType === 'service' ? `/api/service-pdf/${docId}` : `/api/pdf/${docId}?type=${docType}`
+
+    if (toast) toast({ title: 'Preparing PDF for WhatsApp...', duration: 2500 })
+
+    const response = await fetch(pdfUrl)
+    if (!response.ok) throw new Error('Failed to generate PDF')
+    const blob = await response.blob()
+    const pdfFile = new File([blob], filename, { type: 'application/pdf' })
+
     const cleanPhone = String(customerPhone || '').replace(/[^\d]/g, '')
     const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone.length > 10 ? cleanPhone : ''
 
@@ -265,9 +333,11 @@ export async function shareWhatsAppPdf({
     const statusText = isPaid ? 'PAID ✓' : `Balance Due: Rs. ${Number(amountDue).toFixed(2)}`
     const titleLabel = docType === 'invoice' ? 'Invoice' : docType === 'quotation' ? 'Quotation' : 'Service Invoice'
 
+    // Clean message — NO view link / track URL / public doc link.
+    // Only shop + customer + doc details (the PDF itself carries the rest).
     const messageText = `*Smart Computers*\n\n` +
       `Dear *${customerName || 'Customer'}*,\n\n` +
-      `Here are your ${titleLabel.toLowerCase()} details:\n\n` +
+      `Please find attached ${titleLabel.toLowerCase()}:\n\n` +
       `*${titleLabel} No:* ${docNumber}\n` +
       `*Total Amount:* Rs. ${Number(grandTotal).toFixed(2)}\n` +
       `*Status:* ${statusText}\n` +
@@ -275,7 +345,43 @@ export async function shareWhatsAppPdf({
       `For any queries, please contact us.\n\n` +
       `Thank you for your business! 🙏`
 
-    // Open WhatsApp directly with text only — NO PDF, NO View Link
+    // 1. Try Native Web Share API (passes the actual PDF file attachment on
+    //    mobile Chrome/Safari). Note: navigator.share needs a user gesture;
+    //    the async fetch above may break that chain on some browsers, so we
+    //    catch the "user activation" error and fall through to the desktop
+    //    fallback below.
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      try {
+        await navigator.share({
+          files: [pdfFile],
+          title: `${titleLabel} ${docNumber}`,
+          text: messageText,
+        })
+        if (toast) toast({ title: 'PDF Shared to WhatsApp ✓', duration: 3500 })
+        return
+      } catch (shareErr: any) {
+        // AbortError = user cancelled the share sheet — silently return
+        if (shareErr?.name === 'AbortError') return
+        // Any other error (including "Must be handling a user gesture") —
+        // fall through to the download + WhatsApp Web fallback below.
+        console.warn('Native share failed, falling back to download:', shareErr?.message)
+      }
+    }
+
+    // 2. Desktop fallback: auto-download the PDF + open WhatsApp Web with
+    //    the text message. User then attaches the downloaded PDF manually.
+    const downloadUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    setTimeout(() => {
+      URL.revokeObjectURL(downloadUrl)
+    }, 2000)
+
     const waUrl = targetPhone
       ? `https://wa.me/${targetPhone}?text=${encodeURIComponent(messageText)}`
       : `https://wa.me/?text=${encodeURIComponent(messageText)}`
@@ -284,14 +390,14 @@ export async function shareWhatsAppPdf({
 
     if (toast) {
       toast({
-        title: 'WhatsApp Opened ✓',
-        description: `Message ready for ${customerName || 'Customer'}`,
-        duration: 3500,
+        title: 'PDF Downloaded & WhatsApp Opened ✓',
+        description: `Please attach ${filename} in the WhatsApp chat window`,
+        duration: 6000,
       })
     }
   } catch (e: any) {
     if (e?.name !== 'AbortError') {
-      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing', variant: 'destructive', duration: 5000 })
+      if (toast) toast({ title: 'Share failed', description: e.message || 'Error sharing PDF', variant: 'destructive', duration: 5000 })
     }
   }
 }
