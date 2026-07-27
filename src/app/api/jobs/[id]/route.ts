@@ -164,7 +164,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       const paymentMode = String(body?.paymentMode || 'Cash')
-      const engineerSharePct = clamp(Number(body?.engineerSharePct) || 50, 0, 100)
       const warrantyDays = clamp(Number(body?.warrantyDays) || Number(existing?.warrantyDays) || 30, 0, 3650)
       const deductStock = body?.deductStock !== false
 
@@ -172,8 +171,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const svcCharge = money(body?.serviceCharge)
       const actualServiceProfit = svcCharge
       const grossProfit = money(actualServiceProfit + totals.profit)
-      const engineerShare = Math.round(grossProfit * engineerSharePct / 100)
-      const adminShare = money(grossProfit - engineerShare)
       const warrantyExpiry = warrantyDays > 0
         ? new Date(Date.now() + warrantyDays * 24 * 60 * 60 * 1000).toISOString()
         : ''
@@ -213,8 +210,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         mode: paymentMode,
         type: balanceDueAfter <= 0 ? 'Final' : 'Partial',
         date: new Date().toISOString(),
-        engineerShare: balanceDueAfter <= 0 ? engineerShare : 0,
-        adminShare: balanceDueAfter <= 0 ? adminShare : paymentReceivedNow,
         notes: balanceDueAfter <= 0 ? 'Final payment at job completion' : 'Partial payment at job completion',
       } : null
 
@@ -226,10 +221,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         serviceCharge: svcCharge,
         paidAmount: newPaidAmount,
         paymentMode,
-        engineerShare,
-        adminShare,
         partsProfit: totals.profit,
         serviceProfit: actualServiceProfit,
+        grossProfit,
         warrantyDays,
         warrantyExpiry,
         completedDate: new Date().toISOString(),
@@ -249,8 +243,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({
           success: true,
           job: result.data,
-          engineerShare,
-          adminShare,
+          grossProfit,
           partsProfit: totals.profit,
           serviceProfit: actualServiceProfit,
           warrantyExpiry,
@@ -277,10 +270,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           serviceCharge: svcCharge,
           paidAmount: newPaidAmount,
           paymentMode,
-          engineerShare,
-          adminShare,
           partsProfit: totals.profit,
           serviceProfit: actualServiceProfit,
+          grossProfit,
           warrantyDays,
           warrantyExpiry,
           completedDate: new Date().toISOString(),
@@ -312,8 +304,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         return NextResponse.json({
           success: true,
           job: updated,
-          engineerShare,
-          adminShare,
+          grossProfit,
           partsProfit: totals.profit,
           serviceProfit: actualServiceProfit,
           warrantyExpiry,
@@ -413,8 +404,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         mode,
         type: 'Partial',
         date: new Date().toISOString(),
-        engineerShare: 0,
-        adminShare: amount,
         notes: 'Partial service payment recorded',
       }).catch(() => {})
 

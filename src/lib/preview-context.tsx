@@ -8,11 +8,12 @@ interface PreviewState {
   docId: string
   docType: 'invoice' | 'quotation' | 'service'
   title: string
+  gstMode?: 'gst' | 'non-gst'
 }
 
 interface PreviewApi {
   /** Open the ultra-fast preview panel. Pass docId + docType directly. */
-  openPreview: (docId: string, docType?: 'invoice' | 'quotation' | 'service', title?: string) => void
+  openPreview: (docId: string, docType?: 'invoice' | 'quotation' | 'service', title?: string, gstMode?: 'gst' | 'non-gst') => void
   /** Fully close the preview panel. */
   closePreview: () => void
   /** Collapse / expand the preview panel (kept for backward compat). */
@@ -41,13 +42,14 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
     setMounted(true)
   }, [])
 
-  const openPreview = useCallback((docId: string, docType: 'invoice' | 'quotation' | 'service' = 'invoice', title?: string) => {
+  const openPreview = useCallback((docId: string, docType: 'invoice' | 'quotation' | 'service' = 'invoice', title?: string, gstMode?: 'gst' | 'non-gst') => {
     // Parse old-style URL calls for backward compatibility
     // e.g. openPreview('/api/pdf/abc123?type=invoice', 'Invoice INV-001')
     let finalDocId = docId
     let finalDocType = docType
     let finalTitle = title || 'Document Preview'
-    
+    let finalGstMode: 'gst' | 'non-gst' = gstMode || 'gst'
+
     if (docId.startsWith('/api/') || docId.startsWith('http')) {
       try {
         const parsedUrl = new URL(docId, 'http://localhost')
@@ -56,6 +58,10 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
         const typeParam = parsedUrl.searchParams.get('type')
         if (typeParam === 'invoice' || typeParam === 'quotation' || typeParam === 'service') {
           finalDocType = typeParam
+        }
+        const gstModeParam = parsedUrl.searchParams.get('gstMode')
+        if (gstModeParam === 'non-gst' || gstModeParam === 'gst') {
+          finalGstMode = gstModeParam
         }
       } catch {
         // fallback — use as-is
@@ -66,7 +72,7 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
         finalDocType = 'invoice'
       }
     }
-    
+
     if (!finalTitle || finalTitle === 'Document Preview') {
       const typeLabel = finalDocType === 'quotation' ? 'Quotation' : finalDocType === 'service' ? 'Service Invoice' : 'Invoice'
       finalTitle = `${typeLabel} Preview`
@@ -74,7 +80,7 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
 
     // Instant open — use rAF for single-frame render
     cancelAnimationFrame(rafRef.current)
-    setPreview({ docId: finalDocId, docType: finalDocType, title: finalTitle })
+    setPreview({ docId: finalDocId, docType: finalDocType, title: finalTitle, gstMode: finalGstMode })
     rafRef.current = requestAnimationFrame(() => {
       setVisible(true)
     })
@@ -123,11 +129,12 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
       >
         <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-3 bg-white shadow-2xl rounded-none sm:rounded-xl overflow-hidden flex flex-col border border-slate-700">
           <DocumentHtmlViewer
-            key={`${preview.docId}:${preview.docType}`}
+            key={`${preview.docId}:${preview.docType}:${preview.gstMode || 'gst'}`}
             docId={preview.docId}
             docType={preview.docType}
             title={preview.title}
             onClose={closePreview}
+            gstMode={preview.gstMode}
           />
         </div>
       </div>,

@@ -71,9 +71,10 @@ export async function GET(
       'tally-classic'
     const bannerVariant =
       url.searchParams.get('banner') || 'flyer'
+    const gstMode = (url.searchParams.get('gstMode') === 'non-gst' ? 'non-gst' : 'gst') as 'gst' | 'non-gst'
 
     // Cache key — if we've rendered this exact combo in the last 10 min, return it
-    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}`
+    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}:${gstMode}`
     const cached = getCachedHtml(cacheKey)
     if (cached) {
       return new NextResponse(cached, {
@@ -142,6 +143,7 @@ export async function GET(
           templateId,
           adBannerVariant: bannerVariant,
           productImages,
+          gstMode,
         },
         id,
       )
@@ -205,6 +207,7 @@ export async function GET(
           templateId,
           adBannerVariant: bannerVariant,
           productImages,
+          gstMode,
         },
         id,
       )
@@ -301,6 +304,7 @@ export async function GET(
           templateId,
           adBannerVariant: bannerVariant,
           productImages,
+          gstMode,
           ...(job as any),
         },
         id,

@@ -41,8 +41,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const templateId = url.searchParams.get('template') || String(shop.pdfTemplate || '') || 'tally-classic'
     const bannerVariant = url.searchParams.get('banner') || String(shop.adBannerVariant || '') || 'flyer'
+    const gstMode = (url.searchParams.get('gstMode') === 'non-gst' ? 'non-gst' : 'gst') as 'gst' | 'non-gst'
 
-    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}`
+    const cacheKey = `${id}:${type}:${templateId}:${bannerVariant}:${gstMode}`
     const cached = PDF_CACHE.get(cacheKey)
     if (cached && cached.expires > Date.now()) {
       return new NextResponse(cached.buffer, {
@@ -105,6 +106,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         templateId,
         productImages: await loadProductImages(),
         adBannerVariant: bannerVariant,
+        gstMode,
       })
     } else if (type === 'quotation') {
       const q = await getRow<any>('Quotations', id)
@@ -151,6 +153,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         templateId,
         productImages: await loadProductImages(),
         adBannerVariant: bannerVariant,
+        gstMode,
       })
     } else if (type === 'service') {
       const job = await getRow<any>('Jobs', id)
@@ -230,6 +233,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         templateId,
         productImages: await loadProductImages(),
         adBannerVariant: bannerVariant,
+        gstMode,
         ...(job as any),
       })
     }

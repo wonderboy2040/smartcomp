@@ -210,30 +210,6 @@ export function calculateDiscount(original: number, discountPercent: number): { 
   return { discountAmount, final: round2(original - discountAmount) }
 }
 
-export function calculateServiceProfitShare(serviceCharge: number, partsProfit: number, engineerPercent: number = 50): {
-  engineerService: number
-  adminService: number
-  engineerParts: number
-  adminParts: number
-  totalEngineer: number
-  totalAdmin: number
-} {
-  const engPct = engineerPercent / 100
-  const adminPct = 1 - engPct
-  const engineerService = round2(serviceCharge * engPct)
-  const adminService = round2(serviceCharge * adminPct)
-  const engineerParts = round2(partsProfit * engPct)
-  const adminParts = round2(partsProfit * adminPct)
-  return {
-    engineerService,
-    adminService,
-    engineerParts,
-    adminParts,
-    totalEngineer: round2(engineerService + engineerParts),
-    totalAdmin: round2(adminService + adminParts),
-  }
-}
-
 export function calculateAMCExpiry(startDate: string, durationMonths: number): string {
   const start = new Date(startDate)
   start.setMonth(start.getMonth() + durationMonths)
@@ -247,4 +223,98 @@ export function getAMCStatus(endDate: string): 'active' | 'expiring_soon' | 'exp
   if (diffDays < 0) return 'expired'
   if (diffDays <= 30) return 'expiring_soon'
   return 'active'
+}
+
+// ===== NEW v3.1 HELPERS — added for existing-feature upgrades =====
+
+/**
+ * If a price already includes GST, extract the taxable base + GST amount.
+ * Example: 1180 inclusive @ 18% → { base: 1000, gst: 180 }
+ */
+export function extractGstFromInclusive(inclusivePrice: number, gstRate: number): { base: number; gst: number } {
+  const rate = Number(gstRate) || 0
+  if (rate <= 0) return { base: round2(inclusivePrice), gst: 0 }
+  const base = round2(inclusivePrice / (1 + rate / 100))
+  return { base, gst: round2(inclusivePrice - base) }
+}
+
+/**
+ * Apply GST on a base price (exclusive → inclusive).
+ */
+export function applyGstToExclusive(basePrice: number, gstRate: number): { base: number; gst: number; total: number } {
+  const rate = Number(gstRate) || 0
+  const gst = round2((basePrice * rate) / 100)
+  return { base: round2(basePrice), gst, total: round2(basePrice + gst) }
+}
+
+/**
+ * Returns the Indian Financial Year label for a date, e.g. "FY 2025-26".
+ * Indian FY starts on April 1.
+ */
+export function getFinancialYearLabel(date: Date | string = new Date()): string {
+  const d = new Date(date)
+  const year = d.getFullYear()
+  const month = d.getMonth() + 1
+  const fyStart = month >= 4 ? year : year - 1
+  const fyEnd = fyStart + 1
+  return `FY ${fyStart}-${String(fyEnd).slice(2)}`
+}
+
+/**
+ * Whole days between two dates (b - a). Negative if b is in the past.
+ */
+export function daysBetween(a: Date | string, b: Date | string = new Date()): number {
+  const da = new Date(a).getTime()
+  const db = new Date(b).getTime()
+  if (isNaN(da) || isNaN(db)) return 0
+  return Math.floor((db - da) / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * Age an invoice in human-readable form: "Today", "2 days ago", "3 weeks ago", "2 months ago".
+ */
+export function invoiceAge(date: Date | string): string {
+  const days = daysBetween(date)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return `${days} days ago`
+  if (days < 14) return '1 week ago'
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`
+  if (days < 60) return '1 month ago'
+  if (days < 365) return `${Math.floor(days / 30)} months ago`
+  return `${Math.floor(days / 365)} years ago`
+}
+
+/**
+ * Sum a list of objects by a numeric key. Useful for dashboard aggregations.
+ */
+export function sumBy<T>(arr: T[], key: (item: T) => number | string | undefined | null): number {
+  return arr.reduce((s, x) => s + (Number(key(x)) || 0), 0)
+}
+
+/**
+ * Group an array by a key function. Returns a Map.
+ */
+export function groupBy<T, K>(arr: T[], key: (item: T) => K): Map<K, T[]> {
+  const m = new Map<K, T[]>()
+  for (const item of arr) {
+    const k = key(item)
+    const arr2 = m.get(k) || []
+    arr2.push(item)
+    m.set(k, arr2)
+  }
+  return m
+}
+
+/**
+ * Returns Indian-style short currency: Rs.1.2L, Rs.3.4Cr — without decimals for compact UI.
+ */
+export function formatINRShort(n: number): string {
+  const v = Number(n) || 0
+  const sign = v < 0 ? '-' : ''
+  const abs = Math.abs(v)
+  if (abs >= 10000000) return `${sign}Rs.${(abs / 10000000).toFixed(2)}Cr`
+  if (abs >= 100000) return `${sign}Rs.${(abs / 100000).toFixed(2)}L`
+  if (abs >= 1000) return `${sign}Rs.${(abs / 1000).toFixed(1)}K`
+  return `${sign}Rs.${abs.toFixed(0)}`
 }

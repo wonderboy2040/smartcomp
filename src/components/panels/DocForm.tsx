@@ -45,6 +45,8 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10))
   const [selectedTemplate, setSelectedTemplate] = useState('tally-classic')
   const [roundOff, setRoundOff] = useState(false)
+  // GST mode toggle: 'gst' = full GST invoice, 'non-gst' = retail invoice (walk-in)
+  const [gstMode, setGstMode] = useState<'gst' | 'non-gst'>('gst')
 
   const { data: customers } = useFetch<any[]>('/api/customers', undefined)
   const { data: stockItems } = useFetch<any[]>('/api/items?limit=500', undefined)
@@ -72,6 +74,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         setDate(editing.date ? new Date(editing.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10))
         setSelectedTemplate(editing.template || editing.templateId || 'tally-classic')
         setRoundOff(editing.roundOff === true || editing.roundOff === 'true')
+        setGstMode(editing.gstMode === 'non-gst' ? 'non-gst' : 'gst')
       } else {
         setCustomerId('')
         setItems([])
@@ -86,6 +89,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         setDate(new Date().toISOString().slice(0, 10))
         setSelectedTemplate('tally-classic')
         setRoundOff(false)
+        setGstMode('gst')
       }
     }
   }, [open, editing])
@@ -202,6 +206,11 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         notes,
         date,
         template: selectedTemplate,
+        gstMode,
+      }
+      // When non-GST mode, force all items to non-GST (gstApplicable=false)
+      if (gstMode === 'non-gst') {
+        payload.items = items.map((i) => ({ ...i, gstApplicable: false, gstRate: 0 }))
       }
       if (docType === 'invoice') {
         payload.paymentType = paymentType
@@ -326,6 +335,21 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                   <SelectItem value="gst-minimal-white">Minimal White Pro (Eco Print)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="lg:col-span-2">
+              <Label className="text-xs font-bold text-slate-700">Invoice Type</Label>
+              <Select value={gstMode} onValueChange={(v) => setGstMode(v as 'gst' | 'non-gst')}>
+                <SelectTrigger className="mt-1.5 h-11 bg-white border-slate-200"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gst">🧾 GST Tax Invoice (with GSTIN)</SelectItem>
+                  <SelectItem value="non-gst">🛍️ Retail Invoice (Non-GST, walk-in)</SelectItem>
+                </SelectContent>
+              </Select>
+              {gstMode === 'non-gst' && (
+                <p className="text-[10px] text-amber-700 mt-1 font-medium">
+                  ⚠️ Non-GST mode: HSN, GST columns, CGST/SGST hidden. For walk-in customers only.
+                </p>
+              )}
             </div>
             <div className="lg:col-span-2">
               <Label className="text-xs font-bold text-slate-700">{docType === 'quotation' ? 'Valid Till' : 'Payment'}</Label>

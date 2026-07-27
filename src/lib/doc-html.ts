@@ -25,6 +25,7 @@ import {
   type InvoiceCalc,
 } from './calc'
 import type { PdfDocData, ShopInfo, CustomerInfo } from './pdf'
+import { BUSINESS_GROWTH } from './business-growth'
 
 // ──────────────────────────────────────────────────────────────────────
 // Template palette (kept in sync with PDF_TEMPLATES in pdf.ts)
@@ -285,40 +286,59 @@ export async function generateInvoiceHtml(
   const tpl = getTemplate(data.templateId)
   const isInvoice = data.docType === 'invoice'
   const isService = data.docType === 'service'
+  const isNonGst = data.gstMode === 'non-gst'
 
-  const docTitle = isInvoice
-    ? 'TAX INVOICE'
-    : isService
-      ? 'SERVICE INVOICE'
-      : 'QUOTATION'
+  const docTitle = isNonGst
+    ? (isService ? 'RETAIL BILL' : 'RETAIL INVOICE')
+    : isInvoice
+      ? 'TAX INVOICE'
+      : isService
+        ? 'SERVICE INVOICE'
+        : 'QUOTATION'
 
   const shopState = (data.shop.state || '').toLowerCase()
   const custState = (data.customer.state || '').toLowerCase()
   const sameState = !shopState || !custState || shopState === custState
 
   // Build items table rows
-  const itemsRows = data.calc.items
-    .map(
-      (item, i) => `
-      <tr class="item-row">
-        <td class="num">${i + 1}</td>
-        <td class="name">
-          <div class="iname">${escapeHtml(item.name)}${item.sku ? ` <span style="font-size:8px;color:#94a3b8;">SKU: ${escapeHtml(item.sku)}</span>` : ''}</div>
-        </td>
-        <td class="center">${escapeHtml(item.hsnCode || '-')}</td>
-        <td class="center">${item.quantity}</td>
-        <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
-        <td class="right">${formatCurrency(item.amount).replace('Rs. ', '')}</td>
-        <td class="right">${item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') + (item.gstRate ? ` (${item.gstRate}%)` : '') : '-'}</td>
-        <td class="right bold">${formatCurrency(item.total).replace('Rs. ', '')}</td>
-      </tr>`,
-    )
-    .join('')
+  // For non-GST invoices, hide HSN, Taxable, GST columns.
+  const itemsRows = isNonGst
+    ? data.calc.items
+        .map(
+          (item, i) => `
+        <tr class="item-row">
+          <td class="num">${i + 1}</td>
+          <td class="name">
+            <div class="iname">${escapeHtml(item.name)}${item.sku ? ` <span style="font-size:8px;color:#94a3b8;">SKU: ${escapeHtml(item.sku)}</span>` : ''}</div>
+          </td>
+          <td class="center">${item.quantity}</td>
+          <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
+          <td class="right bold">${formatCurrency(item.amount).replace('Rs. ', '')}</td>
+        </tr>`,
+        )
+        .join('')
+    : data.calc.items
+        .map(
+          (item, i) => `
+        <tr class="item-row">
+          <td class="num">${i + 1}</td>
+          <td class="name">
+            <div class="iname">${escapeHtml(item.name)}${item.sku ? ` <span style="font-size:8px;color:#94a3b8;">SKU: ${escapeHtml(item.sku)}</span>` : ''}</div>
+          </td>
+          <td class="center">${escapeHtml(item.hsnCode || '-')}</td>
+          <td class="center">${item.quantity}</td>
+          <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
+          <td class="right">${formatCurrency(item.amount).replace('Rs. ', '')}</td>
+          <td class="right">${item.gstApplicable ? formatCurrency(item.gstAmount).replace('Rs. ', '') + (item.gstRate ? ` (${item.gstRate}%)` : '') : '-'}</td>
+          <td class="right bold">${formatCurrency(item.total).replace('Rs. ', '')}</td>
+        </tr>`,
+        )
+        .join('')
 
-  // HSN summary (only if 2-6 distinct HSN codes)
-  const hsnSummary = calculateHSNSummary(data.calc.items)
+  // HSN summary (only if 2-6 distinct HSN codes AND GST mode)
+  const hsnSummary = isNonGst ? [] : calculateHSNSummary(data.calc.items)
   const hsnBlock =
-    hsnSummary.length > 1 && hsnSummary.length <= 6
+    !isNonGst && hsnSummary.length > 1 && hsnSummary.length <= 6
       ? `
       <div class="hsn-block">
         <h3>HSN/SAC GST SUMMARY</h3>
@@ -367,7 +387,7 @@ export async function generateInvoiceHtml(
       `<tr class="discount"><td>Discount</td><td class="right">- ${formatCurrency(data.calc.discount)}</td></tr>`,
     )
   }
-  if (data.calc.gstAmount > 0) {
+  if (!isNonGst && data.calc.gstAmount > 0) {
     if (sameState) {
       const rate = (data.calc.items[0]?.gstRate || 18) / 2
       totalsRows.push(
@@ -1069,7 +1089,8 @@ export async function generateInvoiceHtml(
             ${data.shop.address ? `<div>${escapeHtml(data.shop.address)}</div>` : ''}
             ${data.shop.state ? `<div>${escapeHtml(data.shop.state)}${shopStateCode ? ` (${shopStateCode})` : ''}</div>` : ''}
             ${data.shop.phone || data.shop.email ? `<div>${data.shop.phone ? `Ph: ${escapeHtml(data.shop.phone)}` : ''}${data.shop.phone && data.shop.email ? ' &nbsp;|&nbsp; ' : ''}${data.shop.email ? escapeHtml(data.shop.email) : ''}</div>` : ''}
-            ${data.shop.gstNumber ? `<div class="gst">GSTIN: ${escapeHtml(data.shop.gstNumber)}</div>` : ''}
+            ${data.shop.gstNumber && !isNonGst ? `<div class="gst">GSTIN: ${escapeHtml(data.shop.gstNumber)}</div>` : ''}
+            ${isNonGst ? `<div class="gst" style="color:${tpl.accent};">RETAIL INVOICE (Non-GST)</div>` : ''}
           </div>
         </div>
       </div>
@@ -1103,11 +1124,11 @@ export async function generateInvoiceHtml(
         <tr>
           <th>#</th>
           <th class="left">Item / Description (SKU)</th>
-          <th>HSN / SAC</th>
+          ${isNonGst ? '' : '<th>HSN / SAC</th>'}
           <th>Qty</th>
           <th class="right">Rate (Rs.)</th>
-          <th class="right">Taxable (Rs.)</th>
-          <th class="right">GST (Rs.)</th>
+          ${isNonGst ? '' : '<th class="right">Taxable (Rs.)</th>'}
+          ${isNonGst ? '' : '<th class="right">GST (Rs.)</th>'}
           <th class="right">Amount (Rs.)</th>
         </tr>
       </thead>
@@ -1150,6 +1171,9 @@ export async function generateInvoiceHtml(
     <div class="footer">
       ${escapeHtml(docTitle)} ${escapeHtml(data.number)} &nbsp;|&nbsp; ${escapeHtml(data.shop.name || 'Smart Computers')}
       &nbsp;|&nbsp; Computer generated on ${escapeHtml(new Date().toLocaleString('en-IN'))}
+      <div style="margin-top:4px;font-size:9px;font-weight:700;color:${tpl.accent};">
+        ⭐ Review us on Google: <a href="${BUSINESS_GROWTH.googleReviewUrl}" target="_blank" style="color:${tpl.accent};text-decoration:underline;">${BUSINESS_GROWTH.googleReviewUrl}</a>
+      </div>
     </div>
   </div>
 

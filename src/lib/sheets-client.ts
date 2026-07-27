@@ -643,8 +643,6 @@ export async function completeJobFull(data: {
   serviceCharge?: number
   paidAmount?: number
   paymentMode?: string
-  engineerShare?: number
-  adminShare?: number
   partsProfit?: number
   serviceProfit?: number
   warrantyDays?: number

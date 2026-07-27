@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   const startTime = Date.now()
   try {
     const body = await req.json()
-    const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, paymentType = 'cash', amountPaid = 0, notes = '', date, deductStock = true } = body
+    const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, paymentType = 'cash', amountPaid = 0, notes = '', date, deductStock = true, template, gstMode = 'gst' } = body
 
     if (!customerId) return NextResponse.json({ error: 'Customer required' }, { status: 400 })
     if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'Items required' }, { status: 400 })
@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
       notes: notes || '',
       date: date || new Date().toISOString(),
       stockUpdates: stockUpdates.length > 0 ? stockUpdates : undefined,
+      template: template || 'tally-classic',
+      gstMode: gstMode === 'non-gst' ? 'non-gst' : 'gst',
       // Server will fetch customer and generate number
     })
 

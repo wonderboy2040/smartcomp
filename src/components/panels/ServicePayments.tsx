@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { Wallet, IndianRupee, Smartphone, Banknote, Filter, TrendingUp } from 'lucide-react'
+import { Wallet, IndianRupee, Smartphone, Banknote, Filter } from 'lucide-react'
 
 export function ServicePaymentsPanel() {
   const [fromDate, setFromDate] = useState('')
@@ -28,7 +28,7 @@ export function ServicePaymentsPanel() {
   }
 
   const payments = data?.payments || []
-  const totals = data?.totals || { upi: 0, cash: 0, total: 0, engineerShare: 0, adminShare: 0 }
+  const totals = data?.totals || { upi: 0, cash: 0, total: 0 }
 
   return (
     <div className="space-y-4">
@@ -39,7 +39,7 @@ export function ServicePaymentsPanel() {
             <span className="truncate">Service Payments</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            UPI/Cash payment history with engineer and admin profit shares
+            UPI/Cash payment history for service jobs
           </p>
         </div>
       </div>
@@ -60,7 +60,7 @@ export function ServicePaymentsPanel() {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-3">
         <Card className="border-slate-200">
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-1">
@@ -88,24 +88,6 @@ export function ServicePaymentsPanel() {
             <p className="text-lg sm:text-xl font-bold text-white">Rs.{totals.total}</p>
           </CardContent>
         </Card>
-        <Card className="border-slate-200">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-medium text-slate-600 uppercase">Engineer Share</span>
-              <TrendingUp className="w-4 h-4 text-blue-500" />
-            </div>
-            <p className="text-lg sm:text-xl font-bold text-blue-600">Rs.{totals.engineerShare}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-medium text-slate-600 uppercase">Admin Share</span>
-              <TrendingUp className="w-4 h-4 text-purple-500" />
-            </div>
-            <p className="text-lg sm:text-xl font-bold text-purple-600">Rs.{totals.adminShare}</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Table */}
@@ -121,15 +103,13 @@ export function ServicePaymentsPanel() {
                   <TableHead className="text-xs text-right">Amount</TableHead>
                   <TableHead className="text-xs text-center">Mode</TableHead>
                   <TableHead className="text-xs text-center hidden sm:table-cell">Type</TableHead>
-                  <TableHead className="text-xs text-right hidden sm:table-cell">Eng. Share</TableHead>
-                  <TableHead className="text-xs text-right hidden sm:table-cell">Admin Share</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-500">Loading...</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">Loading...</TableCell></TableRow>
                 ) : payments.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-500">
+                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-slate-500">
                     <Wallet className="w-12 h-12 mx-auto mb-2 text-slate-300" />
                     No payments yet. Complete a service job to record payments.
                   </TableCell></TableRow>
@@ -151,8 +131,6 @@ export function ServicePaymentsPanel() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center text-xs hidden sm:table-cell">{p.type}</TableCell>
-                      <TableCell className="text-right text-xs text-blue-600 hidden sm:table-cell">Rs.{p.engineerShare}</TableCell>
-                      <TableCell className="text-right text-xs text-purple-600 hidden sm:table-cell">Rs.{p.adminShare}</TableCell>
                     </TableRow>
                   ))
                 )}

@@ -1,5 +1,6 @@
 // WhatsApp helper - generates wa.me links and message templates
 // Note: For full automation, use WhatsApp Business API / Twilio / WATI
+import { BUSINESS_GROWTH } from './business-growth'
 
 export interface WhatsAppMessage {
   to: string // phone number with country code, no + sign
@@ -304,6 +305,7 @@ export async function shareWhatsAppPdf({
   amountDue,
   notes,
   toast,
+  gstMode = 'gst',
 }: {
   docId: string
   docType: 'invoice' | 'quotation' | 'service'
@@ -314,10 +316,13 @@ export async function shareWhatsAppPdf({
   amountDue?: number
   notes?: string
   toast?: any
+  gstMode?: 'gst' | 'non-gst'
 }) {
   try {
     const filename = `${docType.toUpperCase()}-${docNumber || docId}.pdf`
-    const pdfUrl = docType === 'service' ? `/api/service-pdf/${docId}` : `/api/pdf/${docId}?type=${docType}`
+    const pdfUrl = docType === 'service'
+      ? `/api/service-pdf/${docId}`
+      : `/api/pdf/${docId}?type=${docType}&gstMode=${gstMode}`
 
     if (toast) toast({ title: 'Preparing PDF for WhatsApp...', duration: 2500 })
 
@@ -335,6 +340,11 @@ export async function shareWhatsAppPdf({
 
     // Clean message — NO view link / track URL / public doc link.
     // Only shop + customer + doc details (the PDF itself carries the rest).
+    // Adds a Google Review prompt ONLY when the invoice is fully paid
+    // (don't ask for a review when money is still owed).
+    const reviewPrompt = isPaid
+      ? `\n\n⭐ _Happy with our service? Please leave us a Google review — it takes 30 seconds and really helps!_\n👉 ${BUSINESS_GROWTH.googleReviewUrl}\n`
+      : ''
     const messageText = `*Smart Computers*\n\n` +
       `Dear *${customerName || 'Customer'}*,\n\n` +
       `Please find attached ${titleLabel.toLowerCase()}:\n\n` +
@@ -343,7 +353,7 @@ export async function shareWhatsAppPdf({
       `*Status:* ${statusText}\n` +
       `${notes ? `*Notes:* ${notes}\n` : ''}\n` +
       `For any queries, please contact us.\n\n` +
-      `Thank you for your business! 🙏`
+      `Thank you for your business! 🙏${reviewPrompt}`
 
     // 1. Try Native Web Share API (passes the actual PDF file attachment on
     //    mobile Chrome/Safari). Note: navigator.share needs a user gesture;

@@ -30,6 +30,7 @@ export interface DocumentHtmlViewerProps {
   docType?: 'invoice' | 'quotation' | 'service'
   title?: string
   onClose?: () => void
+  gstMode?: 'gst' | 'non-gst'
 }
 
 /**
@@ -42,7 +43,7 @@ export interface DocumentHtmlViewerProps {
  * 
  * All three use the SAME doc-html.ts rendering engine.
  */
-export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose }: DocumentHtmlViewerProps) {
+export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose, gstMode = 'gst' }: DocumentHtmlViewerProps) {
   const [templateId, setTemplateId] = useState<string>('tally-classic')
   const [bannerVariant, setBannerVariant] = useState<string>('flyer')
   const [iframeLoaded, setIframeLoaded] = useState(false)
@@ -57,9 +58,10 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose 
       type: docType,
       template: tpl,
       banner: banner,
+      gstMode,
     })
     return `/api/doc-html/${encodeURIComponent(docId)}?${params.toString()}`
-  }, [docId, docType])
+  }, [docId, docType, gstMode])
 
   const iframeUrl = buildIframeUrl(templateId, bannerVariant)
 
@@ -107,7 +109,7 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose 
 
   // PDF download URL
   const pdfDownloadUrl = docId
-    ? `/api/pdf/${encodeURIComponent(docId)}?type=${docType}&template=${templateId}&banner=${bannerVariant}`
+    ? `/api/pdf/${encodeURIComponent(docId)}?type=${docType}&template=${templateId}&banner=${bannerVariant}&gstMode=${gstMode}`
     : ''
 
   const docTypeLabel = docType === 'quotation' ? 'Quotation' : docType === 'service' ? 'Service Invoice' : 'Invoice'

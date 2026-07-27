@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import QRCode from 'qrcode'
 import { formatCurrency, numberToWords, type InvoiceCalc } from './calc'
+import { BUSINESS_GROWTH } from './business-growth'
 
 export interface ShopInfo {
   name: string
@@ -53,6 +54,13 @@ export interface PdfDocData {
   adBannerVariant?: string
   docId?: string
   copyType?: 'ORIGINAL FOR RECIPIENT' | 'DUPLICATE FOR TRANSPORTER' | 'TRIPLICATE FOR SUPPLIER'
+  /**
+   * 'gst'    → standard GST invoice with HSN, CGST/SGST/IGST, GSTIN
+   * 'non-gst'→ retail invoice for walk-in customers (no GST columns, no GSTIN,
+   *            labeled "RETAIL INVOICE" instead of "TAX INVOICE").
+   * Defaults to 'gst' for backward compatibility.
+   */
+  gstMode?: 'gst' | 'non-gst'
 }
 
 export interface PdfTemplate {
@@ -313,6 +321,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   const isInvoice = data.docType === 'invoice'
   const isService = data.docType === 'service'
+  const isNonGst = data.gstMode === 'non-gst'
   const tpl = PDF_TEMPLATES.find((t) => t.id === data.templateId) || PDF_TEMPLATES[0]
   const HB = tpl.headerBg
   const HT = tpl.headerText
@@ -333,6 +342,17 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       totalPages > 1 ? `Page ${pageNum} of ${totalPages} | ` : ''
     }Computer generated | ${formatDateTime(new Date())}`
     doc.text(footerText, pageWidth / 2, FOOTER_Y, { align: 'center', maxWidth: usableWidth })
+
+    // Google Review prompt on the footer (small, subtle) — boosts SEO + reviews
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(...A)
+    doc.text(
+      `⭐ Review us on Google: ${BUSINESS_GROWTH.googleReviewUrl}`,
+      pageWidth / 2,
+      FOOTER_Y - 3,
+      { align: 'center', maxWidth: usableWidth },
+    )
   }
 
   const addPageIfNeeded = (requiredSpace: number): boolean => {
@@ -444,11 +464,17 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     currentHeaderY += 3.2
   }
 
-  if (data.shop.gstNumber) {
+  if (data.shop.gstNumber && !isNonGst) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(7.5)
     doc.setTextColor(...HT)
     doc.text(`GSTIN: ${data.shop.gstNumber}`, shopNameX, currentHeaderY)
+  } else if (isNonGst) {
+    // For non-GST invoices, show "Retail Invoice" tag instead of GSTIN
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...A)
+    doc.text('RETAIL INVOICE (Non-GST)', shopNameX, currentHeaderY)
   }
 
   // Right Side Document Title Block - "INVOICE" badge with Copy Type Subtitle
@@ -459,14 +485,16 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...(lightHeader ? A : N.white))
-  const docTitle = isInvoice ? 'INVOICE' : isService ? 'SERVICE INVOICE' : 'QUOTATION'
+  const docTitle = isNonGst
+    ? (isService ? 'RETAIL BILL' : 'RETAIL INVOICE')
+    : isInvoice ? 'TAX INVOICE' : isService ? 'SERVICE INVOICE' : 'QUOTATION'
   doc.text(docTitle, titleBoxX + 29, 13, { align: 'center' })
 
   // Subtitle Copy Type Tag
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(5.5)
   doc.setTextColor(...(lightHeader ? A : N.white))
-  const copySubtitle = data.copyType || (isInvoice ? 'ORIGINAL FOR RECIPIENT' : 'OFFICIAL DOCUMENT')
+  const copySubtitle = data.copyType || (isNonGst ? 'RETAIL COPY' : isInvoice ? 'ORIGINAL FOR RECIPIENT' : 'OFFICIAL DOCUMENT')
   doc.text(copySubtitle, titleBoxX + 29, 16.5, { align: 'center' })
 
   doc.setFont('helvetica', 'normal')
@@ -544,18 +572,29 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   y += boxH + 3
 
   // ===== ITEMS TABLE =====
-  const tableHeaders = ['#', 'Item name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable', 'GST (Rs.)', 'Amount (Rs.)']
+  // For non-GST invoices, hide HSN, Taxable, GST columns (no GST applicable).
+  const tableHeaders = isNonGst
+    ? ['#', 'Item name', 'Qty', 'Rate (Rs.)', 'Amount (Rs.)']
+    : ['#', 'Item name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable', 'GST (Rs.)', 'Amount (Rs.)']
 
-  const tableBody = data.calc.items.map((item, index) => [
-    index + 1,
-    item.name + (item.sku ? `\nSKU: ${item.sku}` : ''),
-    item.hsnCode || '-',
-    item.quantity,
-    item.rate.toFixed(2),
-    item.amount.toFixed(2),
-    item.gstAmount > 0 ? `${item.gstAmount.toFixed(2)} (${item.gstRate}%)` : '-',
-    item.total.toFixed(2),
-  ])
+  const tableBody = isNonGst
+    ? data.calc.items.map((item, index) => [
+        index + 1,
+        item.name + (item.sku ? `\nSKU: ${item.sku}` : ''),
+        item.quantity,
+        item.rate.toFixed(2),
+        item.amount.toFixed(2),
+      ])
+    : data.calc.items.map((item, index) => [
+        index + 1,
+        item.name + (item.sku ? `\nSKU: ${item.sku}` : ''),
+        item.hsnCode || '-',
+        item.quantity,
+        item.rate.toFixed(2),
+        item.amount.toFixed(2),
+        item.gstAmount > 0 ? `${item.gstAmount.toFixed(2)} (${item.gstRate}%)` : '-',
+        item.total.toFixed(2),
+      ])
 
   autoTable(doc, {
     startY: y,
@@ -576,16 +615,24 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       fontStyle: 'bold',
       halign: 'left',
     },
-    columnStyles: {
-      0: { halign: 'center', cellWidth: 8 },
-      1: { halign: 'left', cellWidth: 'auto' },
-      2: { halign: 'center', cellWidth: 16 },
-      3: { halign: 'right', cellWidth: 12 },
-      4: { halign: 'right', cellWidth: 22 },
-      5: { halign: 'right', cellWidth: 22 },
-      6: { halign: 'right', cellWidth: 24 },
-      7: { halign: 'right', cellWidth: 25 },
-    },
+    columnStyles: isNonGst
+      ? {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'left', cellWidth: 'auto' },
+          2: { halign: 'right', cellWidth: 20 },
+          3: { halign: 'right', cellWidth: 30 },
+          4: { halign: 'right', cellWidth: 35 },
+        }
+      : {
+          0: { halign: 'center', cellWidth: 8 },
+          1: { halign: 'left', cellWidth: 'auto' },
+          2: { halign: 'center', cellWidth: 16 },
+          3: { halign: 'right', cellWidth: 12 },
+          4: { halign: 'right', cellWidth: 22 },
+          5: { halign: 'right', cellWidth: 22 },
+          6: { halign: 'right', cellWidth: 24 },
+          7: { halign: 'right', cellWidth: 25 },
+        },
     alternateRowStyles: {
       fillColor: N.bgRow,
     },
@@ -597,7 +644,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
 
   // ===== HSN SUMMARY TABLE (If GST applicable) =====
   const hsnSummary = calculateHSNSummary(data.calc.items)
-  if (hsnSummary.length > 0 && hsnSummary.some((h) => h.total > 0)) {
+  if (!isNonGst && hsnSummary.length > 0 && hsnSummary.some((h) => h.total > 0)) {
     addPageIfNeeded(20)
     const hsnHeaders = ['HSN/SAC', 'Taxable Value', 'CGST', 'SGST', 'Total Tax']
     const hsnRows = hsnSummary.map((h) => [
@@ -654,8 +701,8 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   }
 
   drawRow('Sub Total', formatCurrency(data.calc.subtotal))
-  if (data.calc.cgstAmount > 0) drawRow(`CGST (${halfGstRate}%)`, formatCurrency(data.calc.cgstAmount))
-  if (data.calc.sgstAmount > 0) drawRow(`SGST (${halfGstRate}%)`, formatCurrency(data.calc.sgstAmount))
+  if (!isNonGst && data.calc.cgstAmount > 0) drawRow(`CGST (${halfGstRate}%)`, formatCurrency(data.calc.cgstAmount))
+  if (!isNonGst && data.calc.sgstAmount > 0) drawRow(`SGST (${halfGstRate}%)`, formatCurrency(data.calc.sgstAmount))
   if (data.calc.courierCharges > 0) drawRow('Courier Charges', formatCurrency(data.calc.courierCharges))
   if (data.calc.discount > 0) drawRow('Discount', `- ${formatCurrency(data.calc.discount)}`, true, N.green)
 

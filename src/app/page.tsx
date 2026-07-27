@@ -11,7 +11,7 @@ import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Zap, Wifi, ShieldCheck, Sparkles,
+  Menu, X, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Zap, Wifi, ShieldCheck, Sparkles, Brain,
 } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
@@ -33,6 +33,7 @@ const FinancialsPanel = lazy(() => import('@/components/panels/Financials').then
 const CampaignsPanel = lazy(() => import('@/components/panels/Campaigns').then(m => ({ default: m.CampaignsPanel })))
 const CreditControlPanel = lazy(() => import('@/components/panels/CreditControl').then(m => ({ default: m.CreditControlPanel })))
 const AMCPanel = lazy(() => import('@/components/panels/AMC').then(m => ({ default: m.AMCPanel })))
+const GrowthHubPanel = lazy(() => import('@/components/panels/GrowthHub').then(m => ({ default: m.GrowthHubPanel })))
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-slate-600' },
@@ -53,6 +54,7 @@ const NAV_ITEMS = [
   { id: 'credit', label: 'Credit Control', icon: ShieldAlert, color: 'text-red-600' },
   { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
+  { id: 'growth', label: 'Growth Hub', icon: Brain, color: 'text-violet-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ] as const
 
@@ -465,6 +467,9 @@ function HomeInner() {
             </PanelBoundary>
             <PanelBoundary active={active} id="settings" mounted={mountedPanels.has('settings')}>
               <SettingsPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="growth" mounted={mountedPanels.has('growth')}>
+              <GrowthHubPanel />
             </PanelBoundary>
           </div>
         </main>

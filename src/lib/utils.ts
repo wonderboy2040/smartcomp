@@ -203,3 +203,110 @@ export function sumBy<T>(arr: T[], key: keyof T | ((item: T) => number)): number
     return sum + (isNaN(val) ? 0 : val)
   }, 0)
 }
+
+// ===== NEW v3.1 HELPERS — added for existing-feature upgrades =====
+
+/**
+ * Pretty file size: 1536 → "1.5 KB", 1048576 → "1.0 MB"
+ */
+export function formatBytes(bytes: number, decimals = 1): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${sizes[i]}`
+}
+
+/**
+ * Convert a string to a URL/file-safe slug: "HP Laptop 15s!" → "hp-laptop-15s"
+ */
+export function slugify(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+/**
+ * Format a date range compactly: "1 Jan – 15 Jan 2025"
+ */
+export function formatDateRange(start: string | Date, end: string | Date): string {
+  const s = new Date(start)
+  const e = new Date(end)
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return ''
+  const sStr = s.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+  const eStr = e.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: e.getFullYear() === s.getFullYear() ? undefined : 'numeric',
+  })
+  const year = s.getFullYear() === e.getFullYear() ? ` ${s.getFullYear()}` : ''
+  return `${sStr} – ${eStr}${year}`
+}
+
+/**
+ * Initials from a name: "Rahul Sharma" → "RS"
+ */
+export function initials(name: string): string {
+  return String(name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() || '')
+    .join('')
+}
+
+/**
+ * Clamp a number between min and max.
+ */
+export function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Number(n) || 0))
+}
+
+/**
+ * Pick the first non-empty value from a list of candidates.
+ * Useful for reading fields that may live under several keys
+ * (e.g. customer.phone vs customerPhone vs mobile).
+ */
+export function pickFirst(...candidates: unknown[]): string {
+  for (const c of candidates) {
+    if (c !== null && c !== undefined && String(c).trim() !== '') {
+      return String(c)
+    }
+  }
+  return ''
+}
+
+/**
+ * Indian GST number checksum validator.
+ * Returns true for valid 15-char GSTIN format: 2 state + 10 PAN + 1 entity + 1 Z + 1 checksum.
+ */
+export function isValidGSTIN(gstin: string): boolean {
+  const g = String(gstin || '').trim().toUpperCase()
+  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(g)) return false
+  // Luhn-style checksum on the GSTIN charset
+  const charset = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const factor = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+  let sum = 0
+  for (let i = 0; i < 14; i++) {
+    let v = charset.indexOf(g[i])
+    if (v < 0) return false
+    v = (v * factor[i])
+    sum += Math.floor(v / 36) + (v % 36)
+  }
+  const check = (36 - (sum % 36)) % 36
+  return charset[check] === g[14]
+}
+
+/**
+ * Paginate an array in memory (1-indexed page).
+ */
+export function paginate<T>(arr: T[], page: number, pageSize: number): T[] {
+  const p = Math.max(1, page)
+  const ps = Math.max(1, pageSize)
+  const start = (p - 1) * ps
+  return arr.slice(start, start + ps)
+}

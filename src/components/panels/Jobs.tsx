@@ -295,7 +295,6 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   const [finalAmount, setFinalAmount] = useState(Number(job?.finalAmount) || 0)
   const [serviceCharge, setServiceCharge] = useState(Number(job?.serviceCharge) || 0)
   const [paymentMode, setPaymentMode] = useState(job?.paymentMode || 'Cash')
-  const [engineerSharePct, setEngineerSharePct] = useState(50)
   const [stockSearch, setStockSearch] = useState('')
   const [showStock, setShowStock] = useState(false)
   const [newPart, setNewPart] = useState({ name: '', costPrice: 0, sellPrice: 0, qty: 1, itemId: '', sku: '', warranty: 'No Warranty' })
@@ -394,7 +393,6 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
         serviceCharge,
         paidAmount: Number(job?.paidAmount) || 0,
         paymentMode,
-        engineerSharePct,
         deductStock,
       })
       toast({ title: 'Job completed! ✓', description: 'Profit calculated & stock updated' })
@@ -568,20 +566,18 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div><Label className="text-[11px] font-semibold text-blue-800">Payment Mode</Label><Select value={paymentMode} onValueChange={setPaymentMode}><SelectTrigger className="h-10 text-sm bg-white mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Cash">Cash</SelectItem><SelectItem value="UPI">UPI</SelectItem></SelectContent></Select></div>
-                    <div><Label className="text-[11px] font-semibold text-blue-800">Engineer Share %</Label><Input type="number" value={engineerSharePct} onChange={(e) => setEngineerSharePct(Number(e.target.value))} min={0} max={100} className="h-10 text-sm bg-white mt-1" /></div>
                   </div>
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-[11px] text-amber-800"><AlertTriangle className="w-3.5 h-3.5 inline mr-1" />On complete: {deductStock ? 'Stock will be deducted for linked items' : 'Stock will NOT be deducted'} | Profit share calculated 50-50</div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-[11px] text-amber-800"><AlertTriangle className="w-3.5 h-3.5 inline mr-1" />On complete: {deductStock ? 'Stock will be deducted for linked items' : 'Stock will NOT be deducted'}</div>
                   <Button onClick={handleComplete} disabled={saving || finalAmount <= 0} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-11 font-bold">{saving ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Completing...</> : <><CheckCircle2 className="w-5 h-5 mr-2" /> Complete Job & Generate Invoice</>}</Button>
                 </div>
               )}
             </div>
           )}
 
-          {(job.status === 'Completed' || job.status === 'Delivered') && Number(job.engineerShare) > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+          {(job.status === 'Completed' || job.status === 'Delivered') && Number(job.serviceProfit || job.partsProfit) > 0 && (
+            <div className="grid grid-cols-2 gap-2">
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-center"><p className="text-[10px] font-semibold text-slate-600 uppercase">Service Profit</p><p className="font-bold text-emerald-700 text-lg">Rs.{job.serviceProfit || 0}</p></div>
-              <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-center"><p className="text-[10px] font-semibold text-slate-600 uppercase">Engineer</p><p className="font-bold text-blue-700 text-lg">Rs.{job.engineerShare || 0}</p></div>
-              <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl text-center"><p className="text-[10px] font-semibold text-slate-600 uppercase">Admin</p><p className="font-bold text-purple-700 text-lg">Rs.{job.adminShare || 0}</p></div>
+              <div className="bg-blue-50 border border-blue-200 p-3 rounded-xl text-center"><p className="text-[10px] font-semibold text-slate-600 uppercase">Parts Profit</p><p className="font-bold text-blue-700 text-lg">Rs.{job.partsProfit || 0}</p></div>
             </div>
           )}
         </div>

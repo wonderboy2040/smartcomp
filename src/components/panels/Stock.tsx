@@ -16,8 +16,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
-import { formatCurrency } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload, Tag, Folder, Layers } from 'lucide-react'
+import { formatCurrency, sumBy } from '@/lib/calc'
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload, Tag, Folder, Layers, IndianRupee, TrendingUp, Boxes, Percent } from 'lucide-react'
 import { toCSV, downloadCSV } from '@/lib/utils'
 
 export const PRESET_CATEGORIES = [
@@ -139,6 +139,79 @@ export function StockPanel() {
           </Button>
         </div>
       </div>
+
+      {/* ===== Inventory summary cards ===== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center"><Boxes className="w-4 h-4 text-blue-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Items</p>
+                <p className="text-sm sm:text-base font-bold text-slate-900 truncate">{(items || []).length}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">{filtered.length} shown</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><IndianRupee className="w-4 h-4 text-slate-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Cost Value</p>
+                <p className="text-sm sm:text-base font-bold text-slate-900 truncate">{formatCurrency(sumBy(items || [], (i) => (Number(i.quantity) || 0) * (Number(i.costPrice) || 0)))}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">Qty × Cost</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><TrendingUp className="w-4 h-4 text-emerald-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Selling Value</p>
+                <p className="text-sm sm:text-base font-bold text-emerald-700 truncate">{formatCurrency(sumBy(items || [], (i) => (Number(i.quantity) || 0) * (Number(i.sellingPrice) || 0)))}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">Qty × Sell</p>
+          </CardContent>
+        </Card>
+        <Card className={`border-slate-200 bg-white ${(items || []).filter((i) => Number(i.quantity) <= Number(i.minQuantity)).length > 0 ? 'ring-2 ring-red-200' : ''}`}>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center"><AlertTriangle className="w-4 h-4 text-red-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Low Stock</p>
+                <p className="text-sm sm:text-base font-bold text-red-700 truncate">{(items || []).filter((i) => Number(i.quantity) <= Number(i.minQuantity)).length}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-red-500 mt-1">Reorder needed</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Potential profit banner */}
+      {(() => {
+        const cost = sumBy(items || [], (i) => (Number(i.quantity) || 0) * (Number(i.costPrice) || 0))
+        const sell = sumBy(items || [], (i) => (Number(i.quantity) || 0) * (Number(i.sellingPrice) || 0))
+        const profit = sell - cost
+        const margin = sell > 0 ? (profit / sell) * 100 : 0
+        return (
+          <Card className="border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50">
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0"><Percent className="w-4 h-4 text-violet-600" /></div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] text-violet-700 uppercase font-medium">Potential Profit on Current Stock</p>
+                <p className="text-sm font-bold text-violet-900">
+                  {formatCurrency(profit)} <span className="text-[10px] font-medium text-violet-600">({margin.toFixed(1)}% margin)</span>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       <Card className="border-slate-200 dark:border-slate-800">
         <CardContent className="p-3 space-y-3">

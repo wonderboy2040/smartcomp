@@ -15,8 +15,6 @@ export async function GET() {
           highPriorityJobs: 0, todayJobs: 0, monthJobs: 0,
           todayServiceTotal: 0, todayServiceUPI: 0, todayServiceCash: 0,
           monthServiceTotal: 0, monthServiceUPI: 0, monthServiceCash: 0,
-          adminServiceShare: 0, adminPartsShare: 0, adminTotalShare: 0,
-          engineerServiceShare: 0, engineerPartsShare: 0, engineerTotalShare: 0,
         },
         pendingInvoices: [], recentInvoices: [], recentPayments: [], recentEnquiries: [], lowStockList: [],
         recentJobs: [],

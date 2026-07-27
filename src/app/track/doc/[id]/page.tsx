@@ -390,6 +390,19 @@ function DocViewInner() {
           View / Download PDF
         </a>
 
+        {/* Google Review CTA — only show for paid invoices */}
+        {isInvoice && doc?.paymentStatus === 'paid' && (
+          <a
+            href="https://share.google/ZUvRUX4eYuUHJdaA4"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl text-sm font-bold hover:from-amber-600 hover:to-orange-600 transition-colors shadow-lg shadow-amber-200"
+          >
+            <Star className="w-4 h-4" />
+            Rate us on Google — 30 seconds ⭐
+          </a>
+        )}
+
         {/* Shop Contact */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
           <p className="text-sm font-semibold text-slate-900 mb-3">Contact Shop</p>

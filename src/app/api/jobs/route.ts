@@ -76,8 +76,6 @@ export async function GET(req: NextRequest) {
         serviceCharge: money(j?.serviceCharge),
         paidAmount: money(j?.paidAmount),
         paymentMode: String(j?.paymentMode || ''),
-        engineerShare: money(j?.engineerShare),
-        adminShare: money(j?.adminShare),
         partsProfit: money(j?.partsProfit),
         serviceProfit: money(j?.serviceProfit),
         warrantyDays: Number(j?.warrantyDays) || 0,
@@ -168,8 +166,6 @@ export async function POST(req: NextRequest) {
       paidAmount: 0,
       paymentMode: '',
       paymentType: '',
-      engineerShare: 0,
-      adminShare: 0,
       partsProfit: 0,
       serviceProfit: 0,
       notes: String(body?.notes || ''),
@@ -194,8 +190,6 @@ export async function POST(req: NextRequest) {
         mode: String(body?.advanceMode || 'Cash'),
         type: 'Advance',
         date: new Date().toISOString(),
-        engineerShare: 0,
-        adminShare: advanceAmount,
         notes: 'Advance payment at job creation',
       }).catch(() => {})
     }

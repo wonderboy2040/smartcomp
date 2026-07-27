@@ -5,7 +5,10 @@ import { isConfigured } from '@/lib/sheets-client'
 /**
  * GET /api/service-payments
  * Query: ?from=2026-01-01&to=2026-12-31
- * Returns: { payments, totals: { upi, cash, total, engineerShare, adminShare } }
+ * Returns: { payments, totals: { upi, cash, total } }
+ *
+ * Note: engineerShare/adminShare were removed in v9.1. The full payment
+ * amount now belongs to the shop owner (single-owner model).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -28,21 +31,15 @@ export async function GET(req: NextRequest) {
 
     const totals = payments.reduce((acc, p) => {
       const amt = Number(p.amount) || 0
-      const eng = Number(p.engineerShare) || 0
-      const adm = Number(p.adminShare) || 0
       if (String(p.mode).toLowerCase() === 'upi') acc.upi += amt
       else acc.cash += amt
       acc.total += amt
-      acc.engineerShare += eng
-      acc.adminShare += adm
       return acc
-    }, { upi: 0, cash: 0, total: 0, engineerShare: 0, adminShare: 0 })
+    }, { upi: 0, cash: 0, total: 0 })
 
     const result = payments.map((p) => ({
       ...p,
       amount: Number(p.amount) || 0,
-      engineerShare: Number(p.engineerShare) || 0,
-      adminShare: Number(p.adminShare) || 0,
       mode: String(p.mode || 'Cash'),
       type: String(p.type || ''),
       jobId: String(p.jobId || ''),

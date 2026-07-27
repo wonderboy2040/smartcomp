@@ -16,8 +16,9 @@ import {
   CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy,
   ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X, Bug,
   Download, Upload, HardDrive, Activity, Cpu, BarChart3, FileJson,
-  FileText
+  FileText, Star, Megaphone
 } from 'lucide-react'
+import { BUSINESS_GROWTH } from '@/lib/business-growth'
 
 export function SettingsPanel() {
   return (
@@ -36,9 +37,12 @@ export function SettingsPanel() {
       </div>
 
       <Tabs defaultValue="shop">
-        <TabsList className="grid w-full grid-cols-5 h-auto">
+        <TabsList className="grid w-full grid-cols-6 h-auto">
           <TabsTrigger value="shop" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
             <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Shop
+          </TabsTrigger>
+          <TabsTrigger value="growth" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
+            <Megaphone className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Growth</span><span className="sm:hidden">Grow</span>
           </TabsTrigger>
           <TabsTrigger value="whatsapp" className="flex items-center gap-1 py-2 text-[11px] sm:text-xs">
             <Cloud className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">WhatsApp</span><span className="sm:hidden">WA</span>
@@ -53,6 +57,104 @@ export function SettingsPanel() {
             <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> <span className="hidden sm:inline">Backup v3.0</span><span className="sm:hidden">Backup</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* ===== Growth & Marketing Tab ===== */}
+        <TabsContent value="growth">
+          <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Star className="w-4 h-4 text-amber-600" />
+                </div>
+                Google Review Link
+              </CardTitle>
+              <CardDescription>
+                Your Google review link is automatically embedded in PDF invoice footers and WhatsApp share messages. More reviews = higher local search ranking.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="bg-white border border-amber-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] text-slate-500 uppercase font-medium">Your Review URL</p>
+                  <p className="text-sm font-mono text-slate-900 truncate">{BUSINESS_GROWTH.googleReviewUrl}</p>
+                </div>
+                <a
+                  href={BUSINESS_GROWTH.googleReviewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold flex-shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open
+                </a>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <p className="text-xs text-emerald-900 font-medium mb-1">✓ Where it shows up:</p>
+                <ul className="text-[11px] text-emerald-700 space-y-0.5 ml-4 list-disc">
+                  <li>PDF invoice footer (every invoice/quotation/service invoice)</li>
+                  <li>WhatsApp share message (when invoice is fully paid)</li>
+                  <li>Customer tracking page (track/[jobId])</li>
+                  <li>Daily Business Snapshot reports</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-violet-200 bg-gradient-to-br from-violet-50 to-white shadow-sm mt-4">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <div className="w-8 h-8 bg-violet-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Megaphone className="w-4 h-4 text-violet-600" />
+                </div>
+                Marketing Campaigns
+              </CardTitle>
+              <CardDescription>
+                Pre-built WhatsApp campaign templates. Tap to copy and share with customers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {[
+                { key: 'newCustomer', label: '🎁 New Customer Offer', desc: 'Rs.200 OFF first service' },
+                { key: 'repeat', label: '🙏 Repeat Customer', desc: 'Priority service + free cleaning' },
+                { key: 'winback', label: '👋 Win-Back (Inactive 60d+)', desc: '15% OFF + free diagnostic' },
+                { key: 'festival', label: '🎊 Festival Offer', desc: 'Up to 20% OFF' },
+              ].map((c) => (
+                <div key={c.key} className="bg-white border border-violet-200 rounded-lg p-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900">{c.label}</p>
+                    <p className="text-[11px] text-slate-500">{c.desc}</p>
+                    <p className="text-[11px] text-slate-700 mt-1.5 line-clamp-2">{BUSINESS_GROWTH.campaigns[c.key as keyof typeof BUSINESS_GROWTH.campaigns]}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-shrink-0 border-violet-200 text-violet-700 hover:bg-violet-50"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(BUSINESS_GROWTH.campaigns[c.key as keyof typeof BUSINESS_GROWTH.campaigns])
+                    }}
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1" /> Copy
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-white shadow-sm mt-4">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-4 h-4 text-emerald-600" />
+                </div>
+                Referral Program
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-white border border-emerald-200 rounded-lg p-3">
+                <p className="text-sm text-slate-700 whitespace-pre-line">{BUSINESS_GROWTH.referralOffer}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="shop" className="mt-4">
           <ShopSettings />

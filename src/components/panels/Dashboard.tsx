@@ -9,8 +9,9 @@ import {
   Package, Users, TrendingUp, AlertTriangle,
   Wallet, FileText, MessageSquare, IndianRupee, Clock,
   RefreshCw, CheckCircle2, Zap,
-  ShoppingBag, Wrench, User,
+  ShoppingBag, Wrench,
   ShieldCheck,
+  Plus, FileCheck2, PackagePlus, Bell,
 } from 'lucide-react'
 
 export function DashboardView({ onNavigate, sheetsConnected = true }: { onNavigate: (tab: string) => void; sheetsConnected?: boolean }) {
@@ -52,6 +53,73 @@ export function DashboardView({ onNavigate, sheetsConnected = true }: { onNaviga
           </Button>
         </div>
       </div>
+
+      {/* ===== Quick-action shortcuts — single tap to jump into the most
+          common create flows. Saves 2 taps on mobile vs sidebar nav. ===== */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+        <button
+          onClick={() => onNavigate('invoices')}
+          className="flex items-center gap-2 p-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-semibold transition-colors"
+          title="New Invoice"
+        >
+          <Plus className="w-4 h-4 flex-shrink-0" /> <span className="truncate">New Invoice</span>
+        </button>
+        <button
+          onClick={() => onNavigate('quotations')}
+          className="flex items-center gap-2 p-2.5 rounded-xl bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 text-cyan-700 text-xs font-semibold transition-colors"
+          title="New Quotation"
+        >
+          <FileCheck2 className="w-4 h-4 flex-shrink-0" /> <span className="truncate">New Quote</span>
+        </button>
+        <button
+          onClick={() => onNavigate('jobs')}
+          className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 text-xs font-semibold transition-colors"
+          title="New Service Job"
+        >
+          <Wrench className="w-4 h-4 flex-shrink-0" /> <span className="truncate">Service Job</span>
+        </button>
+        <button
+          onClick={() => onNavigate('stock')}
+          className="flex items-center gap-2 p-2.5 rounded-xl bg-violet-50 hover:bg-violet-100 border border-violet-200 text-violet-700 text-xs font-semibold transition-colors"
+          title="Add Stock Item"
+        >
+          <PackagePlus className="w-4 h-4 flex-shrink-0" /> <span className="truncate">Add Stock</span>
+        </button>
+        <button
+          onClick={() => onNavigate('payments')}
+          className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-xs font-semibold transition-colors col-span-2 sm:col-span-1"
+          title="Record Payment"
+        >
+          <IndianRupee className="w-4 h-4 flex-shrink-0" /> <span className="truncate">Payment</span>
+        </button>
+      </div>
+
+      {/* Overdue alert banner — only shows when there are invoices past 30 days */}
+      {pendingInvoices.length > 0 && (() => {
+        const overdue = pendingInvoices.filter((inv: any) => {
+          const d = new Date(inv?.date || Date.now())
+          const ageDays = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
+          return ageDays > 30
+        })
+        if (overdue.length === 0) return null
+        const overdueValue = overdue.reduce((s: number, inv: any) => s + (Number(inv.amountDue) || 0), 0)
+        return (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+              <Bell className="w-4 h-4 text-red-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-red-900">
+                {overdue.length} overdue invoice(s) — {formatCurrency(overdueValue)}
+              </p>
+              <p className="text-[11px] text-red-700">Past 30 days. Follow up with customers to recover dues.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onNavigate('payments')} className="border-red-300 text-red-700 hover:bg-red-100">
+              Follow Up →
+            </Button>
+          </div>
+        )
+      })()}
 
       {/* Hero stat cards - main KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -211,48 +279,49 @@ export function DashboardView({ onNavigate, sheetsConnected = true }: { onNaviga
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
             <Card className="border-0 overflow-hidden shadow-lg hover:shadow-xl transition-shadow">
-              <div className="bg-gradient-to-br from-blue-500 to-blue-700 p-4 sm:p-6 text-white">
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-700 p-4 sm:p-6 text-white">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <User className="w-6 h-6" />
+                    <IndianRupee className="w-6 h-6" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-lg">Admin Share (50%)</h3>
-                    <p className="text-blue-100 text-xs">Your share from paid service jobs</p>
+                    <h3 className="font-bold text-lg">Service Revenue</h3>
+                    <p className="text-emerald-100 text-xs">Total from paid service jobs (this month)</p>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-white/10 rounded-xl">
-                    <span className="text-blue-100 text-sm">This Month</span>
-                    <span className="font-bold text-xl">{formatCurrency(stats.adminTotalShare || 0)}</span>
+                    <span className="text-emerald-100 text-sm">Collected</span>
+                    <span className="font-bold text-xl">{formatCurrency(stats.monthServiceTotal || 0)}</span>
                   </div>
                   <div className="pt-2 border-t border-white/20 space-y-1">
-                    <div className="flex justify-between text-sm text-blue-100"><span>Service Share:</span><span>{formatCurrency(stats.adminServiceShare || 0)}</span></div>
-                    <div className="flex justify-between text-sm text-blue-100"><span>Parts Profit Share:</span><span>{formatCurrency(stats.adminPartsShare || 0)}</span></div>
+                    <div className="flex justify-between text-sm text-emerald-100"><span>UPI:</span><span>{formatCurrency(stats.monthServiceUPI || 0)}</span></div>
+                    <div className="flex justify-between text-sm text-emerald-100"><span>Cash:</span><span>{formatCurrency(stats.monthServiceCash || 0)}</span></div>
                   </div>
                 </div>
               </div>
             </Card>
 
             <Card className="border-0 overflow-hidden shadow-lg hover:shadow-xl transition-shadow">
-              <div className="bg-gradient-to-br from-purple-500 to-purple-700 p-4 sm:p-6 text-white">
+              <div className="bg-gradient-to-br from-violet-500 to-indigo-700 p-4 sm:p-6 text-white">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <User className="w-6 h-6" />
+                    <Wrench className="w-6 h-6" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-lg">Engineer Share (50%)</h3>
-                    <p className="text-purple-100 text-xs">Engineer share from paid service jobs</p>
+                    <h3 className="font-bold text-lg">Job Throughput</h3>
+                    <p className="text-violet-100 text-xs">Service job pipeline (this month)</p>
                   </div>
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-3 bg-white/10 rounded-xl">
-                    <span className="text-purple-100 text-sm">This Month</span>
-                    <span className="font-bold text-xl">{formatCurrency(stats.engineerTotalShare || 0)}</span>
+                    <span className="text-violet-100 text-sm">Total Jobs</span>
+                    <span className="font-bold text-xl">{stats.totalJobs || 0}</span>
                   </div>
                   <div className="pt-2 border-t border-white/20 space-y-1">
-                    <div className="flex justify-between text-sm text-purple-100"><span>Service Share:</span><span>{formatCurrency(stats.engineerServiceShare || 0)}</span></div>
-                    <div className="flex justify-between text-sm text-purple-100"><span>Parts Profit Share:</span><span>{formatCurrency(stats.engineerPartsShare || 0)}</span></div>
+                    <div className="flex justify-between text-sm text-violet-100"><span>Completed:</span><span>{stats.completedJobs || 0}</span></div>
+                    <div className="flex justify-between text-sm text-violet-100"><span>Delivered:</span><span>{stats.deliveredJobs || 0}</span></div>
+                    <div className="flex justify-between text-sm text-violet-100"><span>Pending:</span><span>{stats.pendingJobs || 0}</span></div>
                   </div>
                 </div>
               </div>
