@@ -845,6 +845,111 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       }
     }
 
+    // Featured variant — left headline panel + 4 product tiles
+    if (variant === 'featured') {
+      const featuredShopName = data.shop.name || 'Smart Computers'
+      const leftW = 50
+      const rightX = posterX + leftW + 2
+      const rightW = posterW - leftW - 2
+      const tileW = (rightW - 6) / 4 // 4 tiles with 2mm gaps
+
+      // Left panel — headline + shop name + phone
+      doc.setFillColor(...A)
+      doc.rect(posterX, by, leftW, bandH, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(...N.white)
+      doc.text('WE ALSO', posterX + 3, by + 8)
+      doc.text('SUPPLY', posterX + 3, by + 14)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(6.5)
+      doc.text(featuredShopName.slice(0, 22), posterX + 3, by + 22)
+      if (phone) {
+        doc.setFontSize(6)
+        doc.text(`Call: ${phone}`, posterX + 3, by + 27)
+      }
+
+      // Right — 4 product tiles with images
+      const tiles = [
+        { src: imgs['computers'], label: 'Computers' },
+        { src: imgs['laptop'], label: 'Laptops' },
+        { src: imgs['printers'], label: 'Printers' },
+        { src: imgs['accessories'], label: 'Accessories' },
+      ]
+      tiles.forEach((tile, i) => {
+        const tx = rightX + i * (tileW + 2)
+        // Background card
+        doc.setFillColor(...N.white)
+        doc.setDrawColor(...mixColor(A, N.white, 0.7))
+        doc.setLineWidth(0.2)
+        doc.roundedRect(tx, by + 2, tileW, bandH - 4, 1, 1, 'FD')
+        // Image
+        if (tile.src) {
+          try {
+            const src = String(tile.src)
+            let fmt: 'JPEG' | 'PNG' | 'WEBP' = 'JPEG'
+            if (src.startsWith('data:image/png')) fmt = 'PNG'
+            else if (src.startsWith('data:image/webp')) fmt = 'WEBP'
+            const imgH = bandH - 14
+            doc.addImage(src, fmt, tx + 1, by + 3, tileW - 2, imgH, undefined, 'FAST')
+          } catch {
+            try { doc.addImage(String(tile.src), 'JPEG', tx + 1, by + 3, tileW - 2, bandH - 14) } catch {}
+          }
+        }
+        // Label
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(5.5)
+        doc.setTextColor(...N.textDark)
+        doc.text(tile.label, tx + tileW / 2, by + bandH - 3, { align: 'center' })
+      })
+      return
+    }
+
+    // Strip variant — compact horizontal strip with 4 small product images
+    if (variant === 'strip') {
+      doc.setFillColor(...mixColor(A, N.white, 0.94))
+      doc.setDrawColor(...A)
+      doc.setLineWidth(0.3)
+      doc.roundedRect(posterX, by, posterW, bandH, 1, 1, 'FD')
+
+      // Left text
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...A)
+      doc.text('WE ALSO SUPPLY', posterX + 4, by + 6)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(5.5)
+      doc.setTextColor(...N.textMid)
+      doc.text('Computers • Laptops • Printers • Accessories', posterX + 4, by + 11)
+
+      // 4 small product images on the right
+      const tiles = [imgs['computers'], imgs['laptop'], imgs['printers'], imgs['accessories']]
+      const imgSize = bandH - 6
+      const startX = posterX + posterW - 4 - (4 * (imgSize + 2))
+      tiles.forEach((src, i) => {
+        if (src) {
+          try {
+            const s = String(src)
+            let fmt: 'JPEG' | 'PNG' | 'WEBP' = 'JPEG'
+            if (s.startsWith('data:image/png')) fmt = 'PNG'
+            else if (s.startsWith('data:image/webp')) fmt = 'WEBP'
+            doc.addImage(s, fmt, startX + i * (imgSize + 2), by + 3, imgSize, imgSize, undefined, 'FAST')
+          } catch {
+            try { doc.addImage(String(src), 'JPEG', startX + i * (imgSize + 2), by + 3, imgSize, imgSize) } catch {}
+          }
+        }
+      })
+
+      // Phone on right edge
+      if (phone) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.5)
+        doc.setTextColor(...A)
+        doc.text(`Call: ${phone}`, posterX + posterW - 4, by + bandH - 4, { align: 'right' })
+      }
+      return
+    }
+
     // Fallback Card (Centered)
     doc.setFillColor(...mixColor(A, N.white, 0.94))
     doc.setDrawColor(...A)

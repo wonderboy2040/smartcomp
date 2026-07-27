@@ -22,6 +22,98 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
+// ===== LOCAL STORAGE PERSISTENCE — INSTANT LOADING =====
+// On page refresh, in-memory cache is lost → panels show "Loading..." for 2-5s
+// while fetch completes. By persisting cache to localStorage, we can restore
+// data instantly on next load (<50ms), then background-fetch updates it.
+const LS_CACHE_KEY = 'smartcomp_cache_v1'
+const LS_CACHE_TTL = 10 * 60 * 1000 // 10 min — stale data is fine for instant display
+const LS_MAX_ENTRIES = 60 // limit to avoid quota issues
+const LS_MAX_VALUE_SIZE = 500 * 1024 // 500KB per value max (avoid quota on large lists)
+
+function loadCacheFromStorage(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const raw = localStorage.getItem(LS_CACHE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return
+    const now = Date.now()
+    for (const [key, entry] of Object.entries(parsed)) {
+      const e = entry as { data: any; ts: number }
+      if (!e || typeof e.ts !== 'number') continue
+      // Restore even "stale" entries — better to show old data instantly
+      // than show "Loading..." for 3 seconds. Background fetch will refresh.
+      cache.set(key, e.data)
+      timestamps.set(key, e.ts)
+      // Don't set lastDataHash — let the fetch update it
+    }
+  } catch {}
+}
+
+function saveCacheToStorage(): void {
+  if (typeof window === 'undefined') return
+  try {
+    // Only persist GET list endpoints (arrays) and dashboard — skip detail/error
+    const toSave: Record<string, { data: any; ts: number }> = {}
+    const now = Date.now()
+    const keys = Array.from(cache.keys())
+      .filter((k) => !k.startsWith('__error:') && !k.startsWith('temp_'))
+      .filter((k) => {
+        // Only persist list/dashboard/shop endpoints
+        return k.startsWith('/api/invoices') ||
+               k.startsWith('/api/quotations') ||
+               k.startsWith('/api/jobs') ||
+               k.startsWith('/api/items') ||
+               k.startsWith('/api/customers') ||
+               k.startsWith('/api/payments') ||
+               k.startsWith('/api/dashboard') ||
+               k.startsWith('/api/shop') ||
+               k.startsWith('/api/suppliers') ||
+               k.startsWith('/api/expenses') ||
+               k.startsWith('/api/service-payments')
+      })
+      .sort((a, b) => (timestamps.get(b) || 0) - (timestamps.get(a) || 0))
+      .slice(0, LS_MAX_ENTRIES)
+
+    let totalSize = 0
+    for (const key of keys) {
+      const data = cache.get(key)
+      const ts = timestamps.get(key) || 0
+      if (!data || !ts) continue
+      // Skip entries older than TTL for saving (don't bloat localStorage)
+      if (now - ts > LS_CACHE_TTL * 6) continue // 60 min max
+      try {
+        const serialized = JSON.stringify(data)
+        if (serialized.length > LS_MAX_VALUE_SIZE) continue
+        totalSize += serialized.length
+        if (totalSize > 3 * 1024 * 1024) break // 3MB total cap
+        toSave[key] = { data, ts }
+      } catch {}
+    }
+    localStorage.setItem(LS_CACHE_KEY, JSON.stringify(toSave))
+  } catch {}
+}
+
+// Debounced save — don't write to localStorage on every cache update
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+function debouncedSave(): void {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    saveCacheToStorage()
+  }, 1500)
+}
+
+// Load persisted cache on module init (client-side only)
+if (typeof window !== 'undefined') {
+  loadCacheFromStorage()
+  // Save before page unload (covers refresh/close)
+  window.addEventListener('beforeunload', saveCacheToStorage)
+  // Also save periodically
+  setInterval(debouncedSave, 30 * 1000)
+}
+
 // ===== QUANTUM CACHE (like index.html PWA) =====
 type QuantumMemEntry = { data: any; expires: number; hash: string }
 const quantumMemCache = new Map<string, QuantumMemEntry>()
@@ -129,7 +221,7 @@ function setQuantumMem(key: string, data: any): string {
   return hash
 }
 
-const STALE_MS = 120 * 1000 // 120s — matches Apps Script 60s cache + extra 60s window
+const STALE_MS = 180 * 1000 // 180s — longer cache = fewer refetches = faster perceived load
 const RETRY_ATTEMPTS = 1
 const RETRY_DELAY = 400
 const FETCH_TIMEOUT_MS = 15000 // 15s for writes — server-side Apps Script needs 10s, add network buffer
@@ -181,6 +273,8 @@ function setCache(key: string, data: any) {
     lastDataHash.set(key, newHash)
     notify(key)
   }
+  // Persist to localStorage (debounced) for instant loading on next visit
+  debouncedSave()
 }
 
 export function mutate<T>(key: string, dataOrUpdater: T | Updater<T>) {
@@ -306,7 +400,11 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
 
   const data: T | null = url ? (cache.get(url) ?? null) : null
   const hasEverLoaded = url ? timestamps.has(url) : false
-  const loading = !!url && !hasEverLoaded
+  // loading is TRUE only when we have NO data at all (first-ever load).
+  // If we have cached data (even stale from localStorage), we show it
+  // immediately and treat the background refresh as non-blocking.
+  // This is what makes the app feel "ultra fast" on repeat visits.
+  const loading = !!url && !hasEverLoaded && data === null
   const error = url ? (cache.get(`__error:${url}`) ?? null) : null
 
   return { data, loading, error, refetch, isOnline }
