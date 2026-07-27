@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import {
   FileText, FileCheck2, Loader2, AlertCircle, Download, CreditCard,
   Phone, Mail, MapPin, MessageSquare, CheckCircle2, Store, Calendar,
-  Receipt, ArrowRight, ShieldCheck, ExternalLink, IndianRupee, Clock,
+  Receipt, ArrowRight, ShieldCheck, ExternalLink, IndianRupee, Clock, Star,
 } from 'lucide-react'
 
 export default function DocViewPage() {

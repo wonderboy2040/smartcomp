@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -75,7 +75,7 @@ export function GrowthHubPanel() {
       </div>
 
       {/* Tab content */}
-      {tab === 'overview' && <OverviewTab />}
+      {tab === 'overview' && <OverviewTab onNavigate={setTab} />}
       {tab === 'reminders' && <RemindersTab />}
       {tab === 'reorder' && <ReorderTab />}
       {tab === 'loyalty' && <LoyaltyTab />}
@@ -86,7 +86,7 @@ export function GrowthHubPanel() {
 }
 
 // ===== Overview Tab =====
-function OverviewTab() {
+function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const { data, loading, refetch } = useFetch<any>('/api/growth', undefined)
   const { toast } = useToast()
 
@@ -220,10 +220,11 @@ function OverviewTab() {
                   variant="outline"
                   className="flex-shrink-0 text-[10px] h-7"
                   onClick={() => {
-                    if (a.cta === 'reminders') window.location.hash = '#reminders'
+                    if (a.cta === 'reminders') onNavigate('reminders')
                     if (a.cta === 'reviews') window.open(BUSINESS_GROWTH.googleReviewUrl, '_blank')
                     if (a.cta === 'winback') {
                       navigator.clipboard?.writeText(BUSINESS_GROWTH.campaigns.winback)
+                      onNavigate('loyalty')
                     }
                     if (a.cta === 'campaigns') {
                       navigator.clipboard?.writeText(BUSINESS_GROWTH.campaigns.newCustomer)

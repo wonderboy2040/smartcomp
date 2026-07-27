@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, getRow, isConfigured } from '@/lib/sheets-client'
+import { safeJsonParse } from '@/lib/utils'
 
 /**
  * GET /api/sla
@@ -39,9 +40,7 @@ export async function GET(req: NextRequest) {
       const job = await getRow<any>('Jobs', jobId)
       if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 })
 
-      const statusHistory = typeof job.statusHistoryJson === 'string'
-        ? JSON.parse(job.statusHistoryJson || '[]')
-        : (job.statusHistoryJson || [])
+      const statusHistory = safeJsonParse<any[]>(job.statusHistoryJson, [])
 
       const currentStatus = String(job.status || 'Pending')
       const lastStatusChange = statusHistory.length > 0
@@ -102,9 +101,7 @@ export async function GET(req: NextRequest) {
 
     const activeJobs = jobs.filter((j) => !['Delivered', 'Cancelled'].includes(j.status))
     const slaList = activeJobs.map((job) => {
-      const statusHistory = typeof job.statusHistoryJson === 'string'
-        ? JSON.parse(job.statusHistoryJson || '[]')
-        : (job.statusHistoryJson || [])
+      const statusHistory = safeJsonParse<any[]>(job.statusHistoryJson, [])
       const currentStatus = String(job.status || 'Pending')
       const lastStatusChange = statusHistory.length > 0
         ? new Date(statusHistory[statusHistory.length - 1].timestamp || job.createdAt || Date.now())

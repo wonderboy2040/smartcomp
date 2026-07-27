@@ -259,6 +259,19 @@ function TrackInner() {
           </div>
         )}
 
+        {/* Google Review CTA (if delivered) */}
+        {job?.status === 'Delivered' && (
+          <a
+            href="https://share.google/ZUvRUX4eYuUHJdaA4"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-2 w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl text-sm font-bold hover:from-amber-600 hover:to-orange-600 transition-colors shadow-lg shadow-amber-200"
+          >
+            <Star className="w-5 h-5" />
+            Enjoyed our service? Rate us on Google — 30 seconds ⭐
+          </a>
+        )}
+
         {/* Diagnosis notes (if completed) */}
         {job?.diagnosisNotes && (job?.status === 'Completed' || job?.status === 'Delivered') && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">

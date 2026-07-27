@@ -66,6 +66,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       discount: computed.discount,
       grandTotal: computed.grandTotal,
       notes: String(body.notes || existing.notes || ''),
+      template: body.template || existing.template || 'tally-classic',
+      gstMode: body.gstMode === 'non-gst' ? 'non-gst' : (body.gstMode === 'gst' ? 'gst' : (existing.gstMode || 'gst')),
     })
 
     return NextResponse.json(updated)
