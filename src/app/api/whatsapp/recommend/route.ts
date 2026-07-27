@@ -56,6 +56,10 @@ export async function GET(req: NextRequest) {
       const supplierName = String(supplier?.name || e.supplierName || 'Unknown')
 
       for (const r of rates) {
+        // Skip out-of-stock entries
+        const isOOS = r.rate === 0 || (r.notes && String(r.notes).includes('OUT OF STOCK'))
+        if (isOOS) continue
+
         const matched = originalItems.find(
           (oi) =>
             String(oi?.name || '').toLowerCase() === String(r?.itemName || '').toLowerCase() ||

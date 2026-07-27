@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRow, updateRow, deleteRow } from '@/lib/sheets-client'
-import { parseRateResponse } from '@/lib/whatsapp'
+import { parseRateResponseAdvanced } from '@/lib/whatsapp'
 import { safeJsonParse } from '@/lib/utils'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +25,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (!enquiry) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
       const items = safeJsonParse<any[]>(enquiry.itemsJson, [])
-      const parsedRates = parseRateResponse(String(response || ''), items)
+      // Use advanced parser — handles @ patterns, ₹, INR, OOS, MOQ, confidence scoring
+      const parsedRates = parseRateResponseAdvanced(String(response || ''), items)
 
       const updated = await updateRow('Enquiries', id, {
         response: String(response || ''),
@@ -46,6 +47,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       let appliedCount = 0
 
       for (const rate of rates) {
+        // Skip out-of-stock entries — don't overwrite cost price with 0
+        const isOOS = rate.rate === 0 || (rate.notes && String(rate.notes).includes('OUT OF STOCK'))
+        if (isOOS) continue
+
         const matchedItem = items.find(
           (i: any) => {
             const iName = String(i?.name || '').toLowerCase()
@@ -56,6 +61,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         if (matchedItem?.id) {
           // Use totalCost if available (accounts for GST), else fall back to rate
           const effectiveCost = rate.totalCost ?? rate.rate
+          if (!effectiveCost || effectiveCost <= 0) continue
           const updateData: any = { costPrice: effectiveCost }
           if (rate.gstApplicable !== null && rate.gstApplicable !== undefined) {
             updateData.gstApplicable = rate.gstApplicable

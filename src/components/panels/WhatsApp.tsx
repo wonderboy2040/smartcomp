@@ -189,7 +189,9 @@ export function WhatsAppPanel() {
     setParsedRates(safeJsonParse<any[]>(enquiry.ratesJson, []))
   }
 
+  const [parsing, setParsing] = useState(false)
   const handleParseResponse = async () => {
+    setParsing(true)
     try {
       const items = safeJsonParse<any[]>(responseDialog.itemsJson, [])
       const res = await apiPost('/api/whatsapp/parse', {
@@ -197,8 +199,11 @@ export function WhatsAppPanel() {
         items,
       })
       setParsedRates(res.parsed)
+      toast({ title: `${res.parsed.length} rates detected`, duration: 2500 })
     } catch (e: any) {
       toast({ title: 'Parse error', description: e.message, variant: 'destructive' })
+    } finally {
+      setParsing(false)
     }
   }
 
@@ -573,13 +578,13 @@ export function WhatsAppPanel() {
               <Textarea
                 value={responseText}
                 onChange={(e) => setResponseText(e.target.value)}
-                placeholder="Paste the WhatsApp reply from supplier here. The system will auto-detect rates from patterns like '1. Item Name: Rs.1000' or 'Item - 1000 (GST: Yes)'"
+                placeholder="Paste supplier's WhatsApp reply here. Supports formats:&#10;• Item @75+ (75 + 18% GST extra)&#10;• Item @88 nett (88 inclusive GST)&#10;• Item: Rs.1000&#10;• Item @NO (out of stock)&#10;• 1. Item Name: 3450+"
                 rows={6}
                 className="font-mono text-xs"
               />
               <div className="flex gap-2 mt-2">
-                <Button size="sm" variant="outline" onClick={handleParseResponse}>
-                  <RefreshCw className="w-3.5 h-3.5 mr-1" /> Preview Parsed Rates
+                <Button size="sm" variant="outline" onClick={handleParseResponse} disabled={parsing || !responseText.trim()}>
+                  {parsing ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> Parsing…</> : <><RefreshCw className="w-3.5 h-3.5 mr-1" /> Preview Parsed Rates</>}
                 </Button>
                 <Button size="sm" variant="outline" onClick={handleSaveResponse}>
                   Save Response
@@ -592,6 +597,10 @@ export function WhatsAppPanel() {
                 <div className="bg-emerald-50 px-3 py-2 border-b border-emerald-200">
                   <p className="text-sm font-medium text-emerald-800 flex items-center gap-2">
                     <Check className="w-4 h-4" /> {parsedRates.length} rates detected
+                    <span className="text-[10px] text-emerald-600 ml-auto">
+                      {parsedRates.filter((r: any) => (r.confidence || 0.5) >= 0.7).length} high confidence •
+                      {' '}{parsedRates.filter((r: any) => r.notes?.includes('OUT OF STOCK') || r.rate === 0).length} OOS
+                    </span>
                   </p>
                 </div>
                 <Table>
@@ -601,33 +610,52 @@ export function WhatsAppPanel() {
                       <TableHead className="text-right">Rate (Rs.)</TableHead>
                       <TableHead className="text-center">GST Type</TableHead>
                       <TableHead className="text-right">Total Cost</TableHead>
-                      <TableHead className="text-center">Raw</TableHead>
+                      <TableHead className="text-center">Conf.</TableHead>
+                      <TableHead className="text-center">Notes</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {parsedRates.map((r, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="text-sm font-medium">{r.itemName}</TableCell>
-                        <TableCell className="text-right font-semibold text-slate-700">
-                          {formatCurrency(r.rate)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {r.gstType === 'extra' ? (
-                            <Badge className="bg-orange-50 text-orange-700 hover:bg-orange-50 text-[10px]">+ GST {r.gstRate || 18}%</Badge>
-                          ) : r.gstType === 'inclusive' ? (
-                            <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[10px]">Nett (incl)</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px]">?</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-emerald-600">
-                          {formatCurrency(r.totalCost)}
-                        </TableCell>
-                        <TableCell className="text-center text-[10px] text-slate-400 font-mono max-w-[120px] truncate" title={r.raw}>
-                          {r.raw}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {parsedRates.map((r, i) => {
+                      const isOOS = r.notes?.includes('OUT OF STOCK') || r.rate === 0
+                      const conf = r.confidence || 0.5
+                      return (
+                        <TableRow key={i} className={isOOS ? 'bg-red-50/50' : conf < 0.6 ? 'bg-amber-50/50' : ''}>
+                          <TableCell className="text-sm font-medium">
+                            {r.itemName}
+                            {r.matchedItemSku && <span className="block text-[9px] text-slate-400">SKU: {r.matchedItemSku}</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-slate-700">
+                            {isOOS ? <span className="text-red-600">—</span> : formatCurrency(r.rate)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isOOS ? (
+                              <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px]">OOS</Badge>
+                            ) : r.gstType === 'extra' ? (
+                              <Badge className="bg-orange-50 text-orange-700 hover:bg-orange-50 text-[10px]">+ GST {r.gstRate || 18}%</Badge>
+                            ) : r.gstType === 'inclusive' ? (
+                              <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 text-[10px]">Nett (incl)</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px]">?</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-emerald-600">
+                            {isOOS ? <span className="text-red-600">—</span> : formatCurrency(r.totalCost)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge className={
+                              conf >= 0.8 ? 'bg-emerald-100 text-emerald-700 text-[10px]'
+                              : conf >= 0.6 ? 'bg-amber-100 text-amber-700 text-[10px]'
+                              : 'bg-red-100 text-red-700 text-[10px]'
+                            }>
+                              {(conf * 100).toFixed(0)}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center text-[9px] text-slate-500 max-w-[150px] truncate" title={r.notes || r.raw}>
+                            {r.notes || r.raw}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>

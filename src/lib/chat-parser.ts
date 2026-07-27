@@ -21,7 +21,7 @@
  * Returns: { supplierName, supplierPhone?, responseText, parsedRates }
  */
 
-import { parseRateResponse, ParsedRate } from './whatsapp'
+import { parseRateResponseAdvanced, ParsedRate } from './whatsapp'
 
 export interface ParsedChatExport {
   supplierName: string | null
@@ -93,8 +93,8 @@ export function parseChatExport(
   // Build response text — join all supplier messages
   const responseText = supplierMessages.map((m) => m.body).join('\n')
 
-  // Parse rates from the response
-  const parsedRates = parseRateResponse(responseText, originalItems)
+  // Parse rates from the response (advanced parser handles @ patterns, ₹, OOS, MOQ)
+  const parsedRates = parseRateResponseAdvanced(responseText, originalItems)
 
   // Date range
   const dateRange = {

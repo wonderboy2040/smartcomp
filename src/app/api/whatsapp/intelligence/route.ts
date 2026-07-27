@@ -82,14 +82,21 @@ export async function GET(req: NextRequest) {
       const supplierId = String(enquiry.supplierId || '')
       const enquiryDate = String(enquiry.respondedAt || enquiry.sentAt || enquiry.createdAt || '')
 
-      // Parse the response
+      // Parse the response — always use advanced parser on the raw response
+      // (cached ratesJson may be from old parser without confidence/notes)
       const originalItems = safeJsonParse<any[]>(enquiry.itemsJson, [])
-      const cachedRates = safeJsonParse<any[]>(enquiry.ratesJson, [])
-      let parsedRates = cachedRates
+      let parsedRates = safeJsonParse<any[]>(enquiry.ratesJson, [])
 
-      // If no cached rates, re-parse with advanced parser
-      if (cachedRates.length === 0 && enquiry.response) {
-        parsedRates = parseRateResponseAdvanced(String(enquiry.response), originalItems)
+      // Re-parse from raw response if available — this ensures we get the
+      // richest data (confidence, notes, OOS markers, MOQ, delivery)
+      // even for old enquiries that were saved with the basic parser.
+      if (enquiry.response && String(enquiry.response).trim().length > 0) {
+        try {
+          const reParsed = parseRateResponseAdvanced(String(enquiry.response), originalItems)
+          if (reParsed.length > 0) {
+            parsedRates = reParsed
+          }
+        } catch {}
       }
 
       // Initialize supplier stats
