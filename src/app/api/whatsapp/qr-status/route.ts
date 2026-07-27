@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { qrSessions } from '@/lib/whatsapp-qr-store'
 
 /**
  * GET /api/whatsapp/qr-status?sessionId=xxx
@@ -10,32 +11,19 @@ import { NextRequest, NextResponse } from 'next/server'
  *     flow for self-hosted deployments without a real webhook).
  */
 
-interface QrSession {
-  sessionId: string
-  qrToken: string
-  qrPayload: string
-  status: 'pending' | 'connected' | 'expired' | 'error'
-  phoneNumber?: string
-  createdAt: number
-  expiresAt: number
-  connectedAt?: number
-}
-
-// Share the same in-memory store as qr-login/route.ts
-// (In Next.js dev, each route module is a separate module instance, so we
-// use a globalThis pointer to share state.)
-const g = globalThis as any
-if (!g.__waQrSessions) g.__waQrSessions = new Map<string, QrSession>()
-const sessions: Map<string, QrSession> = g.__waQrSessions
-
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)
     const sessionId = url.searchParams.get('sessionId')
     if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
 
-    const session = sessions.get(sessionId)
-    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+    const session = qrSessions.get(sessionId)
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Session not found. It may have expired — please generate a new QR code.', status: 'expired' },
+        { status: 404 },
+      )
+    }
 
     // Check expiry
     if (session.status === 'pending' && Date.now() > session.expiresAt) {
@@ -61,18 +49,29 @@ export async function POST(req: NextRequest) {
     const { sessionId, confirm, phoneNumber } = body
     if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
 
-    const session = sessions.get(sessionId)
-    if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+    const session = qrSessions.get(sessionId)
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Session not found. The QR code may have expired — please generate a new one.', status: 'expired' },
+        { status: 404 },
+      )
+    }
 
-    if (session.status === 'expired' || Date.now() > session.expiresAt) {
+    // Check expiry first
+    if (Date.now() > session.expiresAt) {
       session.status = 'expired'
-      return NextResponse.json({ error: 'Session expired. Generate a new QR code.' }, { status: 410 })
+      return NextResponse.json(
+        { error: 'Session expired. Please generate a new QR code.', status: 'expired' },
+        { status: 410 },
+      )
     }
 
     if (confirm) {
       session.status = 'connected'
       session.phoneNumber = String(phoneNumber || '')
       session.connectedAt = Date.now()
+      // Re-save (the store is a Map of references, but be explicit)
+      qrSessions.set(session)
       return NextResponse.json({
         sessionId: session.sessionId,
         status: 'connected',

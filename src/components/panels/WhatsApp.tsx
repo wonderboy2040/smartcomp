@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
 import { safeJsonParse } from '@/lib/utils'
 import { buildEnquiryMessage, generateWhatsAppLink } from '@/lib/whatsapp'
@@ -1378,33 +1378,42 @@ function QrLoginView() {
   const [session, setSession] = useState<any>(null)
   const [status, setStatus] = useState<'idle' | 'pending' | 'connected' | 'expired' | 'loading'>('idle')
   const [phoneInput, setPhoneInput] = useState('')
-  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null)
+  // Use a ref for the poll timer so the async polling callback always sees
+  // the latest value (state-based closures go stale inside setInterval).
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+  }
 
   const generateQr = async () => {
     setStatus('loading')
+    stopPolling()
     try {
       const res = await fetch('/api/whatsapp/qr-login', { method: 'POST' })
       const data = await res.json()
       if (data.error) throw new Error(data.error)
       setSession(data)
       setStatus('pending')
-      // Start polling for status
-      if (pollTimer) clearInterval(pollTimer)
-      const t = setInterval(async () => {
+
+      // Start polling for status every 3s
+      pollTimerRef.current = setInterval(async () => {
         try {
           const sr = await fetch(`/api/whatsapp/qr-status?sessionId=${data.sessionId}`)
           const sd = await sr.json()
           if (sd.status === 'connected') {
             setStatus('connected')
-            if (pollTimer) clearInterval(pollTimer)
+            stopPolling()
             toast({ title: 'WhatsApp Connected ✓', description: sd.phoneNumber ? `Phone: ${sd.phoneNumber}` : 'Ready to auto-capture rates', duration: 5000 })
-          } else if (sd.status === 'expired') {
+          } else if (sd.status === 'expired' || sd.error) {
             setStatus('expired')
-            if (pollTimer) clearInterval(pollTimer)
+            stopPolling()
           }
         } catch {}
       }, 3000)
-      setPollTimer(t)
     } catch (e: any) {
       toast({ title: 'Failed to generate QR', description: e.message, variant: 'destructive' })
       setStatus('idle')
@@ -1420,9 +1429,15 @@ function QrLoginView() {
         body: JSON.stringify({ sessionId: session.sessionId, confirm: true, phoneNumber: phoneInput }),
       })
       const data = await res.json()
-      if (data.error) throw new Error(data.error)
+      if (data.error) {
+        // Session expired or not found — show friendly message + reset
+        toast({ title: 'Login failed', description: data.error, variant: 'destructive', duration: 5000 })
+        setStatus('expired')
+        stopPolling()
+        return
+      }
       setStatus('connected')
-      if (pollTimer) clearInterval(pollTimer)
+      stopPolling()
       toast({ title: 'WhatsApp Connected ✓', description: phoneInput ? `Phone: ${phoneInput}` : 'Ready to auto-capture rates', duration: 5000 })
     } catch (e: any) {
       toast({ title: 'Confirm failed', description: e.message, variant: 'destructive' })
@@ -1437,16 +1452,17 @@ function QrLoginView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: session.sessionId }),
       })
-      setSession(null)
-      setStatus('idle')
-      if (pollTimer) clearInterval(pollTimer)
-      toast({ title: 'Logged out', duration: 2500 })
     } catch {}
+    setSession(null)
+    setStatus('idle')
+    setPhoneInput('')
+    stopPolling()
+    toast({ title: 'Logged out', duration: 2500 })
   }
 
   useEffect(() => {
-    return () => { if (pollTimer) clearInterval(pollTimer) }
-  }, [pollTimer])
+    return () => { stopPolling() }
+  }, [])
 
   return (
     <div className="space-y-4">

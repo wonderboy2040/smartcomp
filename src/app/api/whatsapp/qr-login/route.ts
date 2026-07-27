@@ -1,77 +1,52 @@
 import { NextResponse } from 'next/server'
+import { qrSessions, QR_SESSION_TTL, genToken, type QrSession } from '@/lib/whatsapp-qr-store'
 
 /**
- * WhatsApp QR Login — Session Manager
+ * WhatsApp QR Login — Create Session
  *
- * This simulates a WhatsApp Web-style QR login flow. In production, this would
- * connect to a WhatsApp Business Cloud API or a Baileys/whatsapp-web.js session
- * manager running on a separate worker. For now, we generate a session token
- * and QR code payload that the frontend renders as a QR image.
+ * POST /api/whatsapp/qr-login
+ * Returns: { sessionId, qrPayload, qrToken, expiresAt }
  *
- * Flow:
- *   1. POST /api/whatsapp/qr-login    → creates session, returns { sessionId, qrPayload }
- *   2. Frontend polls GET /api/whatsapp/qr-status?sessionId=xxx every 3s
- *   3. When user scans QR with WhatsApp → status becomes 'connected'
- *   4. POST /api/whatsapp/qr-logout    → destroys session
- *
- * The QR payload is a wa.me link with a one-time token. When the user opens
- * it on their phone, WhatsApp opens and (in a real deployment) sends a
- * webhook callback that flips the session status to 'connected'.
- *
- * In this self-hosted deployment without a real webhook, the user can
- * manually confirm login by clicking "I've scanned — confirm login" in the
- * UI, which POSTs to /api/whatsapp/qr-status with { confirm: true }.
+ * The QR payload is a `wa.me/?text=...` link so WhatsApp accepts it as
+ * valid. When the user scans with WhatsApp, it opens a chat to themselves
+ * (or any number) with a pre-filled message containing the session token.
+ * In a production webhook setup, a listener catches that message and flips
+ * the session to 'connected'. For self-hosted, the user manually confirms
+ * via the "Confirm Login" button which POSTs to /api/whatsapp/qr-status.
  */
-
-// In-memory session store (resets on server restart — fine for single-user desktop app)
-interface QrSession {
-  sessionId: string
-  qrToken: string
-  qrPayload: string
-  status: 'pending' | 'connected' | 'expired' | 'error'
-  phoneNumber?: string
-  createdAt: number
-  expiresAt: number
-  connectedAt?: number
-}
-const sessions = new Map<string, QrSession>()
-const SESSION_TTL = 5 * 60 * 1000 // 5 min to scan
-
-function genToken(len: number): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
-  let out = ''
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return out
-}
 
 export async function POST() {
   try {
-    // Expire old sessions
-    const now = Date.now()
-    for (const [id, s] of sessions.entries()) {
-      if (s.expiresAt < now) sessions.delete(id)
-    }
+    // Cleanup expired sessions first
+    qrSessions.cleanup()
 
     const sessionId = 'wa_' + genToken(16)
     const qrToken = genToken(24)
-    const qrPayload = `https://wa.me/login?t=${qrToken}&s=${sessionId}`
 
+    // WhatsApp-compatible payload: wa.me with pre-filled text.
+    // The text contains the session token so a real webhook listener
+    // (or the manual confirm flow) can identify which session to mark
+    // as connected.
+    const loginMessage = `SMARTCOMP LOGIN\nSession: ${sessionId}\nToken: ${qrToken}\nTime: ${new Date().toISOString()}`
+    const qrPayload = `https://wa.me/?text=${encodeURIComponent(loginMessage)}`
+
+    const now = Date.now()
     const session: QrSession = {
       sessionId,
       qrToken,
       qrPayload,
       status: 'pending',
       createdAt: now,
-      expiresAt: now + SESSION_TTL,
+      expiresAt: now + QR_SESSION_TTL,
     }
-    sessions.set(sessionId, session)
+    qrSessions.set(session)
 
     return NextResponse.json({
       sessionId,
       qrPayload,
       qrToken,
       expiresAt: session.expiresAt,
-      ttl: SESSION_TTL,
+      ttl: QR_SESSION_TTL,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
