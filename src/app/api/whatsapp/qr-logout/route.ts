@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qrSessions } from '@/lib/whatsapp-qr-store'
+import { disconnectWhatsApp } from '@/lib/whatsapp-baileys'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
  * POST /api/whatsapp/qr-logout
- * Body: { sessionId }
- * Destroys a WhatsApp QR login session.
+ * Disconnects from WhatsApp and clears the Baileys session.
  */
-export async function POST(req: NextRequest) {
+export async function POST() {
   try {
-    const body = await req.json()
-    const { sessionId } = body
-    if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
-
-    if (qrSessions.has(sessionId)) {
-      qrSessions.delete(sessionId)
-      return NextResponse.json({ success: true, message: 'Logged out' })
-    }
-    return NextResponse.json({ success: true, message: 'Already logged out' })
+    await disconnectWhatsApp()
+    return NextResponse.json({ success: true, message: 'Logged out from WhatsApp' })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }

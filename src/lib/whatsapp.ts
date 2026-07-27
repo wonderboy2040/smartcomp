@@ -149,6 +149,21 @@ export function parseRateResponseAdvanced(
   // Rate extraction patterns (order matters — most specific first)
   // Each pattern: [regex, captureGroupForName, captureGroupForRate]
   const patterns: Array<{ re: RegExp; nameGroup: number; rateGroup: number }> = [
+    // ===== @ PATTERN (most common in Indian wholesale trade) =====
+    // "Item Name @NO" — out of stock (MUST come first — before general @ patterns)
+    { re: /^(.+?)\s*@\s*(?:no|na|n\/a|oos|out\s*of\s*stock|not\s*available)\b.*$/i, nameGroup: 1, rateGroup: 0 },
+    // "Item @BRAND @1600+" — double @ (brand note then rate) — MUST come before single-@
+    // e.g. "Zebronics H81M2 Motherboard @CONSISINTET @1600+"
+    // e.g. "24 inch FHD Monitor @IPS @4850+"
+    { re: /^(.+?)\s*@\s*[A-Za-z][^\d@]*\s*@\s*(\d+(?:[.,]\d+)?)\s*(\+|nett?|incl)?/i, nameGroup: 1, rateGroup: 2 },
+    // "Item @BRAND RATE+" — single @ with brand text, then rate (NOT a digit after @)
+    // e.g. "22 inch FHD Monitor @IPS 4100+"
+    // e.g. "19.5 HD Monitor @1800+ FOXIN" (digit after @, brand after rate)
+    { re: /^(.+?)\s*@\s*([A-Za-z][^\d]*)\s*(\d+(?:[.,]\d+)?)\s*(\+|nett?|incl)?/i, nameGroup: 1, rateGroup: 3 },
+    // "Item @Rate+" / "Item @Rate nett" — @ directly followed by number
+    // e.g. "Mouse @75+", "DDR3 8GB @1200+", "Keyboard @175+"
+    { re: /^(.+?)\s*@\s*(\d+(?:[.,]\d+)?)\s*(\+|nett?|incl|gst\s*extra|gst\s*incl)?\b.*$/i, nameGroup: 1, rateGroup: 2 },
+    // ===== STANDARD PATTERNS =====
     // "1. Item Name: Rs.3450+" — numbered list with Rs.
     { re: /^\d+[\.\)]\s*(.+?)\s*[:\-]\s*(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-|per\s+(?:unit|pc|piece|qty))?/i, nameGroup: 1, rateGroup: 2 },
     // "Item Name: Rs.3450" — name : Rs. rate
@@ -159,8 +174,8 @@ export function parseRateResponseAdvanced(
     { re: /^[•\*\u2022]\s*(.+?)\s+(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-)?/i, nameGroup: 1, rateGroup: 2 },
     // "Rs.3450 Item Name" — rate first, then name
     { re: /^(?:rs\.?|₹|inr|rupees?)\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-)?\s*[-:]?\s*(.+)/i, nameGroup: 2, rateGroup: 1 },
-    // "Item Name 3450" — name then bare number (must be ≥3 digits to avoid false positives)
-    { re: /^(.+?)\s+(?:rs\.?|₹|inr)?\s*(\d{3,}(?:[.,]\d+)?)\s*(?:\/-)?$/i, nameGroup: 1, rateGroup: 2 },
+    // "Item Name 3450+" — name then bare number with optional + suffix
+    { re: /^(.+?)\s+(?:rs\.?|₹|inr)?\s*(\d{3,}(?:[.,]\d+)?)\s*(\+|nett?|incl)?\s*$/i, nameGroup: 1, rateGroup: 2 },
     // "3450" — bare rate only (assign by order)
     { re: /^(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d{3,}(?:[.,]\d+)?)\s*(?:\/-)?$/i, nameGroup: 0, rateGroup: 1 },
   ]
@@ -177,7 +192,7 @@ export function parseRateResponseAdvanced(
     if (/^-{3,}$/.test(line) || /^\*{3,}$/.test(line)) continue
 
     // Check for out-of-stock marker
-    const isOOS = oosRegex.test(line)
+    let isOOS = oosRegex.test(line)
 
     let matched = false
     let itemNameRaw = ''
@@ -187,6 +202,16 @@ export function parseRateResponseAdvanced(
     for (const p of patterns) {
       const m = line.match(p.re)
       if (m) {
+        // rateGroup 0 means "no rate" (used for @NO / out-of-stock patterns)
+        if (p.rateGroup === 0) {
+          rateStr = ''
+          itemNameRaw = p.nameGroup > 0 ? (m[p.nameGroup] || '').trim() : ''
+          confidence = 0.7
+          matched = true
+          // Mark as OOS — the isOOS check below will handle it
+          isOOS = true
+          break
+        }
         rateStr = m[p.rateGroup] || ''
         if (p.nameGroup > 0) {
           itemNameRaw = (m[p.nameGroup] || '').trim()
@@ -198,6 +223,8 @@ export function parseRateResponseAdvanced(
         }
         // Boost confidence if Rs./₹ prefix is present
         if (/rs\.?|₹|inr/i.test(line)) confidence = Math.min(1, confidence + 0.1)
+        // Boost confidence if @ separator is present (common trade format)
+        if (/@/i.test(line)) confidence = Math.min(1, confidence + 0.05)
         matched = true
         break
       }
@@ -205,9 +232,12 @@ export function parseRateResponseAdvanced(
 
     if (!matched) continue
 
+    // If no rate string and not OOS, skip (e.g. truncated line like "Wired Combo KB & Mous")
+    if (!rateStr && !isOOS) continue
+
     // Normalize rate string: Indian 1,234.56 → 1234.56; 1.234,56 → 1234.56
-    const rateNum = parseIndianNumber(rateStr)
-    if (isNaN(rateNum) || rateNum <= 0) continue
+    const rateNum = rateStr ? parseIndianNumber(rateStr) : 0
+    if (rateStr && (isNaN(rateNum) || rateNum <= 0)) continue
 
     // Out of stock → record as 0 rate with notes
     if (isOOS) {

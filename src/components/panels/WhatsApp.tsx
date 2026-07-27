@@ -1369,17 +1369,18 @@ function IntelligenceView() {
   )
 }
 
-// ===== QR LOGIN VIEW =====
-// WhatsApp Web-style QR login. User scans QR with phone, confirms login,
-// and the panel shows "connected" status. Used to enable automated
-// supplier rate capture from incoming WhatsApp messages.
+// ===== QR LOGIN VIEW (Baileys — Real WhatsApp Web) =====
+// Uses Baileys library to create a REAL WhatsApp Web session.
+// The QR code is a genuine WhatsApp pairing code — scan it with:
+//   WhatsApp → Settings → Linked Devices → Link a Device
+// When scanned, the phone links to this "device" and all incoming
+// supplier rate replies are auto-captured and parsed.
 function QrLoginView() {
   const { toast } = useToast()
-  const [session, setSession] = useState<any>(null)
-  const [status, setStatus] = useState<'idle' | 'pending' | 'connected' | 'expired' | 'loading'>('idle')
-  const [phoneInput, setPhoneInput] = useState('')
-  // Use a ref for the poll timer so the async polling callback always sees
-  // the latest value (state-based closures go stale inside setInterval).
+  const [status, setStatus] = useState<'idle' | 'loading' | 'waiting_qr' | 'connected' | 'error'>('idle')
+  const [qrCode, setQrCode] = useState<string | null>(null)
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopPolling = () => {
@@ -1389,80 +1390,86 @@ function QrLoginView() {
     }
   }
 
+  // Check initial connection status on mount
+  useEffect(() => {
+    fetch('/api/whatsapp/qr-status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'connected') {
+          setStatus('connected')
+          setPhoneNumber(data.phoneNumber || null)
+        }
+      })
+      .catch(() => {})
+    return () => { stopPolling() }
+  }, [])
+
   const generateQr = async () => {
     setStatus('loading')
+    setQrCode(null)
+    setErrorMsg(null)
     stopPolling()
     try {
       const res = await fetch('/api/whatsapp/qr-login', { method: 'POST' })
       const data = await res.json()
-      if (data.error) throw new Error(data.error)
-      setSession(data)
-      setStatus('pending')
 
-      // Start polling for status every 3s
-      pollTimerRef.current = setInterval(async () => {
-        try {
-          const sr = await fetch(`/api/whatsapp/qr-status?sessionId=${data.sessionId}`)
-          const sd = await sr.json()
-          if (sd.status === 'connected') {
-            setStatus('connected')
-            stopPolling()
-            toast({ title: 'WhatsApp Connected ✓', description: sd.phoneNumber ? `Phone: ${sd.phoneNumber}` : 'Ready to auto-capture rates', duration: 5000 })
-          } else if (sd.status === 'expired' || sd.error) {
-            setStatus('expired')
-            stopPolling()
-          }
-        } catch {}
-      }, 3000)
-    } catch (e: any) {
-      toast({ title: 'Failed to generate QR', description: e.message, variant: 'destructive' })
-      setStatus('idle')
-    }
-  }
-
-  const confirmLogin = async () => {
-    if (!session) return
-    try {
-      const res = await fetch('/api/whatsapp/qr-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, confirm: true, phoneNumber: phoneInput }),
-      })
-      const data = await res.json()
-      if (data.error) {
-        // Session expired or not found — show friendly message + reset
-        toast({ title: 'Login failed', description: data.error, variant: 'destructive', duration: 5000 })
-        setStatus('expired')
-        stopPolling()
+      if (data.status === 'connected') {
+        setStatus('connected')
+        setPhoneNumber(data.phoneNumber || null)
+        toast({ title: 'WhatsApp Already Connected ✓', duration: 3000 })
         return
       }
-      setStatus('connected')
-      stopPolling()
-      toast({ title: 'WhatsApp Connected ✓', description: phoneInput ? `Phone: ${phoneInput}` : 'Ready to auto-capture rates', duration: 5000 })
+
+      if (data.error) throw new Error(data.error)
+
+      if (data.qrCode) {
+        setQrCode(data.qrCode)
+        setStatus('waiting_qr')
+        // Poll for connection status every 2s
+        pollTimerRef.current = setInterval(async () => {
+          try {
+            const sr = await fetch('/api/whatsapp/qr-status')
+            const sd = await sr.json()
+            if (sd.status === 'connected') {
+              setStatus('connected')
+              setPhoneNumber(sd.phoneNumber || null)
+              setQrCode(null)
+              stopPolling()
+              toast({ title: 'WhatsApp Connected ✓', description: sd.phoneNumber ? `Phone: ${sd.phoneNumber}` : 'Ready to auto-capture rates', duration: 5000 })
+            } else if (sd.status === 'error' || sd.status === 'disconnected') {
+              setStatus('error')
+              setErrorMsg(sd.error || 'Connection lost')
+              setQrCode(null)
+              stopPolling()
+            } else if (sd.qrCode && sd.qrCode !== qrCode) {
+              // QR refreshed (Baileys generates new QR every ~20s)
+              setQrCode(sd.qrCode)
+            }
+          } catch {}
+        }, 2000)
+      } else if (data.error) {
+        throw new Error(data.error)
+      } else {
+        throw new Error('QR not generated. Please try again.')
+      }
     } catch (e: any) {
-      toast({ title: 'Confirm failed', description: e.message, variant: 'destructive' })
+      setStatus('error')
+      setErrorMsg(e.message)
+      toast({ title: 'Failed to generate QR', description: e.message, variant: 'destructive' })
     }
   }
 
   const logout = async () => {
-    if (!session) return
     try {
-      await fetch('/api/whatsapp/qr-logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId }),
-      })
+      await fetch('/api/whatsapp/qr-logout', { method: 'POST' })
     } catch {}
-    setSession(null)
     setStatus('idle')
-    setPhoneInput('')
+    setQrCode(null)
+    setPhoneNumber(null)
+    setErrorMsg(null)
     stopPolling()
-    toast({ title: 'Logged out', duration: 2500 })
+    toast({ title: 'Disconnected from WhatsApp', duration: 2500 })
   }
-
-  useEffect(() => {
-    return () => { stopPolling() }
-  }, [])
 
   return (
     <div className="space-y-4">
@@ -1474,10 +1481,10 @@ function QrLoginView() {
             </div>
             <div className="min-w-0 flex-1">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                WhatsApp QR Login
-                <Badge className="bg-green-100 text-green-700 text-[10px]">NEW</Badge>
+                WhatsApp Web Login
+                <Badge className="bg-green-100 text-green-700 text-[10px]">REAL DEVICE</Badge>
               </h3>
-              <p className="text-[11px] text-slate-600">Scan with WhatsApp on your phone to enable automatic supplier rate capture from incoming messages</p>
+              <p className="text-[11px] text-slate-600">Scan with WhatsApp → Settings → Linked Devices → Link a Device. Real WhatsApp Web connection — auto-captures supplier rate replies.</p>
             </div>
           </div>
         </CardContent>
@@ -1491,47 +1498,47 @@ function QrLoginView() {
             </div>
             <div>
               <h3 className="font-bold text-slate-900 mb-1">Connect Your WhatsApp</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">Generate a QR code, scan it with your phone's WhatsApp, and the system will automatically capture and analyze supplier rate replies.</p>
+              <p className="text-sm text-slate-500 max-w-md mx-auto">Generate a REAL WhatsApp Web QR code. Scan it with your phone to link this device and auto-capture supplier rate replies.</p>
             </div>
             <Button onClick={generateQr} size="lg" className="bg-green-600 hover:bg-green-700">
-              <QrCode className="w-5 h-5 mr-2" /> Generate QR Code
+              <QrCode className="w-5 h-5 mr-2" /> Generate WhatsApp QR
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {(status === 'loading' || status === 'pending') && session && (
+      {status === 'loading' && (
+        <Card className="border-slate-200">
+          <CardContent className="p-8 text-center">
+            <RefreshCw className="w-10 h-10 text-green-600 animate-spin mx-auto mb-3" />
+            <p className="text-sm font-medium text-slate-700">Connecting to WhatsApp servers…</p>
+            <p className="text-xs text-slate-400 mt-1">Generating real WhatsApp Web QR code</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {status === 'waiting_qr' && qrCode && (
         <Card className="border-slate-200">
           <CardContent className="p-6 space-y-4">
             <div className="text-center">
-              <div className="inline-block p-4 bg-white border-4 border-slate-200 rounded-2xl shadow-sm">
-                {/* QR code rendered via SVG QR library alternative — use a data URL */}
+              <div className="inline-block p-4 bg-white border-4 border-green-200 rounded-2xl shadow-sm">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(session.qrPayload)}`}
-                  alt="WhatsApp Login QR"
-                  className="w-48 h-48"
+                  src={qrCode}
+                  alt="WhatsApp Web QR Code"
+                  className="w-52 h-52"
                 />
               </div>
-              <p className="text-sm font-bold text-slate-900 mt-4">Scan with your phone's WhatsApp</p>
-              <p className="text-xs text-slate-500 mt-1">Open WhatsApp → Settings → Linked Devices → Scan QR Code</p>
-              <p className="text-[10px] text-amber-600 mt-2">⏱ Expires in {Math.ceil((session.expiresAt - Date.now()) / 1000)}s</p>
-            </div>
-
-            {/* Manual confirm (for self-hosted without webhook) */}
-            <div className="border-t border-slate-200 pt-4 space-y-2">
-              <p className="text-xs text-slate-600 font-medium">After scanning, confirm your phone number:</p>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="+91 98765 43210"
-                  value={phoneInput}
-                  onChange={(e) => setPhoneInput(e.target.value)}
-                  className="h-10"
-                />
-                <Button onClick={confirmLogin} className="bg-green-600 hover:bg-green-700 h-10">
-                  <Check className="w-4 h-4 mr-1" /> Confirm Login
-                </Button>
+              <p className="text-sm font-bold text-slate-900 mt-4">Scan with WhatsApp on your phone</p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3 text-left max-w-xs mx-auto">
+                <p className="text-xs font-bold text-green-900 mb-1">📱 How to scan:</p>
+                <ol className="text-[11px] text-green-700 space-y-0.5 ml-4 list-decimal">
+                  <li>Open WhatsApp on your phone</li>
+                  <li>Tap Settings (⚙️) → Linked Devices</li>
+                  <li>Tap "Link a Device"</li>
+                  <li>Point camera at the QR code above</li>
+                </ol>
               </div>
-              <p className="text-[10px] text-slate-400">Manual confirmation — for production with webhook, this step is automatic.</p>
+              <p className="text-[10px] text-amber-600 mt-2">⏱ QR refreshes automatically every 20 seconds if not scanned</p>
             </div>
           </CardContent>
         </Card>
@@ -1545,15 +1552,16 @@ function QrLoginView() {
             </div>
             <div>
               <h3 className="font-bold text-green-900 text-lg mb-1">✓ WhatsApp Connected</h3>
-              <p className="text-sm text-green-700">Your WhatsApp is linked. Supplier rate replies will now be auto-captured and analyzed.</p>
-              {phoneInput && <p className="text-xs text-green-600 mt-2">Connected phone: {phoneInput}</p>}
+              <p className="text-sm text-green-700">Your WhatsApp is linked as a device. Supplier rate replies will now be auto-captured and analyzed.</p>
+              {phoneNumber && <p className="text-xs text-green-600 mt-2 font-mono">Connected: +{phoneNumber}</p>}
             </div>
             <div className="bg-white/60 border border-green-200 rounded-lg p-3 text-left">
               <p className="text-xs font-bold text-green-900 mb-1">🤖 Superintelligence Active</p>
               <ul className="text-[11px] text-green-700 space-y-0.5 ml-4 list-disc">
-                <li>Auto-detects supplier replies in WhatsApp messages</li>
-                <li>Extracts rates, GST type, MOQ, delivery, warranty</li>
-                <li>Flags out-of-stock items instantly</li>
+                <li>Auto-detects supplier replies in incoming WhatsApp messages</li>
+                <li>Extracts rates, GST type (+ = extra, nett = inclusive), MOQ, delivery</li>
+                <li>Handles @ format: "Mouse @75+" = 75 + 18% GST extra</li>
+                <li>Flags out-of-stock items (@NO, OOS) instantly</li>
                 <li>Compares rates across all suppliers per item</li>
                 <li>Recommends cheapest supplier with confidence score</li>
               </ul>
@@ -1565,18 +1573,18 @@ function QrLoginView() {
         </Card>
       )}
 
-      {status === 'expired' && (
+      {status === 'error' && (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-6 text-center space-y-4">
             <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto">
               <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
             <div>
-              <h3 className="font-bold text-red-900 mb-1">QR Code Expired</h3>
-              <p className="text-sm text-red-600">The QR code was not scanned in time. Please generate a new one.</p>
+              <h3 className="font-bold text-red-900 mb-1">Connection Error</h3>
+              <p className="text-sm text-red-600">{errorMsg || 'Failed to connect to WhatsApp. Please try again.'}</p>
             </div>
             <Button onClick={generateQr} className="bg-green-600 hover:bg-green-700">
-              <RefreshCw className="w-4 h-4 mr-2" /> Generate New QR
+              <RefreshCw className="w-4 h-4 mr-2" /> Try Again
             </Button>
           </CardContent>
         </Card>

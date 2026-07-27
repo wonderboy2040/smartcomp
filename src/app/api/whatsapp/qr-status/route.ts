@@ -1,86 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qrSessions } from '@/lib/whatsapp-qr-store'
+import { getState } from '@/lib/whatsapp-baileys'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/whatsapp/qr-status?sessionId=xxx
- * Returns the current status of a QR login session.
+ * GET /api/whatsapp/qr-status
+ * Returns the current WhatsApp connection state (via Baileys).
  *
- * POST /api/whatsapp/qr-status
- * Body: { sessionId, confirm?: boolean, phoneNumber?: string }
- *   - If confirm=true, marks the session as 'connected' (manual confirmation
- *     flow for self-hosted deployments without a real webhook).
+ * States:
+ *   - disconnected  → no connection
+ *   - connecting    → starting up
+ *   - waiting_qr    → QR generated, waiting for phone scan
+ *   - connected     → phone linked, ready to capture messages
+ *   - error         → connection failed
  */
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const url = new URL(req.url)
-    const sessionId = url.searchParams.get('sessionId')
-    if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
-
-    const session = qrSessions.get(sessionId)
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Session not found. It may have expired — please generate a new QR code.', status: 'expired' },
-        { status: 404 },
-      )
-    }
-
-    // Check expiry
-    if (session.status === 'pending' && Date.now() > session.expiresAt) {
-      session.status = 'expired'
-    }
-
+    const state = getState()
     return NextResponse.json({
-      sessionId: session.sessionId,
-      status: session.status,
-      phoneNumber: session.phoneNumber,
-      createdAt: session.createdAt,
-      expiresAt: session.expiresAt,
-      connectedAt: session.connectedAt,
+      status: state.state,
+      qrCode: state.qrCode,
+      qrRetry: state.qrRetry,
+      phoneNumber: state.phoneNumber,
+      connectedAt: state.connectedAt,
+      error: state.error,
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message }, { status: 500 })
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json()
-    const { sessionId, confirm, phoneNumber } = body
-    if (!sessionId) return NextResponse.json({ error: 'sessionId required' }, { status: 400 })
-
-    const session = qrSessions.get(sessionId)
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Session not found. The QR code may have expired — please generate a new one.', status: 'expired' },
-        { status: 404 },
-      )
-    }
-
-    // Check expiry first
-    if (Date.now() > session.expiresAt) {
-      session.status = 'expired'
-      return NextResponse.json(
-        { error: 'Session expired. Please generate a new QR code.', status: 'expired' },
-        { status: 410 },
-      )
-    }
-
-    if (confirm) {
-      session.status = 'connected'
-      session.phoneNumber = String(phoneNumber || '')
-      session.connectedAt = Date.now()
-      // Re-save (the store is a Map of references, but be explicit)
-      qrSessions.set(session)
-      return NextResponse.json({
-        sessionId: session.sessionId,
-        status: 'connected',
-        phoneNumber: session.phoneNumber,
-        connectedAt: session.connectedAt,
-      })
-    }
-
-    return NextResponse.json({ status: session.status })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }

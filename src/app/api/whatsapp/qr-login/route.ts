@@ -1,54 +1,76 @@
 import { NextResponse } from 'next/server'
-import { qrSessions, QR_SESSION_TTL, genToken, type QrSession } from '@/lib/whatsapp-qr-store'
+import { startWhatsAppConnection, getState } from '@/lib/whatsapp-baileys'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /**
- * WhatsApp QR Login — Create Session
- *
  * POST /api/whatsapp/qr-login
- * Returns: { sessionId, qrPayload, qrToken, expiresAt }
  *
- * The QR payload is a `wa.me/?text=...` link so WhatsApp accepts it as
- * valid. When the user scans with WhatsApp, it opens a chat to themselves
- * (or any number) with a pre-filled message containing the session token.
- * In a production webhook setup, a listener catches that message and flips
- * the session to 'connected'. For self-hosted, the user manually confirms
- * via the "Confirm Login" button which POSTs to /api/whatsapp/qr-status.
+ * Starts a REAL WhatsApp Web connection using Baileys.
+ * Returns a genuine QR code (as data URL image) that the phone app
+ * recognises when scanning via:
+ *   WhatsApp → Settings → Linked Devices → Link a Device
+ *
+ * The QR is a real WhatsApp pairing code — NOT a wa.me link.
+ * Scanning it links the phone to this "device" and enables:
+ *   - Auto-capture of incoming supplier rate replies
+ *   - Real-time message monitoring
+ *   - Session persistence (reconnects automatically)
  */
-
 export async function POST() {
   try {
-    // Cleanup expired sessions first
-    qrSessions.cleanup()
+    const current = getState()
 
-    const sessionId = 'wa_' + genToken(16)
-    const qrToken = genToken(24)
-
-    // WhatsApp-compatible payload: wa.me with pre-filled text.
-    // The text contains the session token so a real webhook listener
-    // (or the manual confirm flow) can identify which session to mark
-    // as connected.
-    const loginMessage = `SMARTCOMP LOGIN\nSession: ${sessionId}\nToken: ${qrToken}\nTime: ${new Date().toISOString()}`
-    const qrPayload = `https://wa.me/?text=${encodeURIComponent(loginMessage)}`
-
-    const now = Date.now()
-    const session: QrSession = {
-      sessionId,
-      qrToken,
-      qrPayload,
-      status: 'pending',
-      createdAt: now,
-      expiresAt: now + QR_SESSION_TTL,
+    // If already connected, return success
+    if (current.state === 'connected') {
+      return NextResponse.json({
+        status: 'connected',
+        phoneNumber: current.phoneNumber,
+        connectedAt: current.connectedAt,
+        message: 'Already connected to WhatsApp',
+      })
     }
-    qrSessions.set(session)
+
+    // Start connection — this generates a real QR code
+    const result = await startWhatsAppConnection()
+
+    // Wait a moment for QR to be generated (Baileys is async)
+    // Poll state for up to 10 seconds waiting for QR
+    let attempts = 0
+    let qrCode = result.qrCode
+    while (!qrCode && attempts < 20) {
+      await new Promise(r => setTimeout(r, 500))
+      const s = getState()
+      qrCode = s.qrCode
+      if (s.state === 'connected') {
+        return NextResponse.json({
+          status: 'connected',
+          phoneNumber: s.phoneNumber,
+          connectedAt: s.connectedAt,
+        })
+      }
+      if (s.state === 'error') {
+        return NextResponse.json({ error: s.error || 'Connection failed' }, { status: 500 })
+      }
+      attempts++
+    }
+
+    const finalState = getState()
+    if (finalState.qrCode) {
+      return NextResponse.json({
+        status: 'waiting_qr',
+        qrCode: finalState.qrCode,  // data URL image — ready for <img src="">
+        qrRetry: finalState.qrRetry,
+        message: 'Scan QR with WhatsApp → Settings → Linked Devices → Link a Device',
+      })
+    }
 
     return NextResponse.json({
-      sessionId,
-      qrPayload,
-      qrToken,
-      expiresAt: session.expiresAt,
-      ttl: QR_SESSION_TTL,
-    })
+      status: finalState.state,
+      error: finalState.error || 'QR not generated. Try again.',
+    }, { status: 500 })
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message }, { status: 500 })
+    return NextResponse.json({ error: e?.message || 'Failed to start WhatsApp connection' }, { status: 500 })
   }
 }
