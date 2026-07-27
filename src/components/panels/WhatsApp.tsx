@@ -22,12 +22,13 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import {
   MessageSquare, Send, Search, Users, Package, RefreshCw,
-  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight
+  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight,
+  Brain, QrCode, Smartphone, Zap, AlertTriangle
 } from 'lucide-react'
 
 export function WhatsAppPanel() {
   const { toast } = useToast()
-  const [tab, setTab] = useState<'enquiries' | 'comparison' | 'recommend' | 'send'>('enquiries')
+  const [tab, setTab] = useState<'enquiries' | 'comparison' | 'recommend' | 'intelligence' | 'qrlogin' | 'send'>('enquiries')
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [responseDialog, setResponseDialog] = useState<any | null>(null)
@@ -304,6 +305,8 @@ export function WhatsAppPanel() {
           { id: 'enquiries', label: 'Enquiries', icon: MessageSquare },
           { id: 'comparison', label: 'Rate Comparison', icon: Users },
           { id: 'recommend', label: 'Best Suppliers', icon: TrendingUp },
+          { id: 'intelligence', label: 'AI Intelligence', icon: Brain },
+          { id: 'qrlogin', label: 'QR Login', icon: QrCode },
         ].map((t) => (
           <button
             key={t.id}
@@ -533,6 +536,14 @@ export function WhatsAppPanel() {
       {/* ===== BEST SUPPLIERS TAB ===== */}
       {tab === 'recommend' && (
         <BestSuppliersView data={recommendations} loading={recLoading} />
+      )}
+
+      {tab === 'intelligence' && (
+        <IntelligenceView />
+      )}
+
+      {tab === 'qrlogin' && (
+        <QrLoginView />
       )}
 
       {/* Send enquiry dialog - stable key to prevent remount/flicker */}
@@ -1192,6 +1203,368 @@ function BestSuppliersView({ data, loading }: { data: any; loading: boolean }) {
           </CardContent>
         </Card>
       ))}
+    </div>
+  )
+}
+
+// ===== AI INTELLIGENCE VIEW =====
+// Superintelligence tab — analyzes all supplier replies, extracts rates,
+// finds cheapest supplier per item, flags low-confidence entries + OOS.
+function IntelligenceView() {
+  const { data, loading, refetch } = useFetch<any>('/api/whatsapp/intelligence?days=90', undefined)
+  const { toast } = useToast()
+
+  if (loading && !data) {
+    return <Card><CardContent className="text-center py-8 text-slate-500">Running AI analysis on supplier replies…</CardContent></Card>
+  }
+  if (!data) {
+    return <Card><CardContent className="text-center py-8 text-slate-500">No data</CardContent></Card>
+  }
+
+  const s = data.summary || {}
+  const items = data.itemBestRates || []
+  const topSuppliers = data.topSuppliers || []
+
+  return (
+    <div className="space-y-4">
+      {/* Header banner */}
+      <Card className="border-violet-300 bg-gradient-to-br from-violet-50 via-white to-fuchsia-50">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-violet-600 rounded-xl flex items-center justify-center flex-shrink-0">
+              <Brain className="w-6 h-6 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                Supplier Rate Intelligence
+                <Badge className="bg-violet-100 text-violet-700 text-[10px]">SUPERINTELLIGENCE</Badge>
+              </h3>
+              <p className="text-[11px] text-slate-600">Auto-analyzes all supplier WhatsApp replies, extracts rates, finds cheapest supplier per item, flags low-confidence + out-of-stock entries</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Summary KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="border-slate-200"><CardContent className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase">Replies Analyzed</p>
+          <p className="text-lg font-bold text-slate-900">{s.totalEnquiries || 0}</p>
+          <p className="text-[10px] text-slate-400">{s.totalSuppliers || 0} suppliers</p>
+        </CardContent></Card>
+        <Card className="border-slate-200"><CardContent className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase">Rates Parsed</p>
+          <p className="text-lg font-bold text-blue-700">{s.totalRatesParsed || 0}</p>
+          <p className="text-[10px] text-slate-400">{s.totalItemsAnalyzed || 0} items</p>
+        </CardContent></Card>
+        <Card className="border-slate-200"><CardContent className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase">Avg Confidence</p>
+          <p className="text-lg font-bold text-emerald-700">{((s.avgConfidence || 0) * 100).toFixed(0)}%</p>
+          <p className="text-[10px] text-slate-400">{s.lowConfidenceRates || 0} low-confidence</p>
+        </CardContent></Card>
+        <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50 to-white"><CardContent className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase">Potential Savings</p>
+          <p className="text-lg font-bold text-emerald-700">{formatCurrency(s.potentialSavings || 0)}</p>
+          <p className="text-[10px] text-emerald-600">by picking cheapest supplier</p>
+        </CardContent></Card>
+      </div>
+
+      {/* Top suppliers leaderboard */}
+      {topSuppliers.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Top Suppliers (most lowest rates)</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader><TableRow className="bg-slate-50">
+                <TableHead className="text-xs">Rank</TableHead>
+                <TableHead className="text-xs">Supplier</TableHead>
+                <TableHead className="text-xs text-center">Replies</TableHead>
+                <TableHead className="text-xs text-center">Rates</TableHead>
+                <TableHead className="text-xs text-center">Lowest Wins</TableHead>
+                <TableHead className="text-xs text-center">Confidence</TableHead>
+                <TableHead className="text-xs text-center">OOS</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {topSuppliers.map((sup: any, i: number) => (
+                  <TableRow key={sup.supplierId}>
+                    <TableCell className="font-bold">#{i + 1}</TableCell>
+                    <TableCell className="text-xs font-bold">{sup.supplierName}</TableCell>
+                    <TableCell className="text-center text-xs">{sup.totalReplies}</TableCell>
+                    <TableCell className="text-center text-xs">{sup.totalRates}</TableCell>
+                    <TableCell className="text-center"><Badge className="bg-amber-100 text-amber-700 text-[10px] font-bold">{sup.lowestRatesCount}</Badge></TableCell>
+                    <TableCell className="text-center text-xs">{(sup.avgConfidence * 100).toFixed(0)}%</TableCell>
+                    <TableCell className="text-center text-xs text-red-600">{sup.outOfStockCount}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Per-item best rates */}
+      <Card className="border-slate-200">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Best Rate Per Item (sorted by savings potential)</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => refetch()}><RefreshCw className="w-3.5 h-3.5 mr-1" /> Re-analyze</Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {items.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-sm">No supplier replies yet. Send an enquiry first.</div>
+          ) : (
+            <Table>
+              <TableHeader><TableRow className="bg-slate-50">
+                <TableHead className="text-xs">Item</TableHead>
+                <TableHead className="text-xs">Best Supplier</TableHead>
+                <TableHead className="text-xs text-right">Best Rate</TableHead>
+                <TableHead className="text-xs text-right">Total Cost</TableHead>
+                <TableHead className="text-xs text-center">GST</TableHead>
+                <TableHead className="text-xs text-center">Confidence</TableHead>
+                <TableHead className="text-xs text-center">Quotes</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>
+                {items.map((item: any, i: number) => (
+                  <TableRow key={i} className={item.allOutOfStock ? 'bg-red-50/50' : ''}>
+                    <TableCell className="text-xs font-bold">{item.itemName}</TableCell>
+                    <TableCell className="text-xs">
+                      {item.bestSupplier ? (
+                        <span className="text-emerald-700 font-medium">{item.bestSupplier}</span>
+                      ) : item.allOutOfStock ? (
+                        <Badge className="bg-red-100 text-red-700 text-[10px]">ALL OOS</Badge>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-xs font-bold">{item.bestRate ? formatCurrency(item.bestRate) : '—'}</TableCell>
+                    <TableCell className="text-right text-xs">{item.bestTotalCost ? formatCurrency(item.bestTotalCost) : '—'}</TableCell>
+                    <TableCell className="text-center text-xs">{item.bestGstType || '—'}</TableCell>
+                    <TableCell className="text-center">
+                      {item.bestConfidence !== null && item.bestConfidence !== undefined ? (
+                        <Badge className={item.bestConfidence >= 0.8 ? 'bg-emerald-100 text-emerald-700 text-[10px]' : item.bestConfidence >= 0.6 ? 'bg-amber-100 text-amber-700 text-[10px]' : 'bg-red-100 text-red-700 text-[10px]'}>
+                          {(item.bestConfidence * 100).toFixed(0)}%
+                        </Badge>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell className="text-center text-xs">{item.totalQuotes}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Low confidence warning */}
+      {(s.lowConfidenceRates || 0) > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-3 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <div className="text-xs text-amber-800">
+              <strong>{s.lowConfidenceRates} rate(s) have low confidence.</strong> These were parsed from unusual formats. Review them manually in the Enquiries tab before applying to your stock items.
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ===== QR LOGIN VIEW =====
+// WhatsApp Web-style QR login. User scans QR with phone, confirms login,
+// and the panel shows "connected" status. Used to enable automated
+// supplier rate capture from incoming WhatsApp messages.
+function QrLoginView() {
+  const { toast } = useToast()
+  const [session, setSession] = useState<any>(null)
+  const [status, setStatus] = useState<'idle' | 'pending' | 'connected' | 'expired' | 'loading'>('idle')
+  const [phoneInput, setPhoneInput] = useState('')
+  const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null)
+
+  const generateQr = async () => {
+    setStatus('loading')
+    try {
+      const res = await fetch('/api/whatsapp/qr-login', { method: 'POST' })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setSession(data)
+      setStatus('pending')
+      // Start polling for status
+      if (pollTimer) clearInterval(pollTimer)
+      const t = setInterval(async () => {
+        try {
+          const sr = await fetch(`/api/whatsapp/qr-status?sessionId=${data.sessionId}`)
+          const sd = await sr.json()
+          if (sd.status === 'connected') {
+            setStatus('connected')
+            if (pollTimer) clearInterval(pollTimer)
+            toast({ title: 'WhatsApp Connected ✓', description: sd.phoneNumber ? `Phone: ${sd.phoneNumber}` : 'Ready to auto-capture rates', duration: 5000 })
+          } else if (sd.status === 'expired') {
+            setStatus('expired')
+            if (pollTimer) clearInterval(pollTimer)
+          }
+        } catch {}
+      }, 3000)
+      setPollTimer(t)
+    } catch (e: any) {
+      toast({ title: 'Failed to generate QR', description: e.message, variant: 'destructive' })
+      setStatus('idle')
+    }
+  }
+
+  const confirmLogin = async () => {
+    if (!session) return
+    try {
+      const res = await fetch('/api/whatsapp/qr-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, confirm: true, phoneNumber: phoneInput }),
+      })
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setStatus('connected')
+      if (pollTimer) clearInterval(pollTimer)
+      toast({ title: 'WhatsApp Connected ✓', description: phoneInput ? `Phone: ${phoneInput}` : 'Ready to auto-capture rates', duration: 5000 })
+    } catch (e: any) {
+      toast({ title: 'Confirm failed', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const logout = async () => {
+    if (!session) return
+    try {
+      await fetch('/api/whatsapp/qr-logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId }),
+      })
+      setSession(null)
+      setStatus('idle')
+      if (pollTimer) clearInterval(pollTimer)
+      toast({ title: 'Logged out', duration: 2500 })
+    } catch {}
+  }
+
+  useEffect(() => {
+    return () => { if (pollTimer) clearInterval(pollTimer) }
+  }, [pollTimer])
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-green-200 bg-gradient-to-br from-green-50 via-white to-emerald-50">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-green-600 rounded-xl flex items-center justify-center flex-shrink-0">
+              <QrCode className="w-6 h-6 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                WhatsApp QR Login
+                <Badge className="bg-green-100 text-green-700 text-[10px]">NEW</Badge>
+              </h3>
+              <p className="text-[11px] text-slate-600">Scan with WhatsApp on your phone to enable automatic supplier rate capture from incoming messages</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {status === 'idle' && (
+        <Card className="border-slate-200">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="w-20 h-20 bg-green-100 rounded-2xl flex items-center justify-center mx-auto">
+              <QrCode className="w-10 h-10 text-green-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 mb-1">Connect Your WhatsApp</h3>
+              <p className="text-sm text-slate-500 max-w-md mx-auto">Generate a QR code, scan it with your phone's WhatsApp, and the system will automatically capture and analyze supplier rate replies.</p>
+            </div>
+            <Button onClick={generateQr} size="lg" className="bg-green-600 hover:bg-green-700">
+              <QrCode className="w-5 h-5 mr-2" /> Generate QR Code
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {(status === 'loading' || status === 'pending') && session && (
+        <Card className="border-slate-200">
+          <CardContent className="p-6 space-y-4">
+            <div className="text-center">
+              <div className="inline-block p-4 bg-white border-4 border-slate-200 rounded-2xl shadow-sm">
+                {/* QR code rendered via SVG QR library alternative — use a data URL */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(session.qrPayload)}`}
+                  alt="WhatsApp Login QR"
+                  className="w-48 h-48"
+                />
+              </div>
+              <p className="text-sm font-bold text-slate-900 mt-4">Scan with your phone's WhatsApp</p>
+              <p className="text-xs text-slate-500 mt-1">Open WhatsApp → Settings → Linked Devices → Scan QR Code</p>
+              <p className="text-[10px] text-amber-600 mt-2">⏱ Expires in {Math.ceil((session.expiresAt - Date.now()) / 1000)}s</p>
+            </div>
+
+            {/* Manual confirm (for self-hosted without webhook) */}
+            <div className="border-t border-slate-200 pt-4 space-y-2">
+              <p className="text-xs text-slate-600 font-medium">After scanning, confirm your phone number:</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="+91 98765 43210"
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  className="h-10"
+                />
+                <Button onClick={confirmLogin} className="bg-green-600 hover:bg-green-700 h-10">
+                  <Check className="w-4 h-4 mr-1" /> Confirm Login
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-400">Manual confirmation — for production with webhook, this step is automatic.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {status === 'connected' && (
+        <Card className="border-green-300 bg-gradient-to-br from-green-50 to-emerald-50">
+          <CardContent className="p-6 text-center space-y-4">
+            <div className="w-20 h-20 bg-green-500 rounded-2xl flex items-center justify-center mx-auto">
+              <Check className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-green-900 text-lg mb-1">✓ WhatsApp Connected</h3>
+              <p className="text-sm text-green-700">Your WhatsApp is linked. Supplier rate replies will now be auto-captured and analyzed.</p>
+              {phoneInput && <p className="text-xs text-green-600 mt-2">Connected phone: {phoneInput}</p>}
+            </div>
+            <div className="bg-white/60 border border-green-200 rounded-lg p-3 text-left">
+              <p className="text-xs font-bold text-green-900 mb-1">🤖 Superintelligence Active</p>
+              <ul className="text-[11px] text-green-700 space-y-0.5 ml-4 list-disc">
+                <li>Auto-detects supplier replies in WhatsApp messages</li>
+                <li>Extracts rates, GST type, MOQ, delivery, warranty</li>
+                <li>Flags out-of-stock items instantly</li>
+                <li>Compares rates across all suppliers per item</li>
+                <li>Recommends cheapest supplier with confidence score</li>
+              </ul>
+            </div>
+            <Button onClick={logout} variant="outline" className="border-red-300 text-red-700 hover:bg-red-50">
+              Disconnect WhatsApp
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {status === 'expired' && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-red-900 mb-1">QR Code Expired</h3>
+              <p className="text-sm text-red-600">The QR code was not scanned in time. Please generate a new one.</p>
+            </div>
+            <Button onClick={generateQr} className="bg-green-600 hover:bg-green-700">
+              <RefreshCw className="w-4 h-4 mr-2" /> Generate New QR
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

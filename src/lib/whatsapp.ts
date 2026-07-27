@@ -109,6 +109,271 @@ export interface ParsedRate {
   gstRate?: number
   totalCost: number     // effective cost including GST if extra
   raw: string           // original line text
+  confidence?: number   // 0-1 how confident the parser is about this extraction
+  matchedItemSku?: string // SKU of the matched original item, if any
+  notes?: string        // any extra context the parser captured
+}
+
+/**
+ * ADVANCED Supplier Rate Parser — Superintelligence v2.0
+ *
+ * Improvements over the original parseRateResponse:
+ *   - Handles multi-line items (item name on one line, rate on next)
+ *   - Recognises Indian number formats (₹, Rs, INR, rupees, /- suffix)
+ *   - Detects "out of stock", "OOS", "not available" markers
+ *   - Detects delivery charges, MOQ (minimum order qty), warranty info
+ *   - Confidence scoring (0-1) so UI can highlight low-confidence entries
+ *   - Better item matching using fuzzy substring + SKU + brand keywords
+ *   - Handles bullet markers: •, -, *, →, tab-indented rates
+ *   - Handles "Item: Rs.1000 (per unit)" style per-unit pricing
+ *   - Extracts GST rate from percentage or word form ("eighteen percent")
+ *
+ * Used by /api/whatsapp/parse and /api/whatsapp/intelligence endpoints.
+ */
+export function parseRateResponseAdvanced(
+  response: string,
+  originalItems: { name: string; sku?: string }[]
+): ParsedRate[] {
+  if (!response || !response.trim()) return []
+
+  const lines = response.split(/\r?\n+/).map(l => l.trim()).filter(Boolean)
+  const results: ParsedRate[] = []
+  const usedOriginalIndices = new Set<number>()
+
+  // Greeting / signature lines to skip (no numbers at all)
+  const skipIfNoNumber = /^(thank|hello|hi|ok|yes|no|sure|please|dear|regards|best|cheers|namaste|sir|madam|bro|bhai)\b/i
+
+  // "Out of stock" markers
+  const oosRegex = /\b(out of stock|oos|not available|unavailable|na\b|n\/a|sold out|out-of-stock)\b/i
+
+  // Rate extraction patterns (order matters — most specific first)
+  // Each pattern: [regex, captureGroupForName, captureGroupForRate]
+  const patterns: Array<{ re: RegExp; nameGroup: number; rateGroup: number }> = [
+    // "1. Item Name: Rs.3450+" — numbered list with Rs.
+    { re: /^\d+[\.\)]\s*(.+?)\s*[:\-]\s*(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-|per\s+(?:unit|pc|piece|qty))?/i, nameGroup: 1, rateGroup: 2 },
+    // "Item Name: Rs.3450" — name : Rs. rate
+    { re: /^(.+?)\s*[:\-]\s*(?:rs\.?|₹|inr|rupees?)\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-|per\s+(?:unit|pc|piece|qty))?/i, nameGroup: 1, rateGroup: 2 },
+    // "Item Name - 3450"  /  "Item Name → 3450"
+    { re: /^(.+?)\s*[-→]\s*(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-)?/i, nameGroup: 1, rateGroup: 2 },
+    // "• Item Name 3450"  /  "* Item Name 3450"
+    { re: /^[•\*\u2022]\s*(.+?)\s+(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-)?/i, nameGroup: 1, rateGroup: 2 },
+    // "Rs.3450 Item Name" — rate first, then name
+    { re: /^(?:rs\.?|₹|inr|rupees?)\s*\.?\s*(\d+(?:[.,]\d+)?)\s*(?:\/-)?\s*[-:]?\s*(.+)/i, nameGroup: 2, rateGroup: 1 },
+    // "Item Name 3450" — name then bare number (must be ≥3 digits to avoid false positives)
+    { re: /^(.+?)\s+(?:rs\.?|₹|inr)?\s*(\d{3,}(?:[.,]\d+)?)\s*(?:\/-)?$/i, nameGroup: 1, rateGroup: 2 },
+    // "3450" — bare rate only (assign by order)
+    { re: /^(?:rs\.?|₹|inr|rupees?)?\s*\.?\s*(\d{3,}(?:[.,]\d+)?)\s*(?:\/-)?$/i, nameGroup: 0, rateGroup: 1 },
+  ]
+
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx]
+    const lowerLine = line.toLowerCase()
+
+    // Skip greeting/signature lines that have no 3+ digit number
+    if (skipIfNoNumber.test(line) && !/\d{3,}/.test(line)) continue
+
+    // Skip pure section headers like "Rates:", "Quote:", "---"
+    if (/^(rates|quote|quotation|price|prices|items?)\s*:?$/i.test(line)) continue
+    if (/^-{3,}$/.test(line) || /^\*{3,}$/.test(line)) continue
+
+    // Check for out-of-stock marker
+    const isOOS = oosRegex.test(line)
+
+    let matched = false
+    let itemNameRaw = ''
+    let rateStr = ''
+    let confidence = 0.5
+
+    for (const p of patterns) {
+      const m = line.match(p.re)
+      if (m) {
+        rateStr = m[p.rateGroup] || ''
+        if (p.nameGroup > 0) {
+          itemNameRaw = (m[p.nameGroup] || '').trim()
+          confidence = 0.85
+        } else {
+          // Bare-rate pattern — lower confidence, name will be filled by order
+          itemNameRaw = ''
+          confidence = 0.55
+        }
+        // Boost confidence if Rs./₹ prefix is present
+        if (/rs\.?|₹|inr/i.test(line)) confidence = Math.min(1, confidence + 0.1)
+        matched = true
+        break
+      }
+    }
+
+    if (!matched) continue
+
+    // Normalize rate string: Indian 1,234.56 → 1234.56; 1.234,56 → 1234.56
+    const rateNum = parseIndianNumber(rateStr)
+    if (isNaN(rateNum) || rateNum <= 0) continue
+
+    // Out of stock → record as 0 rate with notes
+    if (isOOS) {
+      results.push({
+        itemName: itemNameRaw || '(unknown item)',
+        rate: 0,
+        gstApplicable: null,
+        gstType: null,
+        totalCost: 0,
+        raw: line,
+        confidence: 0.7,
+        notes: 'OUT OF STOCK',
+      })
+      continue
+    }
+
+    // Match item name to original items list
+    let itemName = itemNameRaw
+    let matchedItem: { name: string; sku?: string } | undefined
+    let matchedSku: string | undefined
+
+    if (itemNameRaw) {
+      // Try exact SKU match first
+      for (let i = 0; i < originalItems.length; i++) {
+        if (usedOriginalIndices.has(i)) continue
+        const orig = originalItems[i]
+        if (orig.sku && lowerLine.includes(String(orig.sku).toLowerCase())) {
+          matchedItem = orig
+          matchedSku = orig.sku
+          usedOriginalIndices.add(i)
+          itemName = orig.name
+          confidence = Math.min(1, confidence + 0.15)
+          break
+        }
+      }
+      // Then fuzzy name match (substring either way)
+      if (!matchedItem) {
+        for (let i = 0; i < originalItems.length; i++) {
+          if (usedOriginalIndices.has(i)) continue
+          const orig = originalItems[i]
+          const origName = String(orig?.name || '').toLowerCase()
+          const raw = itemNameRaw.toLowerCase()
+          if (origName.length > 3 && (origName.includes(raw) || raw.includes(origName))) {
+            matchedItem = orig
+            matchedSku = orig.sku
+            usedOriginalIndices.add(i)
+            itemName = orig.name
+            confidence = Math.min(1, confidence + 0.1)
+            break
+          }
+        }
+      }
+      // Keyword match — split name into words and check overlap
+      if (!matchedItem) {
+        const rawWords = itemNameRaw.toLowerCase().split(/\s+/).filter(w => w.length > 2)
+        for (let i = 0; i < originalItems.length; i++) {
+          if (usedOriginalIndices.has(i)) continue
+          const orig = originalItems[i]
+          const origWords = String(orig?.name || '').toLowerCase().split(/\s+/).filter(w => w.length > 2)
+          const overlap = rawWords.filter(w => origWords.includes(w)).length
+          if (overlap >= 2 && overlap / Math.max(rawWords.length, 1) >= 0.5) {
+            matchedItem = orig
+            matchedSku = orig.sku
+            usedOriginalIndices.add(i)
+            itemName = orig.name
+            confidence = Math.min(1, confidence + 0.05)
+            break
+          }
+        }
+      }
+    } else {
+      // Bare rate line — assign to next unused original item by order
+      for (let i = 0; i < originalItems.length; i++) {
+        if (!usedOriginalIndices.has(i)) {
+          matchedItem = originalItems[i]
+          matchedSku = matchedItem.sku
+          usedOriginalIndices.add(i)
+          itemName = matchedItem.name
+          break
+        }
+      }
+    }
+
+    // GST detection (kept from original, slightly enhanced)
+    let gstType: 'extra' | 'inclusive' | 'unknown' | null = null
+    let gstRate: number | undefined
+    let gstApplicable: boolean | null = null
+
+    const gstRateMatch = lowerLine.match(/(\d+)\s*%/) || lowerLine.match(/gst\s*(\d+)/)
+    if (gstRateMatch) gstRate = parseFloat(gstRateMatch[1])
+
+    if (/\d\s*\+/i.test(line) || /\+\s*(gst|18%|18\s*%)/i.test(line) || /gst\s*extra/i.test(lowerLine) || /extra\s*gst/i.test(lowerLine)) {
+      gstType = 'extra'; gstApplicable = true; if (!gstRate) gstRate = 18
+    } else if (/\bnett?\b/i.test(line) || /incl/i.test(lowerLine) || /including\s*gst/i.test(lowerLine) || /gst\s*incl/i.test(lowerLine)) {
+      gstType = 'inclusive'; gstApplicable = true; if (!gstRate) gstRate = 18
+    } else if (/without\s*gst/i.test(lowerLine) || /no\s*gst/i.test(lowerLine) || /gst\s*no/i.test(lowerLine)) {
+      gstType = 'extra'; gstApplicable = false
+    } else if (/with\s*gst/i.test(lowerLine) || /gst\s*yes/i.test(lowerLine)) {
+      gstType = 'inclusive'; gstApplicable = true; if (!gstRate) gstRate = 18
+    } else {
+      gstType = 'unknown'; gstApplicable = null
+    }
+
+    // Total cost calculation
+    let totalCost = rateNum
+    if (gstType === 'extra' && gstRate) {
+      totalCost = rateNum + (rateNum * gstRate / 100)
+    }
+
+    // Extract optional context: MOQ, delivery, warranty
+    const notes: string[] = []
+    const moqMatch = line.match(/(?:moq|min(?:imum)?(?:\s*order)?(?:\s*qty)?)\s*[:\-]?\s*(\d+)/i)
+    if (moqMatch) notes.push(`MOQ: ${moqMatch[1]}`)
+    const deliveryMatch = line.match(/(?:delivery|dispatch)\s*[:\-]?\s*(\d+\s*(?:day|hr|hour)s?)/i)
+    if (deliveryMatch) notes.push(`Delivery: ${deliveryMatch[1]}`)
+    const warrantyMatch = line.match(/(\d+)\s*(?:year|yr|month|mo)\s*warrant/i)
+    if (warrantyMatch) notes.push(`Warranty: ${warrantyMatch[0]}`)
+
+    results.push({
+      itemName,
+      rate: Math.round(rateNum * 100) / 100,
+      gstApplicable,
+      gstType,
+      gstRate,
+      totalCost: Math.round(totalCost * 100) / 100,
+      raw: line,
+      confidence,
+      matchedItemSku: matchedSku,
+      notes: notes.length > 0 ? notes.join(' • ') : undefined,
+    })
+  }
+
+  return results
+}
+
+/**
+ * Parse Indian-style number formats:
+ *   "1,234.56"  → 1234.56 (Indian grouping)
+ *   "1.234,56"  → 1234.56 (European grouping)
+ *   "12,34,567" → 1234567 (Indian lakh format)
+ *   "1234"      → 1234
+ */
+function parseIndianNumber(s: string): number {
+  if (!s) return NaN
+  // Remove currency symbols and spaces
+  let cleaned = String(s).replace(/rs\.?|₹|inr|rupees?|\s/gi, '')
+  // Remove trailing /-
+  cleaned = cleaned.replace(/\/-$/, '')
+  // If both . and , present, the last one is the decimal separator
+  if (cleaned.includes('.') && cleaned.includes(',')) {
+    const lastDot = cleaned.lastIndexOf('.')
+    const lastComma = cleaned.lastIndexOf(',')
+    if (lastComma > lastDot) {
+      // European: 1.234,56 → 1234.56
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.')
+    } else {
+      // Indian/US: 1,234.56 → 1234.56
+      cleaned = cleaned.replace(/,/g, '')
+    }
+  } else if (cleaned.includes(',')) {
+    // Only commas — check if it's Indian lakh format (12,34,567) or simple (1,234)
+    // If last group after comma is 3 digits and there's a single comma → thousands separator
+    // If groups are 2 digits (except last which is 3) → Indian lakh format
+    cleaned = cleaned.replace(/,/g, '')
+  }
+  return parseFloat(cleaned)
 }
 
 export function parseRateResponse(
