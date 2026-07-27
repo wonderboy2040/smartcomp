@@ -6,19 +6,41 @@
  * the phone app recognises when scanning via:
  *   WhatsApp → Settings → Linked Devices → Link a Device
  *
- * Flow:
- *   1. POST /api/whatsapp/qr-login → starts Baileys, returns real QR
- *   2. User scans QR with phone → Baileys 'connection.update' fires with 'open'
- *   3. GET /api/whatsapp/qr-status → returns 'connected' when Baileys is open
- *   4. Incoming messages are captured for supplier rate auto-parsing
+ * This module uses a custom IN-MEMORY auth state (no file I/O) so it
+ * works in serverless/container environments where the filesystem is
+ * read-only or ephemeral.
  *
- * The connection persists in the Node.js process (module-level singleton).
- * On disconnect/reconnect, Baileys restores the session from stored credentials.
+ * IMPORTANT: Baileys maintains a persistent WebSocket connection to
+ * WhatsApp servers. This only works in a long-lived Node.js process
+ * (next dev / next start / Electron). It will NOT work on Vercel
+ * serverless functions (they freeze between requests).
+ *
+ * For production deployment, run this app on a VPS, Render, Railway,
+ * or as an Electron desktop app — NOT on Vercel/Netlify serverless.
  */
 
-import makeWASocket, { useMultiFileAuthState, DisconnectReason, type WASocket } from '@whiskeysockets/baileys'
+import makeWASocket, {
+  useMultiFileAuthState,
+  DisconnectReason,
+  type WASocket,
+  type AuthenticationState,
+} from '@whiskeysockets/baileys'
 import QRCode from 'qrcode'
 import { Boom } from '@hapi/boom'
+import fs from 'node:fs'
+import path from 'node:path'
+
+// ===== Logger (minimal, no Pino dependency) =====
+const logger = {
+  level: 'silent',
+  info: () => {},
+  debug: () => {},
+  warn: () => {},
+  error: () => {},
+  trace: () => {},
+  fatal: () => {},
+  child: () => logger,
+}
 
 // ===== Connection State =====
 type ConnectionState = 'disconnected' | 'connecting' | 'waiting_qr' | 'connected' | 'error'
@@ -31,9 +53,9 @@ interface BaileysSession {
   connectedAt: number | null
   error: string | null
   socket: WASocket | null
+  lastEvent: string | null
 }
 
-// Module-level singleton — persists across API calls in the same Node process
 let session: BaileysSession = {
   state: 'disconnected',
   qrCode: null,
@@ -42,19 +64,19 @@ let session: BaileysSession = {
   connectedAt: null,
   error: null,
   socket: null,
+  lastEvent: null,
 }
 
-// Callbacks for state changes (used by polling endpoints)
-type StateListener = (state: BaileysSession) => void
-const listeners = new Set<StateListener>()
+const listeners = new Set<(s: BaileysSession) => void>()
 
 function notifyListeners() {
+  const snapshot = { ...session }
   for (const fn of listeners) {
-    try { fn({ ...session }) } catch {}
+    try { fn(snapshot) } catch {}
   }
 }
 
-export function onStateChange(fn: StateListener): () => void {
+export function onStateChange(fn: (s: BaileysSession) => void): () => void {
   listeners.add(fn)
   return () => { listeners.delete(fn) }
 }
@@ -63,21 +85,40 @@ export function getState(): BaileysSession {
   return { ...session }
 }
 
+// ===== File-based Auth State (persists session across restarts) =====
+// Creates a .wa-auth directory in the project root. Baileys stores
+// session credentials here so you don't need to re-scan QR on every
+// restart. Works on local dev, VPS, Render, Railway, Electron.
+async function useFileAuthState(): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
+  const authDir = path.join(process.cwd(), '.wa-auth')
+  try {
+    if (!fs.existsSync(authDir)) {
+      fs.mkdirSync(authDir, { recursive: true })
+    }
+  } catch (e) {
+    // Directory creation failed — try /tmp as fallback
+    const tmpDir = '/tmp/wa-auth-smartcomp'
+    try {
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+      return await useMultiFileAuthState(tmpDir)
+    } catch {
+      throw new Error('Cannot create auth directory. Check filesystem permissions.')
+    }
+  }
+  return await useMultiFileAuthState(authDir)
+}
+
 /**
  * Start the Baileys WhatsApp connection.
  * Generates a real QR code that the phone app can scan.
- *
- * Uses an in-memory auth state (no file persistence) since this is a
- * serverless-ish environment. For production with persistent storage,
- * swap to useMultiFileAuthState with a write directory.
  */
-export async function startWhatsAppConnection(): Promise<{ qrCode: string | null; state: ConnectionState }> {
+export async function startWhatsAppConnection(): Promise<{ qrCode: string | null; state: ConnectionState; error?: string }> {
   // If already connected, return current state
-  if (session.state === 'connected') {
+  if (session.state === 'connected' && session.socket) {
     return { qrCode: null, state: 'connected' }
   }
 
-  // If already connecting/waiting, return current QR
+  // If already connecting/waiting for QR, return current QR
   if (session.state === 'connecting' || session.state === 'waiting_qr') {
     return { qrCode: session.qrCode, state: session.state }
   }
@@ -91,20 +132,24 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
   session.state = 'connecting'
   session.error = null
   session.qrCode = null
+  session.lastEvent = 'starting'
   notifyListeners()
 
   try {
-    // Use in-memory auth state (resets on server restart — for production,
-    // use useMultiFileAuthState with a persistent directory)
-    const { state: authState, saveCreds } = await makeInMemoryAuthState()
+    // Use file-based auth (persists session across restarts)
+    const { state: authState, saveCreds } = await useFileAuthState()
+    session.lastEvent = 'auth:ready'
 
     const sock = makeWASocket({
       auth: authState,
-      printQRInTerminal: false, // we render QR in the UI, not terminal
+      printQRInTerminal: false,
       browser: ['SmartComp', 'Chrome', '1.0.0'],
-      // Reduce reconnect spam
-      connectTimeoutMs: 20000,
+      connectTimeoutMs: 30000,
       defaultQueryTimeoutMs: 30000,
+      logger: logger as any,
+      // Reduce noise
+      markOnlineOnConnect: false,
+      retryRequestDelayMs: 2000,
     })
 
     session.socket = sock
@@ -115,25 +160,27 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
       const { connection, lastDisconnect, qr } = update
 
       if (qr) {
-        // New QR code received from Baileys
+        session.lastEvent = 'qr_received'
         try {
-          const qrDataUrl = await QRCode.toDataURL(qr, { width: 256, margin: 1 })
+          const qrDataUrl = await QRCode.toDataURL(qr, { width: 256, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
           session.qrCode = qrDataUrl
           session.qrRetry += 1
           session.state = 'waiting_qr'
           notifyListeners()
-        } catch {}
+        } catch (qrErr) {
+          session.lastEvent = 'qr_error'
+          session.error = 'Failed to generate QR image'
+        }
       }
 
       if (connection === 'open') {
+        session.lastEvent = 'connected'
         session.state = 'connected'
         session.qrCode = null
         session.connectedAt = Date.now()
-        // Get phone number from connection
         try {
           const user = sock.user
           if (user?.id) {
-            // Baileys user.id format: "91XXXXXXXXXX@s.whatsapp.net"
             session.phoneNumber = user.id.split('@')[0]
           }
         } catch {}
@@ -142,26 +189,41 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
 
       if (connection === 'close') {
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
-        // 515 = restart, 410 = logged out, 401 = unauthorized
+        session.lastEvent = `closed:${statusCode}`
+
         if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
           session.state = 'disconnected'
           session.socket = null
           session.qrCode = null
           session.phoneNumber = null
           session.connectedAt = null
+          session.error = 'Logged out from WhatsApp'
           notifyListeners()
         } else if (statusCode === 515) {
           // Restart — reconnect automatically
           session.state = 'connecting'
           notifyListeners()
-          setTimeout(() => startWhatsAppConnection().catch(() => {}), 1000)
-        } else {
-          // Other close reason — allow manual reconnect
+          setTimeout(() => startWhatsAppConnection().catch(() => {}), 2000)
+        } else if (statusCode === 410) {
+          // Connection lost
           session.state = 'disconnected'
           session.socket = null
           session.qrCode = null
+          session.error = 'Connection lost. Please reconnect.'
+          notifyListeners()
+        } else {
+          // Other close reason
+          session.state = 'disconnected'
+          session.socket = null
+          session.qrCode = null
+          session.error = `Connection closed (code ${statusCode})`
           notifyListeners()
         }
+      }
+
+      if (connection === 'connecting') {
+        session.lastEvent = 'ws_connecting'
+        notifyListeners()
       }
     })
 
@@ -169,21 +231,17 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
     sock.ev.on('messages.upsert', async (messageUpdate: any) => {
       try {
         for (const msg of messageUpdate.messages || []) {
-          // Forward to webhook handler for rate parsing
-          // (The webhook route can also handle Baileys messages)
           const text = msg?.message?.conversation ||
                        msg?.message?.extendedTextMessage?.text ||
                        msg?.message?.imageMessage?.caption ||
                        ''
           if (text) {
-            // Store for the intelligence API to pick up
             capturedMessages.push({
               from: msg.key?.remoteJid || '',
               fromMe: msg.key?.fromMe || false,
               text,
               timestamp: Date.now(),
             })
-            // Keep only last 100 messages
             if (capturedMessages.length > 100) {
               capturedMessages.shift()
             }
@@ -196,8 +254,9 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
   } catch (e: any) {
     session.state = 'error'
     session.error = e?.message || 'Failed to start WhatsApp connection'
+    session.lastEvent = 'init_error'
     notifyListeners()
-    return { qrCode: null, state: 'error' }
+    return { qrCode: null, state: 'error', error: session.error ?? undefined }
   }
 }
 
@@ -216,12 +275,13 @@ export async function disconnectWhatsApp(): Promise<void> {
     connectedAt: null,
     error: null,
     socket: null,
+    lastEvent: 'disconnected',
   }
   capturedMessages.length = 0
   notifyListeners()
 }
 
-// ===== Captured Messages (for supplier rate auto-parsing) =====
+// ===== Captured Messages =====
 export interface CapturedMessage {
   from: string
   fromMe: boolean
@@ -232,14 +292,4 @@ export const capturedMessages: CapturedMessage[] = []
 
 export function getCapturedMessages(limit = 50): CapturedMessage[] {
   return capturedMessages.slice(-limit)
-}
-
-// ===== In-memory auth state (lightweight, no file I/O) =====
-async function makeInMemoryAuthState() {
-  // Dynamic import to avoid issues if baileys internal APIs change
-  const baileys = await import('@whiskeysockets/baileys')
-  // useMultiFileAuthState requires a directory; we use a memory-only approach
-  // via the internal makeInMemoryStore pattern
-  const { state, saveCreds } = await (baileys as any).useMultiFileAuthState('/tmp/wa-auth-smartcomp')
-  return { state, saveCreds }
 }

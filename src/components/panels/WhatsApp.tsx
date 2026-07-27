@@ -1448,14 +1448,16 @@ function QrLoginView() {
           } catch {}
         }, 2000)
       } else if (data.error) {
-        throw new Error(data.error)
+        throw new Error(data.hint ? `${data.error}\n\n💡 ${data.hint}` : data.error)
+      } else if (data.status === 'timeout') {
+        throw new Error(data.hint ? `${data.error}\n\n💡 ${data.hint}` : 'QR generation timed out. Make sure you are running the app locally (npm run dev) or on a VPS — NOT on Vercel serverless.')
       } else {
         throw new Error('QR not generated. Please try again.')
       }
     } catch (e: any) {
       setStatus('error')
       setErrorMsg(e.message)
-      toast({ title: 'Failed to generate QR', description: e.message, variant: 'destructive' })
+      toast({ title: 'Failed to generate QR', description: e.message.split('\n')[0], variant: 'destructive', duration: 6000 })
     }
   }
 
@@ -1581,7 +1583,7 @@ function QrLoginView() {
             </div>
             <div>
               <h3 className="font-bold text-red-900 mb-1">Connection Error</h3>
-              <p className="text-sm text-red-600">{errorMsg || 'Failed to connect to WhatsApp. Please try again.'}</p>
+              <p className="text-sm text-red-600 whitespace-pre-line">{errorMsg || 'Failed to connect to WhatsApp. Please try again.'}</p>
             </div>
             <Button onClick={generateQr} className="bg-green-600 hover:bg-green-700">
               <RefreshCw className="w-4 h-4 mr-2" /> Try Again
