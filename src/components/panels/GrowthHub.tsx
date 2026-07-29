@@ -14,8 +14,8 @@ import { useFetch, apiPost } from '@/lib/api'
 import { BUSINESS_GROWTH } from '@/lib/business-growth'
 import {
   Brain, Star, Bell, TrendingUp, Users, RefreshCw, Send, Zap,
-  AlertTriangle, Package, Crown, Gift, Megaphone, ExternalLink,
-  Smartphone, Clock, CheckCircle2, Sparkles, ArrowUp, ArrowDown,
+  AlertTriangle, Package, Crown, Gift, ExternalLink,
+  Clock, CheckCircle2, Sparkles, ArrowUp, ArrowDown,
 } from 'lucide-react'
 
 type Tab = 'overview' | 'reminders' | 'reorder' | 'loyalty' | 'snapshot' | 'sla'
@@ -98,7 +98,13 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   }
 
   const g = data
-  const revenueUp = g.revenue.growthPct >= 0
+  // Defensive: ensure all nested objects exist to prevent crashes
+  const revenue = g?.revenue || { thisMonth: 0, lastMonth: 0, growthPct: 0, invoicesThisMonth: 0 }
+  const customers = g?.customers || { newThisMonth: 0, totalActive: 0, repeatCustomers: 0, repeatRate: 0, vipCount: 0, goldCount: 0, silverCount: 0 }
+  const opportunities = g?.opportunities || { winbackTargets: 0, reviewTargets: 0, overdueCount: 0 }
+  const actions = g?.actions || [{ priority: 'low', title: 'No data available', description: 'Connect Google Sheets to see insights.' }]
+  const googleReviewUrl = g?.googleReviewUrl || BUSINESS_GROWTH.googleReviewUrl
+  const revenueUp = (revenue.growthPct || 0) >= 0
 
   return (
     <div className="space-y-4">
@@ -109,12 +115,12 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Revenue (Month)</p>
-                <p className="text-base sm:text-lg font-bold text-emerald-700 truncate">{formatCurrency(g.revenue.thisMonth)}</p>
+                <p className="text-base sm:text-lg font-bold text-emerald-700 truncate">{formatCurrency(revenue.thisMonth)}</p>
               </div>
               {revenueUp ? <ArrowUp className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <ArrowDown className="w-4 h-4 text-red-600 flex-shrink-0" />}
             </div>
             <p className={`text-[10px] mt-1 ${revenueUp ? 'text-emerald-600' : 'text-red-600'}`}>
-              {revenueUp ? '↑' : '↓'} {Math.abs(g.revenue.growthPct).toFixed(1)}% vs last month ({formatCurrency(g.revenue.lastMonth)})
+              {revenueUp ? '↑' : '↓'} {Math.abs(revenue.growthPct).toFixed(1)}% vs last month ({formatCurrency(revenue.lastMonth)})
             </p>
           </CardContent>
         </Card>
@@ -124,11 +130,11 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] text-slate-500 uppercase font-medium truncate">New Customers</p>
-                <p className="text-base sm:text-lg font-bold text-blue-700 truncate">{g.customers.newThisMonth}</p>
+                <p className="text-base sm:text-lg font-bold text-blue-700 truncate">{customers.newThisMonth}</p>
               </div>
               <Users className="w-4 h-4 text-blue-600 flex-shrink-0" />
             </div>
-            <p className="text-[10px] text-slate-500 mt-1">{g.customers.totalActive} total active</p>
+            <p className="text-[10px] text-slate-500 mt-1">{customers.totalActive} total active</p>
           </CardContent>
         </Card>
 
@@ -137,11 +143,11 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Repeat Rate</p>
-                <p className="text-base sm:text-lg font-bold text-violet-700 truncate">{g.customers.repeatRate.toFixed(1)}%</p>
+                <p className="text-base sm:text-lg font-bold text-violet-700 truncate">{customers.repeatRate.toFixed(1)}%</p>
               </div>
               <RefreshCw className="w-4 h-4 text-violet-600 flex-shrink-0" />
             </div>
-            <p className="text-[10px] text-slate-500 mt-1">{g.customers.repeatCustomers} repeat / {g.customers.totalActive} total</p>
+            <p className="text-[10px] text-slate-500 mt-1">{customers.repeatCustomers} repeat / {customers.totalActive} total</p>
           </CardContent>
         </Card>
 
@@ -150,11 +156,11 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="flex items-center justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] text-slate-500 uppercase font-medium truncate">VIP Customers</p>
-                <p className="text-base sm:text-lg font-bold text-amber-700 truncate">{g.customers.vipCount}</p>
+                <p className="text-base sm:text-lg font-bold text-amber-700 truncate">{customers.vipCount}</p>
               </div>
               <Crown className="w-4 h-4 text-amber-600 flex-shrink-0" />
             </div>
-            <p className="text-[10px] text-slate-500 mt-1">{g.customers.goldCount} Gold • {g.customers.silverCount} Silver</p>
+            <p className="text-[10px] text-slate-500 mt-1">{customers.goldCount} Gold • {customers.silverCount} Silver</p>
           </CardContent>
         </Card>
       </div>
@@ -168,11 +174,11 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-amber-900">Google Review Engine</p>
             <p className="text-[11px] text-amber-700">
-              Auto-embedded in PDF footers + WhatsApp messages. {g.opportunities.reviewTargets} customer(s) ready for review request this week.
+              Auto-embedded in PDF footers + WhatsApp messages. {opportunities.reviewTargets} customer(s) ready for review request this week.
             </p>
           </div>
           <a
-            href={g.googleReviewUrl}
+            href={googleReviewUrl}
             target="_blank"
             rel="noreferrer"
             className="flex items-center gap-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold"
@@ -194,7 +200,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           <CardDescription>AI-prioritised actions to grow your business</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {g.actions.map((a: any, i: number) => (
+          {actions.map((a: any, i: number) => (
             <div
               key={i}
               className={`p-3 rounded-lg border flex items-start gap-3 ${
@@ -250,7 +256,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center"><Bell className="w-5 h-5 text-red-600" /></div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-500 uppercase">Overdue Invoices</p>
-              <p className="text-base font-bold text-red-700">{g.opportunities.overdueCount}</p>
+              <p className="text-base font-bold text-red-700">{opportunities.overdueCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -259,7 +265,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center"><Star className="w-5 h-5 text-amber-600" /></div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-500 uppercase">Review Requests</p>
-              <p className="text-base font-bold text-amber-700">{g.opportunities.reviewTargets}</p>
+              <p className="text-base font-bold text-amber-700">{opportunities.reviewTargets}</p>
             </div>
           </CardContent>
         </Card>
@@ -268,7 +274,7 @@ function OverviewTab({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
             <div className="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center"><Gift className="w-5 h-5 text-violet-600" /></div>
             <div className="min-w-0">
               <p className="text-[10px] text-slate-500 uppercase">Win-Back Targets</p>
-              <p className="text-base font-bold text-violet-700">{g.opportunities.winbackTargets}</p>
+              <p className="text-base font-bold text-violet-700">{opportunities.winbackTargets}</p>
             </div>
           </CardContent>
         </Card>
@@ -603,6 +609,15 @@ function SnapshotTab() {
   const [sending, setSending] = useState(false)
 
   const snapshot = data?.snapshot
+  // Defensive: ensure nested objects exist
+  const snapSales = snapshot?.sales || { count: 0, value: 0, profit: 0 }
+  const snapPayments = snapshot?.payments || { total: 0, upi: 0, cash: 0 }
+  const snapCustomers = snapshot?.customers || { newToday: 0 }
+  const snapJobs = snapshot?.jobs || { newToday: 0, completedToday: 0, pending: 0 }
+  const snapStock = snapshot?.stock || { lowStockCount: 0 }
+  const snapOverdue = snapshot?.overdue || { count: 0, value: 0 }
+  const snapTopItem = snapshot?.topItem || null
+  const snapDate = snapshot?.date || new Date().toISOString()
   const sendWhatsApp = async () => {
     setSending(true)
     try {
@@ -632,7 +647,7 @@ function SnapshotTab() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <p className="text-[10px] text-slate-400 uppercase">Daily Snapshot</p>
-              <p className="text-lg font-bold">{new Date(snapshot.date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              <p className="text-lg font-bold">{new Date(snapDate).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
             </div>
             <Button onClick={sendWhatsApp} disabled={sending} className="bg-green-500 hover:bg-green-600 text-white">
               {sending ? <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Sending…</> : <><Send className="w-4 h-4 mr-2" /> Send WhatsApp</>}
@@ -641,55 +656,55 @@ function SnapshotTab() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white/10 rounded-lg p-2">
               <p className="text-[10px] text-slate-300">Sales</p>
-              <p className="text-base font-bold">{formatCurrency(snapshot.sales.value)}</p>
-              <p className="text-[10px] text-emerald-300">{snapshot.sales.count} invoices • Profit {formatCurrency(snapshot.sales.profit)}</p>
+              <p className="text-base font-bold">{formatCurrency(snapSales.value)}</p>
+              <p className="text-[10px] text-emerald-300">{snapSales.count} invoices • Profit {formatCurrency(snapSales.profit)}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-2">
               <p className="text-[10px] text-slate-300">Payments</p>
-              <p className="text-base font-bold">{formatCurrency(snapshot.payments.total)}</p>
-              <p className="text-[10px] text-slate-300">UPI {formatCurrency(snapshot.payments.upi)} • Cash {formatCurrency(snapshot.payments.cash)}</p>
+              <p className="text-base font-bold">{formatCurrency(snapPayments.total)}</p>
+              <p className="text-[10px] text-slate-300">UPI {formatCurrency(snapPayments.upi)} • Cash {formatCurrency(snapPayments.cash)}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-2">
               <p className="text-[10px] text-slate-300">New Customers</p>
-              <p className="text-base font-bold">{snapshot.customers.newToday}</p>
+              <p className="text-base font-bold">{snapCustomers.newToday}</p>
             </div>
             <div className="bg-white/10 rounded-lg p-2">
               <p className="text-[10px] text-slate-300">Service Jobs</p>
-              <p className="text-base font-bold">{snapshot.jobs.newToday} new</p>
-              <p className="text-[10px] text-slate-300">{snapshot.jobs.completedToday} done • {snapshot.jobs.pending} pending</p>
+              <p className="text-base font-bold">{snapJobs.newToday} new</p>
+              <p className="text-[10px] text-slate-300">{snapJobs.completedToday} done • {snapJobs.pending} pending</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {snapshot.topItem && (
+      {snapTopItem && (
         <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-white">
           <CardContent className="p-3 flex items-center gap-3">
             <div className="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center"><Star className="w-4 h-4 text-emerald-600" /></div>
             <div className="flex-1">
               <p className="text-[10px] text-slate-500 uppercase">Top Item Today</p>
-              <p className="text-sm font-bold text-slate-900">{snapshot.topItem.name}</p>
+              <p className="text-sm font-bold text-slate-900">{snapTopItem.name}</p>
             </div>
             <div className="text-right">
-              <p className="text-sm font-bold text-emerald-700">{snapshot.topItem.qty} sold</p>
-              <p className="text-[10px] text-slate-500">{formatCurrency(snapshot.topItem.revenue)}</p>
+              <p className="text-sm font-bold text-emerald-700">{snapTopItem.qty} sold</p>
+              <p className="text-[10px] text-slate-500">{formatCurrency(snapTopItem.revenue)}</p>
             </div>
           </CardContent>
         </Card>
       )}
 
       <div className="grid grid-cols-2 gap-3">
-        <Card className={`border-slate-200 ${snapshot.stock.lowStockCount > 0 ? 'ring-2 ring-red-200' : ''}`}>
+        <Card className={`border-slate-200 ${snapStock.lowStockCount > 0 ? 'ring-2 ring-red-200' : ''}`}>
           <CardContent className="p-3">
             <p className="text-[10px] text-slate-500 uppercase">Low Stock Items</p>
-            <p className="text-lg font-bold text-red-700">{snapshot.stock.lowStockCount}</p>
+            <p className="text-lg font-bold text-red-700">{snapStock.lowStockCount}</p>
           </CardContent>
         </Card>
-        <Card className={`border-slate-200 ${snapshot.overdue.count > 0 ? 'ring-2 ring-red-200' : ''}`}>
+        <Card className={`border-slate-200 ${snapOverdue.count > 0 ? 'ring-2 ring-red-200' : ''}`}>
           <CardContent className="p-3">
             <p className="text-[10px] text-slate-500 uppercase">Overdue Invoices</p>
-            <p className="text-lg font-bold text-red-700">{snapshot.overdue.count}</p>
-            <p className="text-[10px] text-slate-500">{formatCurrency(snapshot.overdue.value)}</p>
+            <p className="text-lg font-bold text-red-700">{snapOverdue.count}</p>
+            <p className="text-[10px] text-slate-500">{formatCurrency(snapOverdue.value)}</p>
           </CardContent>
         </Card>
       </div>

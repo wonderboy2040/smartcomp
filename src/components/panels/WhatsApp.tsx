@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
 import { safeJsonParse } from '@/lib/utils'
 import { buildEnquiryMessage, generateWhatsAppLink } from '@/lib/whatsapp'
@@ -22,7 +22,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import {
   MessageSquare, Send, Search, Users, Package, RefreshCw,
-  MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight,
+  MessageCircle, Check, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight,
   Brain, Zap, AlertTriangle
 } from 'lucide-react'
 
@@ -50,9 +50,9 @@ export function WhatsAppPanel() {
     tab === 'recommend' ? '/api/whatsapp/recommend?strategy=cheapest' : null,
     undefined
   )
-  // Only fetch suppliers/items when the send dialog is opened (lazy load)
-  const { data: suppliers } = useFetch<any[]>(dialogOpen ? '/api/suppliers?active=true' : null, undefined)
-  const { data: items } = useFetch<any[]>(dialogOpen ? '/api/items' : null, undefined)
+  // Always fetch suppliers/items — localStorage cache makes this instant on repeat visits
+  const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
+  const { data: items } = useFetch<any[]>('/api/items', undefined)
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: waStatus } = useFetch<any>('/api/whatsapp/status', undefined)
   const cloudApiOn = !!waStatus?.configured

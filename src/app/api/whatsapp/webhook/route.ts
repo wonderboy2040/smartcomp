@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyWebhook, parseIncomingWebhook, markMessageAsRead, isCloudApiConfigured } from '@/lib/whatsapp-cloud'
 import { listRows, updateRow, createRow } from '@/lib/sheets-client'
-import { parseRateResponse } from '@/lib/whatsapp'
+import { parseRateResponseAdvanced } from '@/lib/whatsapp'
 
 /**
  * WhatsApp Cloud API Webhook endpoint.
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
 
       if (!matching) {
         // No open enquiry, but supplier replied — create a fresh "responded" record
-        const rates = parseRateResponse(msg.text, [])
+        const rates = parseRateResponseAdvanced(msg.text, [])
         await createRow('Enquiries', {
           supplierId: String(supplier.id),
           supplierName: String(supplier.name),
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
       } catch {
         items = []
       }
-      const rates = parseRateResponse(msg.text, items)
+      const rates = parseRateResponseAdvanced(msg.text, items)
 
       // 4. Update the matching enquiry with the response + parsed rates
       await updateRow('Enquiries', String(matching.id), {
