@@ -715,7 +715,7 @@ export async function apiPut(url: string, body: any) {
 
     let entity: any = data
     if (data && typeof data === 'object' && !Array.isArray(data)) {
-      const wrapperKeys = ['job', 'invoice', 'quotation', 'customer', 'supplier', 'item', 'payment', 'expense', 'amc', 'campaign', 'serial', 'exp']
+      const wrapperKeys = ['job', 'invoice', 'quotation', 'customer', 'supplier', 'item', 'payment', 'expense', 'amc', 'campaign', 'serial', 'exp', 'enquiry']
       for (const wk of wrapperKeys) {
         if (data[wk] && typeof data[wk] === 'object' && (data[wk].id !== undefined || data[wk].jobId !== undefined)) {
           entity = data[wk]

@@ -23,12 +23,12 @@ import { formatCurrency } from '@/lib/calc'
 import {
   MessageSquare, Send, Search, Users, Package, RefreshCw,
   MessageCircle, Check, FileText, ExternalLink, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight,
-  Brain, QrCode, Smartphone, Zap, AlertTriangle
+  Brain, Zap, AlertTriangle
 } from 'lucide-react'
 
 export function WhatsAppPanel() {
   const { toast } = useToast()
-  const [tab, setTab] = useState<'enquiries' | 'comparison' | 'recommend' | 'intelligence' | 'qrlogin' | 'send'>('enquiries')
+  const [tab, setTab] = useState<'enquiries' | 'comparison' | 'recommend' | 'intelligence' | 'send'>('enquiries')
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [responseDialog, setResponseDialog] = useState<any | null>(null)
@@ -41,7 +41,7 @@ export function WhatsAppPanel() {
   const [linksDialog, setLinksDialog] = useState<{ suppliers: any[]; message: string } | null>(null)
   const [sentTracker, setSentTracker] = useState<Set<string>>(new Set())
 
-  const { data: enquiries, loading, refetch } = useFetch<any[]>('/api/enquiries?limit=100', undefined)
+  const { data: enquiries, loading, refetch } = useFetch<any[]>('/api/enquiries?limit=200', undefined)
   const { data: rateComparison, loading: comparisonLoading } = useFetch<any>(
     tab === 'comparison' ? '/api/whatsapp/rates?days=90' : null,
     undefined
@@ -50,8 +50,9 @@ export function WhatsAppPanel() {
     tab === 'recommend' ? '/api/whatsapp/recommend?strategy=cheapest' : null,
     undefined
   )
-  const { data: suppliers } = useFetch<any[]>('/api/suppliers?active=true', undefined)
-  const { data: items } = useFetch<any[]>('/api/items', undefined)
+  // Only fetch suppliers/items when the send dialog is opened (lazy load)
+  const { data: suppliers } = useFetch<any[]>(dialogOpen ? '/api/suppliers?active=true' : null, undefined)
+  const { data: items } = useFetch<any[]>(dialogOpen ? '/api/items' : null, undefined)
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: waStatus } = useFetch<any>('/api/whatsapp/status', undefined)
   const cloudApiOn = !!waStatus?.configured
@@ -213,8 +214,11 @@ export function WhatsAppPanel() {
         action: 'respond',
         response: responseText,
       })
-      toast({ title: 'Response saved', description: `${res.parsedRates?.length || 0} rates detected` })
-      setParsedRates(res.parsedRates || [])
+      const rates = res.parsedRates || []
+      toast({ title: 'Response saved', description: `${rates.length} rates detected` })
+      setParsedRates(rates)
+      // Invalidate enquiries cache so the list refreshes with updated ratesJson
+      invalidate('/api/enquiries')
       refetch()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -225,8 +229,12 @@ export function WhatsAppPanel() {
     if (!confirm('Apply these rates to your dashboard items? This will update cost prices and GST settings.')) return
     try {
       const res = await apiPut(`/api/enquiries/${responseDialog.id}`, { action: 'applyRates' })
-      toast({ title: 'Rates applied', description: `${res.appliedCount} items updated` })
+      toast({ title: 'Rates applied ✓', description: `${res.appliedCount} items updated — cost prices refreshed` })
       setResponseDialog(null)
+      // Invalidate items cache so Stock panel shows updated cost prices instantly
+      invalidate('/api/items')
+      // Also invalidate dashboard for profit recalculation
+      invalidate('/api/dashboard')
       refetch()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -311,7 +319,6 @@ export function WhatsAppPanel() {
           { id: 'comparison', label: 'Rate Comparison', icon: Users },
           { id: 'recommend', label: 'Best Suppliers', icon: TrendingUp },
           { id: 'intelligence', label: 'AI Intelligence', icon: Brain },
-          { id: 'qrlogin', label: 'QR Login', icon: QrCode },
         ].map((t) => (
           <button
             key={t.id}
@@ -402,7 +409,10 @@ export function WhatsAppPanel() {
       {/* Mobile cards */}
       <div className="sm:hidden space-y-3">
         {loading ? (
-          <Card><CardContent className="text-center py-8 text-slate-500">Loading...</CardContent></Card>
+          <Card><CardContent className="text-center py-8 text-slate-500">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-400" />
+            Loading enquiries…
+          </CardContent></Card>
         ) : filteredEnquiries.length === 0 ? (
           <Card><CardContent className="text-center py-8 text-slate-500">
             <MessageSquare className="w-12 h-12 mx-auto mb-2 text-slate-300" />
@@ -466,7 +476,10 @@ export function WhatsAppPanel() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">Loading...</TableCell>
+                    <TableCell colSpan={6} className="text-center py-8 text-slate-500">
+                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-slate-400" />
+                      Loading enquiries…
+                    </TableCell>
                   </TableRow>
                 ) : filteredEnquiries.length === 0 ? (
                   <TableRow>
@@ -545,10 +558,6 @@ export function WhatsAppPanel() {
 
       {tab === 'intelligence' && (
         <IntelligenceView />
-      )}
-
-      {tab === 'qrlogin' && (
-        <QrLoginView />
       )}
 
       {/* Send enquiry dialog - stable key to prevent remount/flicker */}
@@ -1397,228 +1406,3 @@ function IntelligenceView() {
   )
 }
 
-// ===== QR LOGIN VIEW (Baileys — Real WhatsApp Web) =====
-// Uses Baileys library to create a REAL WhatsApp Web session.
-// The QR code is a genuine WhatsApp pairing code — scan it with:
-//   WhatsApp → Settings → Linked Devices → Link a Device
-// When scanned, the phone links to this "device" and all incoming
-// supplier rate replies are auto-captured and parsed.
-function QrLoginView() {
-  const { toast } = useToast()
-  const [status, setStatus] = useState<'idle' | 'loading' | 'waiting_qr' | 'connected' | 'error'>('idle')
-  const [qrCode, setQrCode] = useState<string | null>(null)
-  const [phoneNumber, setPhoneNumber] = useState<string | null>(null)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const stopPolling = () => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current)
-      pollTimerRef.current = null
-    }
-  }
-
-  // Check initial connection status on mount
-  useEffect(() => {
-    fetch('/api/whatsapp/qr-status')
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === 'connected') {
-          setStatus('connected')
-          setPhoneNumber(data.phoneNumber || null)
-        }
-      })
-      .catch(() => {})
-    return () => { stopPolling() }
-  }, [])
-
-  const generateQr = async () => {
-    setStatus('loading')
-    setQrCode(null)
-    setErrorMsg(null)
-    stopPolling()
-    try {
-      const res = await fetch('/api/whatsapp/qr-login', { method: 'POST' })
-      const data = await res.json()
-
-      if (data.status === 'connected') {
-        setStatus('connected')
-        setPhoneNumber(data.phoneNumber || null)
-        toast({ title: 'WhatsApp Already Connected ✓', duration: 3000 })
-        return
-      }
-
-      if (data.error) throw new Error(data.error)
-
-      if (data.qrCode) {
-        setQrCode(data.qrCode)
-        setStatus('waiting_qr')
-        // Poll for connection status every 2s
-        pollTimerRef.current = setInterval(async () => {
-          try {
-            const sr = await fetch('/api/whatsapp/qr-status')
-            const sd = await sr.json()
-            if (sd.status === 'connected') {
-              setStatus('connected')
-              setPhoneNumber(sd.phoneNumber || null)
-              setQrCode(null)
-              stopPolling()
-              toast({ title: 'WhatsApp Connected ✓', description: sd.phoneNumber ? `Phone: ${sd.phoneNumber}` : 'Ready to auto-capture rates', duration: 5000 })
-            } else if (sd.status === 'error' || sd.status === 'disconnected') {
-              setStatus('error')
-              setErrorMsg(sd.error || 'Connection lost')
-              setQrCode(null)
-              stopPolling()
-            } else if (sd.qrCode && sd.qrCode !== qrCode) {
-              // QR refreshed (Baileys generates new QR every ~20s)
-              setQrCode(sd.qrCode)
-            }
-          } catch {}
-        }, 2000)
-      } else if (data.error) {
-        throw new Error(data.hint ? `${data.error}\n\n💡 ${data.hint}` : data.error)
-      } else if (data.status === 'timeout') {
-        throw new Error(data.hint ? `${data.error}\n\n💡 ${data.hint}` : 'QR generation timed out. Make sure you are running the app locally (npm run dev) or on a VPS — NOT on Vercel serverless.')
-      } else {
-        throw new Error('QR not generated. Please try again.')
-      }
-    } catch (e: any) {
-      setStatus('error')
-      setErrorMsg(e.message)
-      toast({ title: 'Failed to generate QR', description: e.message.split('\n')[0], variant: 'destructive', duration: 6000 })
-    }
-  }
-
-  const logout = async () => {
-    try {
-      await fetch('/api/whatsapp/qr-logout', { method: 'POST' })
-    } catch {}
-    setStatus('idle')
-    setQrCode(null)
-    setPhoneNumber(null)
-    setErrorMsg(null)
-    stopPolling()
-    toast({ title: 'Disconnected from WhatsApp', duration: 2500 })
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card className="border-green-200 bg-gradient-to-br from-green-50 via-white to-emerald-50">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-green-600 rounded-xl flex items-center justify-center flex-shrink-0">
-              <QrCode className="w-6 h-6 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                WhatsApp Web Login
-                <Badge className="bg-green-100 text-green-700 text-[10px]">REAL DEVICE</Badge>
-              </h3>
-              <p className="text-[11px] text-slate-600">Scan with WhatsApp → Settings → Linked Devices → Link a Device. Real WhatsApp Web connection — auto-captures supplier rate replies.</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {status === 'idle' && (
-        <Card className="border-slate-200">
-          <CardContent className="p-8 text-center space-y-4">
-            <div className="w-20 h-20 bg-green-100 rounded-2xl flex items-center justify-center mx-auto">
-              <QrCode className="w-10 h-10 text-green-600" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 mb-1">Connect Your WhatsApp</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">Generate a REAL WhatsApp Web QR code. Scan it with your phone to link this device and auto-capture supplier rate replies.</p>
-            </div>
-            <Button onClick={generateQr} size="lg" className="bg-green-600 hover:bg-green-700">
-              <QrCode className="w-5 h-5 mr-2" /> Generate WhatsApp QR
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {status === 'loading' && (
-        <Card className="border-slate-200">
-          <CardContent className="p-8 text-center">
-            <RefreshCw className="w-10 h-10 text-green-600 animate-spin mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-700">Connecting to WhatsApp servers…</p>
-            <p className="text-xs text-slate-400 mt-1">Generating real WhatsApp Web QR code</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {status === 'waiting_qr' && qrCode && (
-        <Card className="border-slate-200">
-          <CardContent className="p-6 space-y-4">
-            <div className="text-center">
-              <div className="inline-block p-4 bg-white border-4 border-green-200 rounded-2xl shadow-sm">
-                <img
-                  src={qrCode}
-                  alt="WhatsApp Web QR Code"
-                  className="w-52 h-52"
-                />
-              </div>
-              <p className="text-sm font-bold text-slate-900 mt-4">Scan with WhatsApp on your phone</p>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3 text-left max-w-xs mx-auto">
-                <p className="text-xs font-bold text-green-900 mb-1">📱 How to scan:</p>
-                <ol className="text-[11px] text-green-700 space-y-0.5 ml-4 list-decimal">
-                  <li>Open WhatsApp on your phone</li>
-                  <li>Tap Settings (⚙️) → Linked Devices</li>
-                  <li>Tap "Link a Device"</li>
-                  <li>Point camera at the QR code above</li>
-                </ol>
-              </div>
-              <p className="text-[10px] text-amber-600 mt-2">⏱ QR refreshes automatically every 20 seconds if not scanned</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {status === 'connected' && (
-        <Card className="border-green-300 bg-gradient-to-br from-green-50 to-emerald-50">
-          <CardContent className="p-6 text-center space-y-4">
-            <div className="w-20 h-20 bg-green-500 rounded-2xl flex items-center justify-center mx-auto">
-              <Check className="w-10 h-10 text-white" />
-            </div>
-            <div>
-              <h3 className="font-bold text-green-900 text-lg mb-1">✓ WhatsApp Connected</h3>
-              <p className="text-sm text-green-700">Your WhatsApp is linked as a device. Supplier rate replies will now be auto-captured and analyzed.</p>
-              {phoneNumber && <p className="text-xs text-green-600 mt-2 font-mono">Connected: +{phoneNumber}</p>}
-            </div>
-            <div className="bg-white/60 border border-green-200 rounded-lg p-3 text-left">
-              <p className="text-xs font-bold text-green-900 mb-1">🤖 Superintelligence Active</p>
-              <ul className="text-[11px] text-green-700 space-y-0.5 ml-4 list-disc">
-                <li>Auto-detects supplier replies in incoming WhatsApp messages</li>
-                <li>Extracts rates, GST type (+ = extra, nett = inclusive), MOQ, delivery</li>
-                <li>Handles @ format: "Mouse @75+" = 75 + 18% GST extra</li>
-                <li>Flags out-of-stock items (@NO, OOS) instantly</li>
-                <li>Compares rates across all suppliers per item</li>
-                <li>Recommends cheapest supplier with confidence score</li>
-              </ul>
-            </div>
-            <Button onClick={logout} variant="outline" className="border-red-300 text-red-700 hover:bg-red-50">
-              Disconnect WhatsApp
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {status === 'error' && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-6 text-center space-y-4">
-            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
-            </div>
-            <div>
-              <h3 className="font-bold text-red-900 mb-1">Connection Error</h3>
-              <p className="text-sm text-red-600 whitespace-pre-line">{errorMsg || 'Failed to connect to WhatsApp. Please try again.'}</p>
-            </div>
-            <Button onClick={generateQr} className="bg-green-600 hover:bg-green-700">
-              <RefreshCw className="w-4 h-4 mr-2" /> Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
