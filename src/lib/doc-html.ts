@@ -301,8 +301,9 @@ export async function generateInvoiceHtml(
   const sameState = !shopState || !custState || shopState === custState
 
   // Build items table rows
-  // For non-GST invoices, hide HSN, Taxable, GST columns.
-  const itemsRows = isNonGst
+  // For non-GST invoices AND service invoices, hide HSN, Taxable, GST columns
+  // (service invoices are labour-only and don't show tax breakdown per user request).
+  const itemsRows = (isNonGst || isService)
     ? data.calc.items
         .map(
           (item, i) => `
@@ -335,10 +336,12 @@ export async function generateInvoiceHtml(
         )
         .join('')
 
-  // HSN summary (only if 2-6 distinct HSN codes AND GST mode)
-  const hsnSummary = isNonGst ? [] : calculateHSNSummary(data.calc.items)
+  // HSN summary (only if 2-6 distinct HSN codes AND GST mode AND NOT a service invoice).
+  // Service invoices intentionally omit GST details per user request — they
+  // are labour-only repair documents without HSN classification.
+  const hsnSummary = (isNonGst || isService) ? [] : calculateHSNSummary(data.calc.items)
   const hsnBlock =
-    !isNonGst && hsnSummary.length > 1 && hsnSummary.length <= 6
+    !isNonGst && !isService && hsnSummary.length > 1 && hsnSummary.length <= 6
       ? `
       <div class="hsn-block">
         <h3>HSN/SAC GST SUMMARY</h3>
@@ -387,7 +390,9 @@ export async function generateInvoiceHtml(
       `<tr class="discount"><td>Discount</td><td class="right">- ${formatCurrency(data.calc.discount)}</td></tr>`,
     )
   }
-  if (!isNonGst && data.calc.gstAmount > 0) {
+  // Skip GST breakdown rows for non-GST mode AND for service invoices (per
+  // user request — service invoices are labour-only and don't show tax split)
+  if (!isNonGst && !isService && data.calc.gstAmount > 0) {
     if (sameState) {
       const rate = (data.calc.items[0]?.gstRate || 18) / 2
       totalsRows.push(
@@ -440,12 +445,21 @@ export async function generateInvoiceHtml(
     )
   }
 
-  // UPI QR code (optional, server-side via qrcode lib) - only when unpaid
+  // UPI QR code (server-side via qrcode lib).
+  // For regular invoices: only show when unpaid (uses amountDue = balance to pay).
+  // For service invoices: ALWAYS show, using grandTotal (the total amount of the
+  // service job — the customer can pay any portion via UPI and the shop tracks
+  // the rest manually). Per user request "Invoice ka Total Amount ka QR Add karo".
   let qrImg = ''
   const isPaidDoc = (isInvoice || isService) && ((Number(data.amountDue) || 0) <= 0 || data.paymentStatus === 'paid')
-  if (data.shop.upiId && !isPaidDoc) {
-    const qrAmount = (isInvoice || isService) ? Number(data.amountDue) || 0 : data.calc.grandTotal
-    if (qrAmount > 0) {
+  if (data.shop.upiId) {
+    // Service invoices always get a QR for grandTotal; regular invoices only
+    // when there's an unpaid balance (uses amountDue).
+    const qrAmount = isService
+      ? Number(data.calc.grandTotal) || 0
+      : (isInvoice ? Number(data.amountDue) || 0 : data.calc.grandTotal)
+    // For regular invoices, skip QR when paid. For service invoices, always show.
+    if (qrAmount > 0 && (isService || !isPaidDoc)) {
       try {
         const upiLink = `upi://pay?pa=${encodeURIComponent(data.shop.upiId)}&pn=${encodeURIComponent(data.shop.name || 'Shop')}&am=${qrAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(data.number || '')}`
         qrImg = await QRCode.toDataURL(upiLink, { width: 120, margin: 1 })
@@ -491,6 +505,11 @@ export async function generateInvoiceHtml(
     : `<div class="info-block"><h4>Thank You</h4><div>Thank you for your business!<br>Warranty as per manufacturer.</div></div>`
 
   // QR block
+  // Display amount: for service invoices → grandTotal; for regular invoices →
+  // amountDue (balance to pay); for quotations → grandTotal.
+  const qrDisplayAmount = isService
+    ? Number(data.calc.grandTotal) || 0
+    : (isInvoice ? Number(data.amountDue) || 0 : data.calc.grandTotal)
   const qrBlock = qrImg
     ? `
       <div class="info-block qr-block">
@@ -498,7 +517,7 @@ export async function generateInvoiceHtml(
         <div class="qr-row">
           <img src="${qrImg}" alt="UPI QR" class="qr-img" />
           <div class="qr-text">
-            <div class="qr-amt">Rs. ${(isInvoice ? Number(data.amountDue) || 0 : data.calc.grandTotal).toFixed(2)}</div>
+            <div class="qr-amt">Rs. ${qrDisplayAmount.toFixed(2)}</div>
             <div class="qr-upi">${escapeHtml(data.shop.upiId || '')}</div>
             <div class="qr-via">via UPI</div>
           </div>
@@ -1111,8 +1130,8 @@ export async function generateInvoiceHtml(
         <div class="cname">${escapeHtml(data.customer.name || 'Walk-in Customer')}</div>
         ${data.customer.address ? `<div class="cline">${escapeHtml(data.customer.address)}</div>` : ''}
         ${data.customer.phone ? `<div class="cline">Mobile: ${escapeHtml(data.customer.phone)}</div>` : ''}
-        ${data.customer.gstNumber ? `<div class="cline gst">GSTIN: ${escapeHtml(data.customer.gstNumber)}</div>` : ''}
-        ${data.customer.state ? `<div class="cline">State: ${escapeHtml(data.customer.state)}${custStateCode ? ` (${custStateCode})` : ''}</div>` : ''}
+        ${!isService && data.customer.gstNumber ? `<div class="cline gst">GSTIN: ${escapeHtml(data.customer.gstNumber)}</div>` : ''}
+        ${!isService && data.customer.state ? `<div class="cline">State: ${escapeHtml(data.customer.state)}${custStateCode ? ` (${custStateCode})` : ''}</div>` : ''}
       </div>
       <div class="bill-box">
         ${rightBoxContent}
@@ -1124,11 +1143,11 @@ export async function generateInvoiceHtml(
         <tr>
           <th>#</th>
           <th class="left">Item / Description (SKU)</th>
-          ${isNonGst ? '' : '<th>HSN / SAC</th>'}
+          ${(isNonGst || isService) ? '' : '<th>HSN / SAC</th>'}
           <th>Qty</th>
           <th class="right">Rate (Rs.)</th>
-          ${isNonGst ? '' : '<th class="right">Taxable (Rs.)</th>'}
-          ${isNonGst ? '' : '<th class="right">GST (Rs.)</th>'}
+          ${(isNonGst || isService) ? '' : '<th class="right">Taxable (Rs.)</th>'}
+          ${(isNonGst || isService) ? '' : '<th class="right">GST (Rs.)</th>'}
           <th class="right">Amount (Rs.)</th>
         </tr>
       </thead>
@@ -1204,13 +1223,13 @@ function buildPaymentBox(data: PdfDocData, isService: boolean): string {
     const serialNumber = (data as any).serialNumber || 'N/A'
     const problemDesc = (data as any).problemDesc || 'Repair & Maintenance'
     const serviceType = (data as any).serviceType || 'In-Shop'
-    const warrantyDays = (data as any).warrantyDays || 30
+    // NOTE: "Service Warranty: X Days" line removed per user request —
+    // warranty info now lives only in the Terms & Conditions block.
     return `
       <h3>SERVICE &amp; REPAIR DETAILS</h3>
       <div class="cline" style="font-weight:700;color:#0f172a;">Device: ${escapeHtml(brandModel)}</div>
       <div class="cline">S/N: ${escapeHtml(serialNumber)} | Type: ${escapeHtml(serviceType)}</div>
       <div class="cline">Issue: ${escapeHtml(problemDesc)}</div>
-      <div class="cline" style="color:#047857;font-weight:700;margin-top:2px;">Service Warranty: ${escapeHtml(String(warrantyDays))} Days</div>
       ${data.amountDue !== undefined
         ? `<div class="cline ${data.amountDue > 0 ? 'gst' : ''}" style="${data.amountDue > 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;'}margin-top:2px;">${data.amountDue > 0 ? `Balance Due: ${formatCurrency(data.amountDue).replace('Rs. ', '₹')}` : 'STATUS: PAID &#10003;'}</div>`
         : ''}

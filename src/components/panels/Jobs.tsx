@@ -39,6 +39,7 @@ const DEVICE_ICONS: Record<string, any> = {
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  'Device Received': 'bg-cyan-50 text-cyan-700 border-cyan-200',
   'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
   Completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Delivered: 'bg-purple-50 text-purple-700 border-purple-200',
@@ -60,7 +61,7 @@ const money = (value: any) => Math.round((Number(value) || 0) * 100) / 100
 const jobTotal = (job: any) => money(Number(job?.finalAmount) || Number(job?.estimatedAmount) || 0)
 const jobPaidTotal = (job: any) => money((Number(job?.advanceAmount) || 0) + (Number(job?.paidAmount) || 0))
 const jobBalance = (job: any) => money(Math.max(0, jobTotal(job) - jobPaidTotal(job)))
-const isActiveJob = (job: any) => job?.status === 'Pending' || job?.status === 'In Progress'
+const isActiveJob = (job: any) => job?.status === 'Pending' || job?.status === 'Device Received' || job?.status === 'In Progress'
 const jobAgeDays = (job: any) => {
   const ts = job?.createdAt ? new Date(job.createdAt).getTime() : 0
   return ts && !Number.isNaN(ts) ? Math.max(0, Math.floor((Date.now() - ts) / 86400000)) : 0
@@ -114,6 +115,7 @@ export function JobsPanel() {
     return {
       total: list.length,
       pending: list.filter((j) => j.status === 'Pending').length,
+      received: list.filter((j) => j.status === 'Device Received').length,
       progress: list.filter((j) => j.status === 'In Progress').length,
       completed: list.filter((j) => j.status === 'Completed').length,
       delivered: list.filter((j) => j.status === 'Delivered').length,
@@ -164,7 +166,7 @@ export function JobsPanel() {
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-44 h-11 bg-white"><SelectValue placeholder="All Status" /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="Pending">Pending</SelectItem><SelectItem value="In Progress">In Progress</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Delivered">Delivered</SelectItem></SelectContent>
+          <SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="Pending">Pending</SelectItem><SelectItem value="Device Received">Device Received</SelectItem><SelectItem value="In Progress">In Progress</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Delivered">Delivered</SelectItem></SelectContent>
         </Select>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
           <SelectTrigger className="w-full sm:w-40 h-11 bg-white"><SelectValue placeholder="All Priority" /></SelectTrigger>
@@ -465,7 +467,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
           )}
 
           <div className="flex flex-wrap items-end gap-2">
-            <div className="flex-1 min-w-[150px]"><Label className="text-xs font-semibold text-slate-700">Update Status</Label><Select value={status} onValueChange={setStatus}><SelectTrigger className="h-10 bg-white mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Pending">Pending</SelectItem><SelectItem value="In Progress">In Progress</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Delivered">Delivered</SelectItem></SelectContent></Select></div>
+            <div className="flex-1 min-w-[150px]"><Label className="text-xs font-semibold text-slate-700">Update Status</Label><Select value={status} onValueChange={setStatus}><SelectTrigger className="h-10 bg-white mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Pending">Pending</SelectItem><SelectItem value="Device Received">Device Received</SelectItem><SelectItem value="In Progress">In Progress</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Delivered">Delivered</SelectItem></SelectContent></Select></div>
             <Button onClick={handleUpdateStatus} disabled={saving || status === job.status} className="bg-blue-600 hover:bg-blue-700 text-white h-10">Update Status</Button>
             {job.status === 'Completed' && <Button onClick={handleDeliver} disabled={saving} className="bg-purple-600 hover:bg-purple-700 text-white h-10"><Package className="w-4 h-4 mr-1" /> Delivered</Button>}
           </div>

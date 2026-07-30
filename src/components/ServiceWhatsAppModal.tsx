@@ -13,11 +13,26 @@
  * - Modal itself has white bg in light, dark slate in dark but with proper text
  */
 
-import { useFetch } from '@/lib/api'
+import { useFetch, apiPut, invalidate } from '@/lib/api'
 import { useToast } from '@/hooks/use-toast'
 import { buildWhatsAppMessage, buildWhatsAppLink, WHATSAPP_TEMPLATES } from '@/lib/whatsapp-templates'
 import { X, MessageCircle, Clock, CheckCircle2, CreditCard, Heart, Smartphone, Wrench } from 'lucide-react'
 import { useState, useEffect } from 'react'
+
+// Map WhatsApp template type → job status to sync.
+// When the user sends a "Device Received" or "In Progress" template, the
+// job's status is also updated so the Jobs panel reflects the latest
+// communication (per user request).
+//
+// 'completed' and 'delivered' templates do NOT auto-sync status here because:
+//   - "Completed" requires the dedicated Complete Job action (which also
+//     deducts stock, computes profit, records payment, etc.)
+//   - "Delivered" requires the dedicated Deliver action
+//   - 'payment' (Payment Reminder) leaves status unchanged
+const TEMPLATE_TO_STATUS: Record<string, string> = {
+  received: 'Device Received',
+  progress: 'In Progress',
+}
 
 interface Props {
   jobId: string
@@ -82,6 +97,25 @@ export function ServiceWhatsAppModal({ jobId, onClose }: Props) {
     })
     window.open(buildWhatsAppLink(job.customerMobile, msg), '_blank')
     toast({ title: 'WhatsApp opened ✓', description: `Template: ${type}` })
+
+    // Sync job status — when the user sends a "Device Received" / "In Progress"
+    // / "Completed" / "Delivered" WhatsApp template, also update the job's
+    // status in the backend so the Jobs panel reflects the latest state.
+    // 'payment' template leaves status unchanged.
+    const newStatus = TEMPLATE_TO_STATUS[type]
+    if (newStatus && newStatus !== job.status) {
+      apiPut(`/api/jobs/${job.id}`, { action: 'updateStatus', status: newStatus })
+        .then(() => {
+          // Invalidate the jobs list cache so the panel refetches with the new status
+          invalidate('/api/jobs')
+          invalidate('/api/dashboard')
+          toast({ title: 'Job status synced ✓', description: `Status updated to: ${newStatus}` })
+        })
+        .catch((e: any) => {
+          // Don't block the WhatsApp send — just log
+          console.warn('[ServiceWhatsAppModal] Failed to sync job status:', e?.message)
+        })
+    }
     onClose()
   }
 

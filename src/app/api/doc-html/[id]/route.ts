@@ -295,7 +295,11 @@ export async function GET(
             grandTotal: jobTotal,
           },
           notes: String(job.diagnosisNotes || job.notes || `Service completed for ${job.deviceType || 'device'}. Problem: ${job.problemDesc || ''}. ${job.accessories ? `Accessories: ${job.accessories}` : ''}`),
-          terms: String(shop.termsInvoice || `${Number(job.warrantyDays) || 30} days service warranty. Parts warranty as per manufacturer. Please collect device within 30 days.`),
+          // Terms & Conditions — service invoice uses a clean default that
+          // mentions only manufacturer parts warranty + 30-day device pickup.
+          // "30 days service warranty" line intentionally removed per user
+          // request (warranty info lives only in shop settings).
+          terms: String(shop.termsInvoice || 'Parts warranty as per manufacturer. Please collect device within 30 days.'),
           amountPaid: paid,
           amountDue: Math.max(0, jobTotal - paid),
           paymentType: String(job.paymentMode || 'cash'),

@@ -3,7 +3,7 @@ import { getRow, updateRow, deleteRow, listRows, createRow, bulkUpdate, complete
 import { safeJsonParse } from '@/lib/utils'
 import { sendJobStatusNotification } from '@/lib/notifications'
 
-const VALID_STATUSES = new Set(['Pending', 'In Progress', 'Completed', 'Delivered'])
+const VALID_STATUSES = new Set(['Pending', 'Device Received', 'In Progress', 'Completed', 'Delivered'])
 
 type ServicePart = {
   name: string
