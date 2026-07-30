@@ -162,30 +162,28 @@ function HomeInner() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/config', { cache: 'no-store' })
-      .then(async (r) => {
+    // Fetch /api/config (public) to check if APPS_SCRIPT_URL is set.
+    // Then fetch /api/auth/status (public) to check if the user is authenticated.
+    // We CANNOT use document.cookie to check the smartcomp_auth cookie because
+    // it is HttpOnly (intentionally, for security — XSS can't steal it).
+    // Previous bug: code checked document.cookie.includes('smartcomp_auth')
+    // which ALWAYS returned false for HttpOnly cookies, causing every logged-in
+    // user to be bounced to /login on every page load.
+    Promise.all([
+      fetch('/api/config', { cache: 'no-store' }).then((r) => r.json().catch(() => ({ configured: false }))),
+      fetch('/api/auth/status', { cache: 'no-store' }).then((r) => r.json().catch(() => ({ authenticated: false }))),
+    ])
+      .then(([configData, authData]) => {
         if (cancelled) return
-        // If PIN is required and the user isn't authenticated, /api/config
-        // would return 401 (now it's public, so this shouldn't happen — but
-        // be defensive in case of future middleware changes). On 401 we
-        // redirect to /login instead of showing the SetupWizard, because
-        // "PIN required" is NOT the same as "Apps Script URL not configured".
-        if (r.status === 401) {
-          window.location.href = '/login'
-          return
-        }
-        const data = await r.json().catch(() => ({ configured: false }))
-        if (cancelled) return
-        setIsConfigured(!!data?.configured)
+        setIsConfigured(!!configData?.configured)
         setConfigChecked(true)
-        // If PIN is required and there's no auth cookie, the very first
-        // data fetch will bounce to /login anyway — but we can save the
-        // user a round trip by sending them there now.
-        if (data?.pinRequired && data?.configured) {
-          const hasCookie = document.cookie.includes('smartcomp_auth')
-          if (!hasCookie) {
-            window.location.href = '/login'
-          }
+        // If Apps Script is NOT configured → show SetupWizard (lets user paste URL)
+        if (!configData?.configured) return
+        // If PIN is required AND user is NOT authenticated → redirect to /login.
+        // The auth status is determined SERVER-SIDE by /api/auth/status
+        // (which checks the actual HttpOnly cookie), not by document.cookie.
+        if (configData?.pinRequired && !authData?.authenticated) {
+          window.location.href = '/login'
         }
       })
       .catch(() => {
