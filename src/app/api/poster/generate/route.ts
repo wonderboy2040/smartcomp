@@ -284,6 +284,130 @@ async function createZai() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// Direct image generation — bypasses the SDK's bare `fetch` (which has
+// no timeout and no retry, and on Render free-tier reliably fails with
+// "fetch failed" after ~10s). We do the HTTP call ourselves with:
+//   - 90s explicit timeout (image gen takes 25-40s)
+//   - 2 retries with exponential backoff
+//   - Detailed error messages that surface the ACTUAL cause (DNS, ECONNRESET,
+//     timeout, non-2xx, etc.) instead of a generic "fetch failed"
+// ──────────────────────────────────────────────────────────────────────
+
+async function generateImageDirect(opts: {
+  superPrompt: string
+  apiSize: string
+  config: ZaiConfig
+}): Promise<{ base64: string; raw: any }> {
+  const { superPrompt, apiSize, config } = opts
+  const url = `${config.baseUrl}/images/generations`
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${config.apiKey}`,
+    'X-Z-AI-From': 'Z',
+  }
+  if (config.chatId) headers['X-Chat-Id'] = config.chatId
+  if (config.userId) headers['X-User-Id'] = config.userId
+  if (config.token) headers['X-Token'] = config.token
+
+  const requestBody = {
+    prompt: superPrompt,
+    size: apiSize,
+    // Some ZAI endpoints accept user_id in body — harmless if ignored
+    user_id: config.userId,
+  }
+
+  let lastErr: any = null
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const controller = new AbortController()
+    const timeoutMs = 90000 // 90s — image gen takes 25-40s, give buffer for cold starts
+    const timeout = setTimeout(() => controller.abort(`Image generation timed out after ${timeoutMs / 1000}s`), timeoutMs)
+
+    try {
+      console.log(`[/api/poster/generate] attempt ${attempt}/3 → POST ${url} (size=${apiSize})`)
+      const startMs = Date.now()
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+        // @ts-ignore — Node 20+ fetch supports these
+        keepalive: false,
+      })
+      clearTimeout(timeout)
+      const elapsedMs = Date.now() - startMs
+      console.log(`[/api/poster/generate] attempt ${attempt} response: ${response.status} in ${elapsedMs}ms`)
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '<no body>')
+        // 4xx errors are not retryable
+        if (response.status >= 400 && response.status < 500) {
+          throw new Error(`ZAI API ${response.status}: ${errorBody.slice(0, 300)}`)
+        }
+        // 5xx — retry
+        throw new Error(`ZAI API ${response.status} (server error, will retry): ${errorBody.slice(0, 200)}`)
+      }
+
+      const result = await response.json()
+      if (!result?.data?.[0]) {
+        throw new Error('ZAI API returned 200 but no image data in response')
+      }
+
+      // SDK converts URLs to base64 — we do the same here if needed
+      const first = result.data[0]
+      if (first.base64) {
+        return { base64: first.base64, raw: result }
+      }
+      if (first.url) {
+        console.log(`[/api/poster/generate] ZAI returned URL, downloading: ${first.url.slice(0, 80)}…`)
+        const imgRes = await fetch(first.url, { signal: controller.signal })
+        if (!imgRes.ok) throw new Error(`Failed to download generated image (${imgRes.status})`)
+        const arrayBuffer = await imgRes.arrayBuffer()
+        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        return { base64, raw: result }
+      }
+      throw new Error('ZAI API response had neither base64 nor url in data[0]')
+    } catch (e: any) {
+      clearTimeout(timeout)
+      lastErr = e
+
+      // Classify the error for better user feedback
+      const errName = e?.name || ''
+      const errMsg = String(e?.message || '')
+      const isAbort = errName === 'AbortError' || errMsg.includes('aborted') || errMsg.includes('timed out')
+      const isNetwork = errName === 'TypeError' || errMsg.includes('fetch failed') || errMsg.includes('ECONNRESET') || errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT')
+
+      // Don't retry 4xx (those are request errors, not transient)
+      if (errMsg.includes('ZAI API 4') && !errMsg.includes('5')) {
+        throw e
+      }
+
+      console.warn(`[/api/poster/generate] attempt ${attempt} failed: ${errName} — ${errMsg}`)
+
+      if (attempt === 3) {
+        // Final attempt failed — surface a helpful error
+        if (isAbort) {
+          throw new Error(`Image generation timed out after 90s. The ZAI API may be overloaded — try again in a minute, or try a simpler prompt.`)
+        }
+        if (isNetwork) {
+          throw new Error(`Network error reaching ZAI API (${errMsg}). This is usually transient on Render free-tier — the service may be cold-starting. Tried 3 times. Wait 30s and retry.`)
+        }
+        throw new Error(`Image generation failed after 3 attempts: ${errMsg}`)
+      }
+
+      // Exponential backoff: 2s, 4s
+      const backoffMs = 2000 * Math.pow(2, attempt - 1)
+      console.log(`[/api/poster/generate] retrying in ${backoffMs}ms…`)
+      await new Promise((r) => setTimeout(r, backoffMs))
+    }
+  }
+
+  throw lastErr || new Error('Image generation failed (unknown cause)')
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // POST handler
 // ──────────────────────────────────────────────────────────────────────
 
@@ -309,7 +433,28 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Load shop branding in parallel with everything else (best-effort)
+    // Load ZAI config from env vars (preferred) or .z-ai-config file (fallback)
+    let zaiConfig = loadZaiConfigFromEnv()
+    if (!zaiConfig) {
+      // Try file-based config (dev / desktop mode)
+      try {
+        const ZAIModule = await import('z-ai-web-dev-sdk')
+        const ZAI = ZAIModule.default
+        const zai = await ZAI.create()
+        // Extract config from the SDK instance (it's stored as `config` private field)
+        zaiConfig = (zai as any).config
+      } catch (e: any) {
+        return NextResponse.json(
+          {
+            error: 'ZAI SDK config missing. Set ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID env vars on Render.',
+            hint: 'See .z-ai-config.example file for the format. Values can be copied from /etc/.z-ai-config on the dev machine.',
+          },
+          { status: 500 },
+        )
+      }
+    }
+
+    // Load shop branding in parallel (best-effort)
     const shop = includeShopBranding ? await loadShopBranding() : null
 
     // Build the super-prompt
@@ -324,32 +469,16 @@ export async function POST(req: NextRequest) {
       includeBranding: includeShopBranding,
     })
 
-    // Instantiate the ZAI SDK — uses env vars if set, otherwise falls back
-    // to .z-ai-config file lookup.
-    const zai = await createZai()
-
     const sizePreset = SIZE_PRESETS[size]
     const apiSize = sizePreset.apiSize
 
-    // Call the image generation API (this is the same engine that powers
-    // GLM-4V-class image models — comparable to Gemini Nano / Imagen /
-    // DALL-E 3 in capability, free for our use case via z-ai-web-dev-sdk).
-    // The SDK's `size` field is a strict union of "WxH" literals; cast to
-    // any to bypass TS's narrow type since our preset string is one of the
-    // supported values (verified above).
-    const response = await zai.images.generations.create({
-      prompt: superPrompt,
-      size: apiSize as any,
+    // Generate the image (direct HTTP call with timeout + retries)
+    const { base64: imageBase64 } = await generateImageDirect({
+      superPrompt,
+      apiSize,
+      config: zaiConfig!,
     })
 
-    if (!response?.data?.[0]?.base64) {
-      return NextResponse.json(
-        { error: 'Image generation API returned no image. Try a different prompt.' },
-        { status: 502 },
-      )
-    }
-
-    const imageBase64 = response.data[0].base64
     const elapsedMs = Date.now() - startTime
 
     return NextResponse.json({
@@ -361,25 +490,26 @@ export async function POST(req: NextRequest) {
       width: sizePreset.w,
       height: sizePreset.h,
       elapsedMs,
-      // Echo back what we used so the UI can show "Generated using: ..."
       shopBrandingUsed: !!shop && includeShopBranding,
       model: 'z-ai-image-gen (GLM-class)',
     })
   } catch (e: any) {
-    console.error('[/api/poster/generate] error:', e?.message)
-    // Surface a friendly error specifically for the config-not-found case
-    // so the user knows to set ZAI_* env vars on Render.
+    console.error('[/api/poster/generate] final error:', e?.message)
     const isConfigError = e?.message?.includes('Configuration file not found') || e?.message?.includes('.z-ai-config')
     return NextResponse.json(
       {
         error: isConfigError
-          ? 'ZAI SDK config missing. Set ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID env vars on Render (or create .z-ai-config in project root).'
-          : (e?.message || 'Failed to generate poster. Please try again.'),
+          ? 'ZAI SDK config missing. Set ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID env vars on Render.'
+          : (e?.message || 'Failed to generate poster.'),
         hint: isConfigError
-          ? 'See PRO_REFACTOR_REPORT or DEPLOYMENT_TROUBLESHOOTING for the exact env var values to copy from your local /etc/.z-ai-config file.'
+          ? 'See .z-ai-config.example file for the format.'
           : (e?.message?.includes('size')
               ? 'Size validation failed. Use one of: whatsapp-status, instagram-story, square, landscape, wide-banner.'
-              : undefined),
+              : e?.message?.includes('timed out')
+                ? 'The AI model is busy. Wait 1 minute and try again.'
+                : e?.message?.includes('Network error')
+                  ? 'Transient network issue on Render. Wait 30s and retry.'
+                  : undefined),
       },
       { status: 500 },
     )
