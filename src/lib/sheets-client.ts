@@ -292,6 +292,42 @@ function diagnoseHtmlResponse(text: string): string | null {
   return null
 }
 
+/**
+ * Detect a JSON-formatted auth error from the Apps Script and return a
+ * human-readable explanation. This catches the common case where the user's
+ * deployed Apps Script has its own auth check (different from the one in
+ * this repo's code.gs) and returns a body like:
+ *   {"ok":false,"error":"unauthorized"}        ← custom/older Apps Script
+ *   {"success":false,"error":"Unauthorized — PIN required","code":"PIN_REQUIRED"}  ← our v9.0.2 code
+ *
+ * Without this diagnosis, the user just sees a generic "unauthorized" error
+ * and has no idea they need to redeploy the Apps Script.
+ */
+function diagnoseJsonAuthError(text: string): string | null {
+  if (!text || text.length > 500) return null
+  const lower = text.toLowerCase().trim()
+  if (!lower.startsWith('{')) return null
+  try {
+    const parsed = JSON.parse(text)
+    if (!parsed) return null
+    // Pattern 1: our v9.0.2 _unauthorized() — PIN_REQUIRED code
+    if (parsed.code === 'PIN_REQUIRED' || (parsed.error && String(parsed.error).includes('PIN required'))) {
+      return `Apps Script requires PIN authentication but the supplied PIN doesn't match.\nFIX: Either (a) redeploy Apps Script with the latest code from /api/apps-script-code, OR (b) make sure APP_PIN env var matches the PIN stored in the Settings sheet's adminPinHash row.\nBody: ${text.slice(0, 200)}`
+    }
+    // Pattern 2: custom/older Apps Script returning {"ok":false,"error":"unauthorized"}
+    if (parsed.ok === false && parsed.error && String(parsed.error).toLowerCase() === 'unauthorized') {
+      return `Apps Script has its OWN auth check that rejects this request.\nThis usually means the deployed Apps Script is an OLDER or CUSTOM version that doesn't match the code in this repo.\nFIX: Open your Apps Script project at script.google.com → delete all code → paste the latest code from /api/apps-script-code endpoint → Deploy → New deployment → Web app → "Anyone" access → copy new /exec URL → update APPS_SCRIPT_URL env var on Render → redeploy.\nBody: ${text.slice(0, 200)}`
+    }
+    // Pattern 3: any "unauthorized" error in JSON
+    if (parsed.error && String(parsed.error).toLowerCase() === 'unauthorized') {
+      return `Apps Script returned "unauthorized". This is likely an auth mismatch — the deployed Apps Script doesn't recognize the PIN being sent.\nFIX: Redeploy Apps Script with the latest code from /api/apps-script-code.\nBody: ${text.slice(0, 200)}`
+    }
+  } catch {
+    // not JSON, fall through
+  }
+  return null
+}
+
 // ===== REQUEST WITH RETRY + CIRCUIT BREAKER =====
 let circuitBrokenUntil = 0
 let consecutiveFailures = 0
@@ -333,16 +369,22 @@ async function callAppsScript(payload: any): Promise<any> {
       const text = await res.text()
       try {
         const parsed = JSON.parse(text)
+        // Detect Apps Script auth errors and throw with a helpful message
+        // (otherwise the user just sees "unauthorized" with no context)
+        const authHint = diagnoseJsonAuthError(text)
+        if (authHint) throw new Error(authHint)
         consecutiveFailures = 0 // success resets circuit breaker
         return parsed
-      } catch {
+      } catch (parseErr: any) {
+        // If diagnoseJsonAuthError threw, propagate that error (it has the helpful message)
+        if (parseErr?.message && parseErr.message.includes('Apps Script')) throw parseErr
         const hint = diagnoseHtmlResponse(text)
         if (hint) throw new Error(hint)
         throw new Error('Invalid JSON from Apps Script: ' + text.slice(0, 200))
       }
     } catch (e: any) {
       lastErr = e
-      const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML')
+      const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML') && !e?.message?.includes('Apps Script has its OWN auth')
       if (!isRetryable || attempt === 2) {
         consecutiveFailures++
         if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
@@ -386,16 +428,20 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
       const text = await res.text()
       try {
         const parsed = JSON.parse(text)
+        // Detect Apps Script auth errors and throw with a helpful message
+        const authHint = diagnoseJsonAuthError(text)
+        if (authHint) throw new Error(authHint)
         consecutiveFailures = 0
         return parsed
-      } catch {
+      } catch (parseErr: any) {
+        if (parseErr?.message && parseErr.message.includes('Apps Script')) throw parseErr
         const hint = diagnoseHtmlResponse(text)
         if (hint) throw new Error(hint)
         throw new Error('Invalid JSON from Apps Script: ' + text.slice(0, 200))
       }
     } catch (e: any) {
       lastErr = e
-      const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML')
+      const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML') && !e?.message?.includes('Apps Script has its OWN auth')
       if (!isRetryable || attempt === 2) {
         consecutiveFailures++
         if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {

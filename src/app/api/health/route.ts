@@ -29,16 +29,25 @@ export async function GET() {
     let appsScriptReachable: boolean | null = null
     let appsScriptError: string | null = null
     let appsScriptVersion: string | null = null
+    let appsScriptAuthMismatch: boolean = false
     if (configured) {
       try {
         const result = await testConnection()
         appsScriptReachable = result.success
         if (!result.success) {
           appsScriptError = result.message
+          // Detect the specific "Apps Script has its OWN auth check" pattern
+          // that fires when the deployed Apps Script is an older/custom version
+          if (result.message && result.message.includes('Apps Script has its OWN auth')) {
+            appsScriptAuthMismatch = true
+          }
         }
       } catch (e: any) {
         appsScriptReachable = false
         appsScriptError = e?.message || 'Unknown error'
+        if (e?.message && e.message.includes('Apps Script has its OWN auth')) {
+          appsScriptAuthMismatch = true
+        }
       }
     }
 
@@ -55,6 +64,7 @@ export async function GET() {
       appsScriptReachable,
       appsScriptError,
       appsScriptVersion,
+      appsScriptAuthMismatch,
       cache: getCacheStats(),
       env: {
         nodeVersion: process.version,
@@ -62,7 +72,7 @@ export async function GET() {
         runtimeConfigActive: !!process.env.SMARTCOMP_CONFIG_PATH,
       },
       // Quick triage hints for common "data not loading" causes
-      hints: generateHints({ configured, pinRequired: !!pin, appsScriptReachable, url }),
+      hints: generateHints({ configured, pinRequired: !!pin, appsScriptReachable, appsScriptAuthMismatch, url }),
     })
   } catch (e: any) {
     return NextResponse.json({
@@ -77,6 +87,7 @@ function generateHints(opts: {
   configured: boolean
   pinRequired: boolean
   appsScriptReachable: boolean | null
+  appsScriptAuthMismatch: boolean
   url: string | undefined
 }): string[] {
   const hints: string[] = []
@@ -85,10 +96,12 @@ function generateHints(opts: {
   } else if (!opts.url?.includes('/exec')) {
     hints.push('APPS_SCRIPT_URL is set but does not end with /exec. Make sure you deployed the Apps Script as a Web App and copied the /exec URL, not the /edit (editor) URL.')
   }
-  if (opts.configured && opts.appsScriptReachable === false) {
+  if (opts.appsScriptAuthMismatch) {
+    hints.push('🔴 CRITICAL: The deployed Apps Script is an OLDER or CUSTOM version that has its own auth check returning "unauthorized". You MUST redeploy the Apps Script with the latest code. Steps: (1) Open your Apps Script project at script.google.com (2) Delete ALL existing code (3) Open https://smartcomp-8m81.onrender.com/api/apps-script-code in a browser, copy the full code (4) Paste it into the Apps Script editor (5) Deploy → New deployment → Web app → "Anyone" access (6) Copy the new /exec URL (7) Update APPS_SCRIPT_URL env var on Render if URL changed (8) Redeploy on Render')
+  } else if (opts.configured && opts.appsScriptReachable === false) {
     hints.push('Apps Script URL is configured but the backend is not reachable. Open the URL in a browser to check for authorization errors, or redeploy the Apps Script with "Anyone" access.')
   }
-  if (opts.pinRequired && opts.appsScriptReachable) {
+  if (opts.pinRequired && opts.appsScriptReachable && !opts.appsScriptAuthMismatch) {
     hints.push('PIN protection is ON. Make sure you have logged in via /login — every /api/* request (except public ones) requires the smartcomp_auth cookie.')
   }
   if (hints.length === 0) {
