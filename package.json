@@ -1,7 +1,7 @@
 {
   "name": "smartcomp",
   "private": true,
-  "version": "9.0.1-servicefix-cleaned",
+  "version": "10.0.0-ultra",
   "description": "SmartComp — Sales & Service Panel. Cleaned, performance-tuned build with instant preview, sheet-scoped cache, and the bloated AI/Command/Automation/Poster modules removed.",
   "keywords": [
     "shop management",

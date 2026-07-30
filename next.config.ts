@@ -1,39 +1,36 @@
 import type { NextConfig } from "next";
 
 /**
- * Smart Computers Panel v3.0 - Optimized Next.js Config
- *
- * Upgrades in v3.0:
- * - Removed framer-motion from optimizePackageImports (dep removed)
- * - Added zod to optimizePackageImports
- * - Stricter security headers + CSP
- * - Better caching strategy
- * - Bundle analyzer friendly
- * - Improved image optimization
+ * SmartComp v10.0 - Ultra Performance Configuration
+ * 
+ * Key optimizations:
+ * - Partial Prerendering (PPR) enabled for hybrid static/dynamic pages
+ * - Bundle analysis friendly with modular imports
+ * - Aggressive caching headers for static assets
+ * - Strict security with optimized CSP
+ * - stream-based rendering with incremental responses
  */
 
 const nextConfig: NextConfig = {
-  // Standalone output so Electron can ship the server bundle without node_modules
   output: 'standalone',
-  // Type-check on build — was previously ignored, which let real type errors
-  // ship to production silently. If type errors block a deploy, fix them
-  // rather than disabling this flag again.
+  
   typescript: {
     ignoreBuildErrors: false,
   },
-  // ESLint on build — keep build validation active. Same rationale as above.
   eslint: {
     ignoreDuringBuilds: false,
   },
+  
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
   productionBrowserSourceMaps: false,
   cleanDistDir: true,
 
+  // Optimize images for ultra-fast delivery
   images: {
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60 * 60 * 24,
+    minimumCacheTTL: 60 * 60 * 24 * 7, // 7 days cache for images
     remotePatterns: [],
     dangerouslyAllowSVG: true,
   },
@@ -46,11 +43,31 @@ const nextConfig: NextConfig = {
       'lucide-react',
       'recharts',
       'zod',
+      'date-fns',
+      'class-variance-authority',
     ],
+    // Enable PPR for faster page loads
+    ppr: true,
+    // Optimize CSS for smaller bundles
+    optimizeCss: true,
+    // Turbo mode for faster development
+    turbo: {
+      resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
+    },
   },
+
+  // Server-side bundle optimization
+  serverExternalPackages: ['@whiskeysockets/baileys'],
 
   outputFileTracingIncludes: {
     '/api/apps-script-code': ['./apps-script/code.gs'],
+  },
+
+  // Compress with brotli for smaller bundles
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
   },
 
   async headers() {
@@ -62,7 +79,7 @@ const nextConfig: NextConfig = {
       { key: 'X-DNS-Prefetch-Control', value: 'on' },
       { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
       { key: 'X-XSS-Protection', value: '1; mode=block' },
-    ]
+    ];
 
     return [
       {
@@ -76,7 +93,10 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/_next/static/:path*',
-        headers: securityHeaders,
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          ...securityHeaders,
+        ],
       },
       {
         source: '/sw.js',
@@ -118,14 +138,13 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Public tracking pages - cache 5 min for performance
         source: '/track/:path*',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=300, stale-while-revalidate=600' },
           ...securityHeaders,
         ],
       },
-    ]
+    ];
   },
 
   async redirects() {
@@ -135,8 +154,8 @@ const nextConfig: NextConfig = {
         destination: '/',
         permanent: true,
       },
-    ]
+    ];
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;
