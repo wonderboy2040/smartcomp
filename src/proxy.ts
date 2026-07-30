@@ -58,6 +58,7 @@ const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/logout',
   '/api/auth/status',
+  '/api/config',          // Public: only exposes `configured: boolean`, `pinRequired: boolean`, URL preview — no secrets. Needed so the homepage can decide between SetupWizard vs Login vs App.
   '/api/whatsapp/webhook',
   '/api/cron/auto-enquiry',
   '/api/cron/amc',

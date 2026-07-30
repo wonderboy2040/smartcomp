@@ -20,8 +20,15 @@ services:
     rootDir: .
     # IMPORTANT: Use npm with --include=dev for tailwindcss build deps
     buildCommand: npm install --include=dev && npm run build
-    startCommand: npm run start
-    healthCheckPath: /
+    # Use the standalone server directly — `next start` does NOT work with
+    # output: 'standalone' (Next.js 15 logs a warning and routes can misbehave).
+    # The standalone bundle includes only the production deps needed to run,
+    # so it boots faster and uses less memory than `next start`.
+    startCommand: node .next/standalone/server.js
+    # /api/health is public and returns live diagnostics — better health check
+    # than '/' which requires PIN cookie and would always 302 to /login when
+    # APP_PIN is set, causing Render to mark the service as unhealthy.
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -30,17 +37,26 @@ services:
         value: "1"
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
+      - key: PORT
+        value: "10000"
       # REQUIRED: Set this in Render dashboard to your Apps Script Web App URL
       - key: APPS_SCRIPT_URL
         sync: false
-      # OPTIONAL BUT RECOMMENDED: 4-digit PIN to lock the panel
-      # Set to a 4-digit number like "1234" in the Render dashboard.
-      # Leave empty to disable PIN protection.
+      # OPTIONAL BUT RECOMMENDED: 4-digit PIN to lock the panel.
+      # When set, ALL /api/* routes (except public ones in proxy.ts) require
+      # the smartcomp_auth cookie issued by /api/auth/login.
+      # ALSO: this PIN is forwarded to the Apps Script backend for defense-in-depth.
       - key: APP_PIN
+        sync: false
+      # REQUIRED IN PROD if you use the corresponding webhooks/crons:
+      - key: CRON_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: WA_APP_SECRET
         sync: false
       # OPTIONAL: WhatsApp Cloud API — enables auto-send + auto-capture replies.
       # If these are NOT set, the app falls back to wa.me manual mode.
-      # Setup guide: see README → "WhatsApp Cloud API Setup" section.
       - key: WA_TOKEN
         sync: false
       - key: WA_PHONE_NUMBER_ID
@@ -51,9 +67,9 @@ services:
         sync: false
       - key: WA_TEMPLATE_NAME
         value: "rate_enquiry"
-      # Optional: for auto-enquiry cron security
-      # - key: CRON_SECRET
-      #   sync: false
+      # OPTIONAL: public base URL of the deployed app (used in track URLs etc.)
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false
 
 # Note: No database service needed!
 # All data is stored in your Google Sheet.

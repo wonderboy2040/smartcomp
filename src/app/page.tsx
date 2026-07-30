@@ -162,12 +162,31 @@ function HomeInner() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/config')
-      .then((r) => r.json())
-      .then((data) => {
+    fetch('/api/config', { cache: 'no-store' })
+      .then(async (r) => {
         if (cancelled) return
-        setIsConfigured(data.configured)
+        // If PIN is required and the user isn't authenticated, /api/config
+        // would return 401 (now it's public, so this shouldn't happen — but
+        // be defensive in case of future middleware changes). On 401 we
+        // redirect to /login instead of showing the SetupWizard, because
+        // "PIN required" is NOT the same as "Apps Script URL not configured".
+        if (r.status === 401) {
+          window.location.href = '/login'
+          return
+        }
+        const data = await r.json().catch(() => ({ configured: false }))
+        if (cancelled) return
+        setIsConfigured(!!data?.configured)
         setConfigChecked(true)
+        // If PIN is required and there's no auth cookie, the very first
+        // data fetch will bounce to /login anyway — but we can save the
+        // user a round trip by sending them there now.
+        if (data?.pinRequired && data?.configured) {
+          const hasCookie = document.cookie.includes('smartcomp_auth')
+          if (!hasCookie) {
+            window.location.href = '/login'
+          }
+        }
       })
       .catch(() => {
         if (cancelled) return

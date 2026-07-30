@@ -15,8 +15,10 @@
   "main": "electron/main.js",
   "scripts": {
     "build": "next build",
+    "postbuild": "node scripts/copy-standalone-assets.js",
     "dev": "next dev",
     "start": "next start",
+    "start:standalone": "node .next/standalone/server.js",
     "check": "next build",
     "electron:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron electron/main.js\"",
     "electron:build": "node scripts/build-exe.js",
