@@ -67,6 +67,7 @@ const PUBLIC_PATHS = [
   '/api/track',
   '/api/razorpay/webhook',
   '/api/health',
+  '/api/poster/debug',  // Public diagnostic — tests ZAI API connectivity from the server (no auth needed)
   // SECURITY: /api/export removed from PUBLIC_PATHS — it dumps all 16 sheets
   // (Customers PII, PersonalExpenditure, Settings with PINs, etc.) in JSON/CSV.
   // Now requires the auth cookie like every other /api/* route.
