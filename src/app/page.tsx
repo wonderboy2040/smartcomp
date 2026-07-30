@@ -34,6 +34,7 @@ const CampaignsPanel = lazy(() => import('@/components/panels/Campaigns').then(m
 const CreditControlPanel = lazy(() => import('@/components/panels/CreditControl').then(m => ({ default: m.CreditControlPanel })))
 const AMCPanel = lazy(() => import('@/components/panels/AMC').then(m => ({ default: m.AMCPanel })))
 const GrowthHubPanel = lazy(() => import('@/components/panels/GrowthHub').then(m => ({ default: m.GrowthHubPanel })))
+const PosterGeneratorPanel = lazy(() => import('@/components/panels/PosterGenerator').then(m => ({ default: m.PosterGeneratorPanel })))
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-slate-600' },
@@ -55,6 +56,7 @@ const NAV_ITEMS = [
   { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
   { id: 'growth', label: 'Growth Hub', icon: Brain, color: 'text-violet-600' },
+  { id: 'poster', label: 'AI Poster Generator', icon: Sparkles, color: 'text-violet-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ] as const
 
@@ -515,6 +517,9 @@ function HomeInner() {
             </PanelBoundary>
             <PanelBoundary active={active} id="growth" mounted={mountedPanels.has('growth')}>
               <GrowthHubPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="poster" mounted={mountedPanels.has('poster')}>
+              <PosterGeneratorPanel />
             </PanelBoundary>
           </div>
         </main>
