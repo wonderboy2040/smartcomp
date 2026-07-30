@@ -87,6 +87,12 @@ function HomeInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [configChecked, setConfigChecked] = useState(false)
   const [isConfigured, setIsConfigured] = useState(true)
+  // LRU-bounded set of mounted panels. Without this, every panel ever opened
+  // stays mounted forever, holding ~50 useFetch subscriptions in the background
+  // and burning memory on long sessions. We keep at most MAX_MOUNTEDPanels
+  // panels alive, evicting the least-recently-used when the cap is hit.
+  // Dashboard is always alive (rendered eagerly, not via lazy()).
+  const MAX_MOUNTED_PANELS = 6
   const [mountedPanels, setMountedPanels] = useState<Set<string>>(() => new Set([initialTab]))
   const { theme, toggleTheme } = useTheme()
 
@@ -187,9 +193,28 @@ function HomeInner() {
     setActive(tab)
     setSidebarOpen(false)
     setMountedPanels((prev) => {
-      if (prev.has(tab)) return prev
-      const next = new Set(prev)
+      if (prev.has(tab)) {
+        // Move tab to "most recent" by rebuilding the Set with tab last.
+        const reordered = new Set<string>()
+        for (const t of prev) if (t !== tab) reordered.add(t)
+        reordered.add(tab)
+        return reordered
+      }
+      // New panel — add as most-recent, evict LRU if over cap (always keep 'dashboard').
+      const next = new Set<string>(prev)
       next.add(tab)
+      while (next.size > MAX_MOUNTED_PANELS) {
+        // Evict the oldest entry that isn't the dashboard and isn't the just-added tab.
+        let evicted = false
+        for (const t of next) {
+          if (t !== 'dashboard' && t !== tab) {
+            next.delete(t)
+            evicted = true
+            break
+          }
+        }
+        if (!evicted) break // safety — don't infinite-loop if everything is dashboard/tab
+      }
       return next
     })
     if (typeof window !== 'undefined') {

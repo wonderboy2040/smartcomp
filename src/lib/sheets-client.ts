@@ -301,11 +301,19 @@ const CIRCUIT_BREAKER_COOLDOWN = 30 * 1000
 async function callAppsScript(payload: any): Promise<any> {
   const APPS_SCRIPT_URL = getAppsScriptUrl()
   if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured. Open the desktop app settings and paste your Google Apps Script /exec URL.')
-  
+
   // Circuit breaker check
   if (Date.now() < circuitBrokenUntil) {
     throw new Error(`Circuit breaker active - too many failures. Try again in ${Math.ceil((circuitBrokenUntil - Date.now())/1000)}s`)
   }
+
+  // Forward the server-side PIN to Apps Script so the backend can auth the
+  // request. The PIN travels over the same HTTPS connection the Next.js
+  // server already uses to talk to script.google.com; it is never exposed
+  // to the browser. Apps Script hashes it with the same salt we use here
+  // and compares to the stored hash (see apps-script/code.gs).
+  const pin = getAppPin()
+  const bodyWithPin = pin ? { ...payload, pin } : payload
 
   let lastErr: any
   for (let attempt = 1; attempt <= 2; attempt++) { // Reduced from 3 to 2 for ultra speed
@@ -313,7 +321,7 @@ async function callAppsScript(payload: any): Promise<any> {
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(sanitizeRowData(payload)),
+        body: JSON.stringify(sanitizeRowData(bodyWithPin)),
         redirect: 'follow',
         signal: AbortSignal.timeout(10000) // 10s — Apps Script cold start can take 6-8s on first hit
       })
@@ -351,7 +359,7 @@ async function callAppsScript(payload: any): Promise<any> {
 async function getFromAppsScript(params: Record<string, string>): Promise<any> {
   const APPS_SCRIPT_URL = getAppsScriptUrl()
   if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured. Open the desktop app settings and paste your Google Apps Script /exec URL.')
-  
+
   if (Date.now() < circuitBrokenUntil) {
     throw new Error(`Circuit breaker active. Try again in ${Math.ceil((circuitBrokenUntil - Date.now())/1000)}s`)
   }
@@ -360,6 +368,9 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v)
   }
+  // Forward server-side PIN to Apps Script for backend auth (see callAppsScript).
+  const pin = getAppPin()
+  if (pin) url.searchParams.set('pin', pin)
 
   let lastErr: any
   for (let attempt = 1; attempt <= 2; attempt++) { // Ultra fast: 2 attempts max

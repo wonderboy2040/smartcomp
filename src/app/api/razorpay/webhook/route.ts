@@ -17,9 +17,21 @@ export async function POST(req: NextRequest) {
     const body = JSON.parse(rawBody)
 
     const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET
-    if (WEBHOOK_SECRET) {
+    // SECURITY: require the secret to be set in production. Without signature
+    // verification, anyone can POST a fake payment.captured event and mark
+    // their own invoices as paid. Previously this silently skipped verification
+    // when the env var was missing — fine for local dev, dangerous in prod.
+    if (!WEBHOOK_SECRET) {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[Razorpay Webhook] RAZORPAY_WEBHOOK_SECRET not set in production — rejecting webhook')
+        return NextResponse.json(
+          { error: 'Webhook secret not configured' },
+          { status: 503 }
+        )
+      }
+      console.warn('[Razorpay Webhook] RAZORPAY_WEBHOOK_SECRET not set (dev mode) — skipping verification')
+    } else {
       const signature = req.headers.get('x-razorpay-signature') || ''
-      // Razorpay uses HMAC-SHA256 with webhook secret
       const enc = new TextEncoder()
       const key = await crypto.subtle.importKey(
         'raw',
@@ -36,8 +48,6 @@ export async function POST(req: NextRequest) {
         console.warn('[Razorpay Webhook] Invalid signature — rejected')
         return NextResponse.json({ error: 'Invalid signature' }, { status: 403 })
       }
-    } else {
-      console.warn('[Razorpay Webhook] RAZORPAY_WEBHOOK_SECRET not set — skipping verification')
     }
 
     // Process webhook event

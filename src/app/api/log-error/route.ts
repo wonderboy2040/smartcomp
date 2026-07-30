@@ -39,22 +39,32 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   // SECURITY: GET is admin-only (returns error stacks which leak implementation details).
   // POST remains public so client crashes can log before login.
-  // We verify the PIN cookie directly here since middleware whitelists this path for POST.
+  // We verify the auth cookie directly here. Login issues a v3 token
+  // (SALT = '_smartcomp_v3_2026') — historical bug: this route checked the v1
+  // salt instead, so every fresh login got 401 when viewing the error buffer.
   const APP_PIN = getAppPin()
   if (APP_PIN) {
     const cookie = req.cookies.get('smartcomp_auth')?.value
-    const enc = new TextEncoder()
-    const data = enc.encode(APP_PIN + '_smartcomp_v1')
-    const digest = await crypto.subtle.digest('SHA-256', data)
-    const expected = Array.from(new Uint8Array(digest))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-    if (!cookie || cookie.length !== expected.length) {
+    if (!cookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    let diff = 0
-    for (let i = 0; i < expected.length; i++) diff |= cookie.charCodeAt(i) ^ expected.charCodeAt(i)
-    if (diff !== 0) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const enc = new TextEncoder()
+    // v3 is the current salt (matches /api/auth/login). Accept v1 too for any
+    // sessions that were issued before the v3 upgrade (proxy.ts supports both).
+    const salts = ['_smartcomp_v3_2026', '_smartcomp_v1']
+    let ok = false
+    for (const salt of salts) {
+      const data = enc.encode(APP_PIN + salt)
+      const digest = await crypto.subtle.digest('SHA-256', data)
+      const expected = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+      if (cookie.length !== expected.length) continue
+      let diff = 0
+      for (let i = 0; i < expected.length; i++) diff |= cookie.charCodeAt(i) ^ expected.charCodeAt(i)
+      if (diff === 0) { ok = true; break }
+    }
+    if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   // Return recent errors for debugging (admin only)
   return NextResponse.json({ errors: errorBuffer.slice(-20) })

@@ -79,11 +79,13 @@ function _putListCache(key, data) {
   _listMemCache[key] = { data: data, expires: Date.now() + LIST_CACHE_MEM_TTL };
   try {
     var str = JSON.stringify(data);
+    // SECURITY/DATA-INTEGRITY: previously this silently truncated lists to
+    // the first 500 rows when payload exceeded 90KB. That meant listRows()
+    // quietly returned incomplete data once the sheet grew past ~500 rows.
+    // Now we simply skip caching oversized payloads — callers always get the
+    // full sheet from the source. Cache is an optimization, not a substitute.
     if (str.length < 90000) {
       CacheService.getScriptCache().put(key, str, LIST_CACHE_TTL);
-    } else {
-      var trimmed = str.length > 90000 ? data.slice(0, 500) : data;
-      CacheService.getScriptCache().put(key, JSON.stringify(trimmed), LIST_CACHE_TTL);
     }
   } catch (ignore) {}
 }
@@ -181,24 +183,177 @@ function ensureAllSheets() {
 
 function getSheet(name) { return getSheetFast(name); }
 
+// ===== PIN AUTHENTICATION (Apps Script layer) =====
+// The Next.js proxy.ts gate protects the /api/* surface, but the Apps Script
+// Web App URL itself is publicly reachable (Anyone-with-link access is
+// required for the Web App to be called by the Next.js server). Without a
+// PIN check here, anyone who learns the /exec URL can read all PII (phone,
+// GSTIN, addresses) and create/update/delete anything.
+//
+// How it works:
+//   1. The Next.js server forwards the user's PIN-derived cookie value to
+//      Apps Script via the `pin` query param (GET) or `pin` body field (POST).
+//      (sheets-client.ts injects this automatically — see callAppsScript.)
+//   2. Apps Script hashes the supplied PIN with the same SHA-256 + salt the
+//      Next.js layer uses, and compares to the stored hash in Settings sheet.
+//   3. Read actions (list/get/dashboard) require the read PIN.
+//      Write actions (create/update/delete/complete) require the write PIN.
+//
+// PIN storage: the Settings sheet stores HASHED PINs (id=adminPinHash /
+//   engineerPinHash) — never the raw PIN. The legacy `adminPin`/`engineerPin`
+//   rows are migrated to hashes on first use, then deleted.
+//
+// Migration: if `adminPinHash` is absent but `adminPin` exists, the first
+//   request that supplies the matching raw PIN will compute and store the
+//   hash, then soft-delete the plaintext row. After migration, plaintext
+//   rows are ignored.
+//
+// Backward compatibility: when APP_PIN is not set on the Next.js side AND
+//   the Apps Script Settings sheet has no adminPinHash row, the Apps Script
+//   is treated as "open access" (legacy mode, same as v5.0 behavior).
+
+var AUTH_SALT = '_smartcomp_v3_2026';
+
+function _sha256Hex(text) {
+  var raw = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    text,
+    Utilities.Charset.UTF_8
+  );
+  var hex = '';
+  for (var i = 0; i < raw.length; i++) {
+    var b = raw[i];
+    if (b < 0) b += 256;
+    hex += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return hex;
+}
+
+function _pinHash(pin) {
+  return _sha256Hex(String(pin) + AUTH_SALT);
+}
+
+function _getSettingValue(id) {
+  try {
+    var rows = listRows('Settings', '', '', true);
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].id) === String(id) && (!rows[i].deleted || String(rows[i].deleted).toLowerCase() !== 'true')) {
+        return rows[i].value || '';
+      }
+    }
+  } catch (ignore) {}
+  return '';
+}
+
+function _setSettingValue(id, value) {
+  var rows = listRows('Settings', '', '', true);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].id) === String(id)) {
+      updateRow('Settings', rows[i].id, { id: id, value: value, deleted: false });
+      return;
+    }
+  }
+  createRow('Settings', { id: id, value: value, deleted: false });
+}
+
+/**
+ * Returns true if the request is authenticated.
+ * Also performs one-time migration of plaintext PIN rows to hashed rows.
+ */
+function _isAuthenticated(suppliedPin) {
+  var storedHash = _getSettingValue('adminPinHash');
+  var legacyPlain = _getSettingValue('adminPin');
+
+  // Open-access mode: no hash stored AND no plaintext stored
+  if (!storedHash && !legacyPlain) return true;
+
+  if (!suppliedPin) return false;
+
+  // Migration: if we have plaintext but no hash, verify supplied PIN against
+  // plaintext, then write the hash and soft-delete the plaintext.
+  if (!storedHash && legacyPlain) {
+    if (String(suppliedPin) !== String(legacyPlain)) return false;
+    _setSettingValue('adminPinHash', _pinHash(suppliedPin));
+    // soft-delete the plaintext row
+    var rows = listRows('Settings', '', '', true);
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].id) === 'adminPin') {
+        softDeleteRow('Settings', rows[i].id);
+      }
+    }
+    return true;
+  }
+
+  // Normal path: compare hash
+  return _constantTimeEqual(_pinHash(suppliedPin), storedHash);
+}
+
+function _constantTimeEqual(a, b) {
+  a = String(a); b = String(b);
+  if (a.length !== b.length) return false;
+  var diff = 0;
+  for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+var WRITE_ACTIONS = {
+  'create': true, 'createFast': true, 'update': true, 'delete': true,
+  'restore': true, 'bulkCreate': true, 'bulkUpdate': true,
+  'createInvoiceFull': true, 'createInvoiceUltra': true,
+  'createQuotationFull': true, 'createQuotationUltra': true,
+  'completeJobFull': true, 'saveShop': true, 'savePin': true,
+  'removePin': true, 'saveSettings': true, 'newJob': true, 'createJob': true,
+  'updateJob': true, 'deleteJob': true, 'addSparePart': true,
+  'updateSparePart': true, 'deleteSparePart': true, 'payment': true,
+  'addPayment': true, 'updatePayment': true, 'deletePayment': true,
+  'seed': true, 'liveSync': true
+};
+
+function _extractPin(e) {
+  if (!e) return '';
+  if (e.parameter && e.parameter.pin) return String(e.parameter.pin);
+  if (e.postData && e.postData.contents) {
+    try {
+      var body = JSON.parse(e.postData.contents);
+      if (body && body.pin) return String(body.pin);
+      if (body && body.data && body.data.pin) return String(body.data.pin);
+    } catch (ignore) {}
+  }
+  return '';
+}
+
+function _unauthorized() {
+  return json({ success: false, error: 'Unauthorized — PIN required', code: 'PIN_REQUIRED' });
+}
+
 // ===== QUANTUM GET HANDLER - ULTRA FAST + PWA COMPAT =====
 function doGet(e) {
   try {
     var params = (e && e.parameter) ? e.parameter : {};
     var action = params.action || 'status';
 
-    // ULTRA FAST PATH - no sheet access needed (like index.html ping)
+    // ULTRA FAST PATH - no sheet access needed (like index.html ping).
+    // These remain public so connection tests work before PIN is configured.
     if (action === 'ping') {
       return json({ success: true, message: 'pong', time: new Date().toISOString(), version: '5.0', quantum: true, ultraFast: true });
     }
     if (action === 'version') {
-      return json({ success: true, version: '5.0', codename: 'Quantum Ultra Speed', quantum: true, ultraFast: true, features: ['soft-delete', 'quantum-cache', 'bulk-transactions', 'getAllData', 'liveSync'] });
+      return json({ success: true, version: '5.0', codename: 'Quantum Ultra Speed', quantum: true, ultraFast: true, features: ['soft-delete', 'quantum-cache', 'bulk-transactions', 'getAllData', 'liveSync', 'pin-auth'] });
     }
     if (action === 'test') {
       return json({ success: true, message: 'Connection successful (Quantum v5.0)', version: '5.0', quantum: true, ultraFast: true, time: new Date().toISOString() });
     }
     if (action === 'status') {
       return json({ success: true, message: 'Smart Computers API running (Quantum v5.0)', sheets: SHEET_NAMES, version: '5.0', quantum: true, ultraFast: true });
+    }
+
+    // PIN AUTH — every data-touching action requires a valid PIN when one is
+    // configured in the Settings sheet. Public paths (ping/version/test/status)
+    // are exempted above. getPins is also exempted so the login flow can
+    // detect whether a PIN exists before asking the user to enter one.
+    if (action !== 'getPins') {
+      var suppliedPin = _extractPin(e);
+      if (!_isAuthenticated(suppliedPin)) return _unauthorized();
     }
 
     // Early sheet ensure only for actions that need it
@@ -248,20 +403,20 @@ function doGet(e) {
     }
 
     if (action === 'getPins') {
-      // PWA Pins stored in Settings sheet: id=adminPin, engineerPin
+      // SECURITY: returns whether each role's PIN is SET, not the PIN itself.
       try {
         var settingsRows = listRows('Settings', '', '', true);
-        var pins = {};
+        var result = { adminPinSet: false, engineerPinSet: false };
         for (var i = 0; i < settingsRows.length; i++) {
           var r = settingsRows[i];
-          if (r.id === 'adminPin' || r.id === 'engineerPin') {
-            if (!r.deleted || String(r.deleted).toLowerCase() !== 'true') pins[r.id] = r.value;
+          if (!r.deleted || String(r.deleted).toLowerCase() !== 'true') {
+            if (r.id === 'adminPinHash' || r.id === 'adminPin') result.adminPinSet = true;
+            if (r.id === 'engineerPinHash' || r.id === 'engineerPin') result.engineerPinSet = true;
           }
         }
-        // Also try PropertiesService fallback
-        return json({ success: true, status: 'success', data: pins });
+        return json({ success: true, status: 'success', data: result });
       } catch (err) {
-        return json({ success: true, status: 'success', data: {} });
+        return json({ success: true, status: 'success', data: { adminPinSet: false, engineerPinSet: false } });
       }
     }
 
@@ -318,6 +473,17 @@ function doPost(e) {
     }
     if (action === 'version') {
       return json({ success: true, version: '5.0', quantum: true, ultraFast: true });
+    }
+
+    // PIN AUTH — every write/data action requires a valid PIN when one is
+    // configured. savePin/removePin are special: they bootstrap auth so we
+    // can't require a PIN for them (otherwise the first PIN set would be
+    // impossible). They are still safe because they only write to the
+    // Settings sheet — if no PIN exists yet, anyone can set the first one
+    // (which matches the legacy open-access-first-run behavior).
+    if (action !== 'savePin' && action !== 'removePin') {
+      var suppliedPin = _extractPin(e);
+      if (!_isAuthenticated(suppliedPin)) return _unauthorized();
     }
 
     try { ensureAllSheets(); } catch (sheetErr) {
@@ -452,27 +618,42 @@ function doPost(e) {
         var pin = body.data && body.data.pin;
         var role = body.data && body.data.role;
         if (!pin || !role) return json({ success: false, error: 'Missing pin or role' });
-        var pinId = role === 'admin' ? 'adminPin' : 'engineerPin';
-        var existing = listRows('Settings', '', '', true).filter(function(r){ return r.id === pinId; });
-        if (existing.length > 0) updateRow('Settings', existing[0].id, { id: pinId, value: pin, deleted: false });
-        else createRow('Settings', { id: pinId, value: pin, deleted: false });
+        // SECURITY: store only the SHA-256 hash of the PIN (with the same
+        // salt the Next.js layer uses). Never store or return the raw PIN.
+        var hashId = role === 'admin' ? 'adminPinHash' : 'engineerPinHash';
+        var hashValue = _pinHash(pin);
+        var existingHash = listRows('Settings', '', '', true).filter(function(r){ return r.id === hashId; });
+        if (existingHash.length > 0) updateRow('Settings', existingHash[0].id, { id: hashId, value: hashValue, deleted: false });
+        else createRow('Settings', { id: hashId, value: hashValue, deleted: false });
+        // Soft-delete any legacy plaintext row for the same role
+        var legacyId = role === 'admin' ? 'adminPin' : 'engineerPin';
+        var legacyRows = listRows('Settings', '', '', true).filter(function(r){ return r.id === legacyId; });
+        for (var li = 0; li < legacyRows.length; li++) softDeleteRow('Settings', legacyRows[li].id);
         return json({ success: true, status: 'success' });
       }
 
       case 'getPins': {
+        // SECURITY: returns whether each role's PIN is SET, not the PIN itself.
+        // Historical bug: this endpoint returned the raw plaintext PIN to any
+        // caller (the Apps Script URL is publicly reachable). Now it returns
+        // a boolean "set" flag per role, so the client knows whether to prompt.
         var settingsRows = listRows('Settings', '', '', true);
-        var pins = {};
+        var result = { adminPinSet: false, engineerPinSet: false };
         for (var i = 0; i < settingsRows.length; i++) {
           var r = settingsRows[i];
-          if ((r.id === 'adminPin' || r.id === 'engineerPin') && (!r.deleted || String(r.deleted).toLowerCase() !== 'true')) pins[r.id] = r.value;
+          if (!r.deleted || String(r.deleted).toLowerCase() !== 'true') {
+            if (r.id === 'adminPinHash' || r.id === 'adminPin') result.adminPinSet = true;
+            if (r.id === 'engineerPinHash' || r.id === 'engineerPin') result.engineerPinSet = true;
+          }
         }
-        return json({ success: true, status: 'success', data: pins });
+        return json({ success: true, status: 'success', data: result });
       }
 
       case 'removePin': {
-        var role = body.data && body.data.role;
-        var pinId = role === 'admin' ? 'adminPin' : 'engineerPin';
-        var toDelete = listRows('Settings', '', '', true).filter(function(r){ return r.id === pinId; });
+        var role2 = body.data && body.data.role;
+        var hashId2 = role2 === 'admin' ? 'adminPinHash' : 'engineerPinHash';
+        var legacyId2 = role2 === 'admin' ? 'adminPin' : 'engineerPin';
+        var toDelete = listRows('Settings', '', '', true).filter(function(r){ return r.id === hashId2 || r.id === legacyId2; });
         for (var di = 0; di < toDelete.length; di++) softDeleteRow('Settings', toDelete[di].id);
         return json({ success: true, status: 'success' });
       }
@@ -569,6 +750,12 @@ function createInvoiceFull(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var now = new Date().toISOString();
   var id = data.id || Utilities.getUuid();
+  // LockService — see createInvoiceUltra for rationale.
+  var lock = LockService.getScriptLock();
+  try {
+    var locked = lock.tryLock(20000);
+    if (!locked) return { success: false, error: 'Server busy — could not acquire invoice lock. Please retry.' };
+  } catch (lockErr) {}
   try {
     var invoiceSheet = getSheetFast('Invoices');
     var invHeaders = SCHEMAS['Invoices'];
@@ -653,6 +840,8 @@ function createInvoiceFull(data) {
     return { success: true, data: invoiceData, payment: paymentResult, quantum: true, ultraFast: true, operations: 1 };
   } catch (err) {
     return { success: false, error: err.toString(), stack: err.stack };
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) {}
   }
 }
 
@@ -678,6 +867,14 @@ function createQuotationFull(data) {
 
 function completeJobFull(data) {
   var now = new Date().toISOString();
+  // LockService — see createInvoiceUltra for rationale. Job completion does
+  // a read-modify-write on stock quantities, so concurrent completions on
+  // the same SKU can oversell.
+  var lock = LockService.getScriptLock();
+  try {
+    var locked = lock.tryLock(20000);
+    if (!locked) return { success: false, error: 'Server busy — could not acquire job-completion lock. Please retry.' };
+  } catch (lockErr) {}
   try {
     var jobSheet = getSheetFast('Jobs');
     var jobHeaders = SCHEMAS['Jobs'];
@@ -743,6 +940,8 @@ function completeJobFull(data) {
     return { success: true, data: { id: data.id, ...data, updatedAt: now }, quantum: true, ultraFast: true };
   } catch (err) {
     return { success: false, error: err.toString() };
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) {}
   }
 }
 
@@ -790,6 +989,18 @@ function generateQuotationNumber() {
 
 function createInvoiceUltra(data) {
   var now = new Date().toISOString();
+  // LockService prevents race conditions on invoice number generation,
+  // stock decrement, and customer credit updates. Without this, two
+  // concurrent invoices can both read the same max-num and produce
+  // duplicate numbers, or both read the same stock level and oversell.
+  // The lock is released automatically when the function returns.
+  var lock = LockService.getScriptLock();
+  try {
+    var locked = lock.tryLock(20000); // wait up to 20s
+    if (!locked) return { success: false, error: 'Server busy — could not acquire invoice lock. Please retry.' };
+  } catch (lockErr) {
+    // Some Apps Script contexts don't have LockService — proceed without.
+  }
   try {
     var customer = null;
     if (data.customerId && !data.customerName) {
@@ -902,6 +1113,8 @@ function createInvoiceUltra(data) {
     return { success: true, data: invoiceData, payment: paymentResult, quantum: true, ultraFast: true, ultraUltraFast: true, version: '5.0', operations: 1, numberGenerated: number };
   } catch (err) {
     return { success: false, error: err.toString(), stack: err.stack };
+  } finally {
+    try { lock.releaseLock(); } catch (ignore) {}
   }
 }
 

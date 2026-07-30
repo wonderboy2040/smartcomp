@@ -419,6 +419,45 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    // Before soft-deleting the job, restore any stock that was deducted when
+    // the job was completed. Without this, deleting a completed job silently
+    // loses the parts forever in the Items sheet.
+    const job = await getRow<any>('Jobs', id).catch(() => null)
+    if (job && String(job.status) === 'Completed') {
+      try {
+        const parts = normalizeParts(safeJsonParse<any[]>(job.partsUsedJson, []))
+        const stockReturns: { id: string; deductQty: number }[] = []
+        if (parts.length > 0) {
+          const qtyMap = new Map<string, number>()
+          for (const p of parts) {
+            if (p.itemId) qtyMap.set(p.itemId, (qtyMap.get(p.itemId) || 0) + p.qty)
+          }
+          for (const [itemId, qty] of qtyMap.entries()) {
+            // negative deductQty = add back to stock
+            stockReturns.push({ id: itemId, deductQty: -qty })
+          }
+          const dbItems = await Promise.all(
+            stockReturns.map((s) => getRow<any>('Items', s.id).catch(() => null))
+          )
+          const finalUpdates: { id: string; data: any }[] = []
+          for (const upd of stockReturns) {
+            const dbItem = dbItems.find((d: any) => d && String(d.id) === String(upd.id))
+            if (dbItem) {
+              finalUpdates.push({
+                id: upd.id,
+                data: { quantity: (Number(dbItem.quantity) || 0) + Math.abs(upd.deductQty) },
+              })
+            }
+          }
+          if (finalUpdates.length > 0) {
+            await bulkUpdate('Items', finalUpdates).catch(() => {})
+          }
+        }
+      } catch (stockErr: any) {
+        // Log but don't block the delete — stock restore is best-effort.
+        console.error('[Jobs DELETE] Stock restore failed:', stockErr?.message)
+      }
+    }
     await deleteRow('Jobs', id)
     return NextResponse.json({ success: true })
   } catch (e: any) {

@@ -9,12 +9,27 @@ import { sendCustomerNotification } from '@/lib/notifications'
  *
  * On Render: use external cron (cron-job.org) to hit this daily at 10 AM.
  * Header: Authorization: Bearer CRON_SECRET
+ *
+ * SECURITY: CRON_SECRET is REQUIRED in production. If unset, the endpoint
+ * returns 503 — preventing mass-WhatsApp-send abuse. GET is rejected to
+ * prevent CSRF (an attacker can craft a GET link the admin might click).
  */
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
-  if (secret && authHeader !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'CRON_SECRET not configured — cron disabled' },
+        { status: 503 }
+      )
+    }
+    // dev: allow without secret, but warn
+    console.warn('[cron/amc] CRON_SECRET not set (dev mode) — allowing request')
+  } else {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   try {
@@ -62,6 +77,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  return POST(req)
+// GET is intentionally rejected — cron endpoints must be POST to avoid CSRF.
+// (An attacker can craft a <img src="..."> or link the admin might click;
+//  they cannot craft a cross-origin POST without CORS pre-flight.)
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Method Not Allowed — use POST with Authorization: Bearer <CRON_SECRET>' },
+    { status: 405, headers: { Allow: 'POST' } }
+  )
 }

@@ -276,7 +276,11 @@ function createWindow(port) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      // SECURITY: sandbox:true confines the renderer process so even if a
+      // XSS payload runs in the page, it cannot reach Node primitives
+      // directly. Combined with contextIsolation:true, this is the
+      // Electron-recommended baseline.
+      sandbox: true,
     },
   })
 
@@ -409,24 +413,23 @@ function showErrorWindow(errorMessage) {
     </ul>
   </div>
   <script>
-    const { ipcRenderer } = require('electron');
+    // SECURITY: previously this used require('electron') inside the renderer,
+    // which is broken under contextIsolation:true + sandbox:true. The preload
+    // script now exposes a safe 'smartcomp' global with an `openLog()` method
+    // instead — no Node primitives reachable from the error page.
     function retry() {
       location.reload();
     }
     function openLog() {
-      ipcRenderer.send('open-log-file');
+      if (window.smartcomp && typeof window.smartcomp.openLog === 'function') {
+        window.smartcomp.openLog();
+      }
     }
   </script>
 </body>
 </html>`
 
   win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
-
-  // Handle "Open Log File" button
-  const { ipcMain } = require('electron')
-  ipcMain.once('open-log-file', () => {
-    shell.openPath(logPath)
-  })
 }
 
 // ============================================================
@@ -447,6 +450,12 @@ if (!gotLock) {
     if (process.platform === 'win32') {
       app.setAppUserModelId(APP_ID)
     }
+
+    // Register the IPC handler for "Open Log File" (invoked by preload.openLog)
+    const { ipcMain } = require('electron')
+    ipcMain.handle('open-log-file', () => {
+      return shell.openPath(getLogPath())
+    })
 
     openLog()
     logLine(`Config path: ${getConfigPath()}`)

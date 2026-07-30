@@ -25,9 +25,15 @@ import { parseRateResponseAdvanced } from '@/lib/whatsapp'
 // Verify Meta webhook HMAC signature (sha256 of body using App Secret)
 async function verifyMetaSignature(req: NextRequest, rawBody: string): Promise<boolean> {
   const APP_SECRET = process.env.WA_APP_SECRET
+  // SECURITY: in production, require the secret to be set. Without HMAC
+  // verification, anyone can POST fake inbound messages and poison the
+  // Enquiries sheet with arbitrary "rates" attached to real suppliers.
   if (!APP_SECRET) {
-    // No app secret configured — skip verification (testing mode)
-    console.warn('[Webhook] WA_APP_SECRET not set — skipping HMAC verification')
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[Webhook] WA_APP_SECRET not set in production — rejecting webhook')
+      return false
+    }
+    console.warn('[Webhook] WA_APP_SECRET not set (dev mode) — skipping HMAC verification')
     return true
   }
   const signature = req.headers.get('x-hub-signature-256')

@@ -15,13 +15,15 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Standalone output so Electron can ship the server bundle without node_modules
   output: 'standalone',
+  // Type-check on build — was previously ignored, which let real type errors
+  // ship to production silently. If type errors block a deploy, fix them
+  // rather than disabling this flag again.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
+  // ESLint on build — keep build validation active. Same rationale as above.
   eslint: {
-    // The project intentionally keeps legacy panel code permissive; build validation
-    // is done with Next compilation and runtime smoke tests.
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
   reactStrictMode: true,
   poweredByHeader: false,

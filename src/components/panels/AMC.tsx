@@ -43,10 +43,21 @@ export function AMCPanel() {
   }
 
   const handleLogVisit = async (c: any) => {
-    if (!confirm(`Log a service visit for ${c.customerName}?\nVisits used: ${c.visitsUsed}/${c.visitsIncluded}`)) return
+    // Prompt for fresh visit notes instead of silently re-using the contract's
+    // existing notes (which would overwrite visit history with stale data).
+    // window.prompt returns null on Cancel, '' on OK-empty.
+    let visitNotes = ''
+    if (typeof window !== 'undefined') {
+      const prompted = window.prompt(
+        `Log a service visit for ${c.customerName}?\nVisits used: ${c.visitsUsed}/${c.visitsIncluded}\n\nVisit notes (optional):`,
+        ''
+      )
+      if (prompted === null) return // user cancelled
+      visitNotes = prompted
+    }
     try {
-      await apiPut(`/api/amc/${c.id}`, { action: 'logVisit', notes: c.notes })
-      toast({ title: 'Visit logged', description: `Visits: ${c.visitsUsed + 1}/${c.visitsIncluded}` })
+      await apiPut(`/api/amc/${c.id}`, { action: 'logVisit', notes: visitNotes })
+      toast({ title: 'Visit logged', description: `Visits: ${Number(c.visitsUsed || 0) + 1}/${c.visitsIncluded}` })
       refetch()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })

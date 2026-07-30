@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import {
   Plus, Wallet, IndianRupee, TrendingUp, TrendingDown, Trash2,
-  Search, Bell, AlertCircle, MessageCircle, CreditCard
+  Search, Bell, AlertCircle, MessageCircle, CreditCard, Loader2
 } from 'lucide-react'
 
 export function PaymentsPanel() {
@@ -27,6 +27,7 @@ export function PaymentsPanel() {
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null)
+  const [saving, setSaving] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
     amount: 0,
     type: 'cash',
@@ -99,6 +100,8 @@ export function PaymentsPanel() {
       toast({ title: 'Amount must be greater than 0', variant: 'destructive' })
       return
     }
+    if (saving) return // double-click / double-submit guard
+    setSaving(true)
     try {
       await apiPost('/api/payments', {
         invoiceId: selectedInvoice.id,
@@ -110,6 +113,8 @@ export function PaymentsPanel() {
       refetchPay()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -533,9 +538,10 @@ export function PaymentsPanel() {
             </div>
           )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-            <Button onClick={handleSavePayment} className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
-              Record Payment
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving} className="w-full sm:w-auto">Cancel</Button>
+            <Button onClick={handleSavePayment} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 w-full sm:w-auto">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {saving ? 'Saving…' : 'Record Payment'}
             </Button>
           </DialogFooter>
         </DialogContent>

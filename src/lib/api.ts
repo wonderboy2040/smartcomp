@@ -171,6 +171,32 @@ function trackDeleted(type: 'jobs' | 'payments', id: string) {
   } catch {}
 }
 
+/**
+ * Filter a list payload returned by the server, removing any IDs we have
+ * locally soft-deleted within the last 5 minutes. Without this, a slow
+ * background refetch that started BEFORE the delete was synced can
+ * "resurrect" the row in the UI until the next refetch.
+ *
+ * The server (Apps Script) also tracks soft-deletes via the `deleted` column,
+ * but the local filter is a belt-and-braces guard against in-flight requests
+ * and cache-race conditions (the same pattern index.html uses with
+ * recentlyDeletedJobs).
+ */
+function applyDeletedFilter(url: string, data: any): any {
+  if (!Array.isArray(data)) return data
+  // Map URL → tracked-deleted set
+  let type: 'jobs' | 'payments' | null = null
+  if (url.startsWith('/api/jobs')) type = 'jobs'
+  else if (url.startsWith('/api/payments') || url.startsWith('/api/service-payments')) type = 'payments'
+  if (!type) return data
+  const set = type === 'jobs' ? recentlyDeletedJobs : recentlyDeletedPayments
+  if (set.size === 0) return data
+  return data.filter((row: any) => {
+    const id = row?.id || row?.jobId
+    return !id || !set.has(String(id))
+  })
+}
+
 function loadDeletedExpiryFromStorage() {
   if (typeof window === 'undefined') return
   try {
@@ -447,24 +473,29 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
     }
     
     const data = await res.json()
-    
-    // Quantum: hash check like lastCloudDataHash to avoid unnecessary re-render
+
+    // Quantum: hash check like lastCloudDataHash to skip redundant re-renders.
+    // IMPORTANT: do NOT mutate lastDataHash here — setCache() is the single owner
+    // of that map. Pre-writing the hash here would make setCache's prevHash===newHash
+    // check pass silently and skip notify(), leaving every useFetch subscriber stale.
     const newHash = computeHash(data)
     const oldHash = lastDataHash.get(url)
     if (oldHash === newHash) {
-      // Data unchanged, return existing to prevent flicker (like index.html)
+      // Data unchanged — refresh timestamp only, do not notify (prevents flicker)
       const existing = cache.get(url)
       if (existing !== undefined) {
-        timestamps.set(url, Date.now()) // refresh timestamp
+        timestamps.set(url, Date.now())
+        lastPullTime.set(url, Date.now())
         return existing
       }
     }
-    lastDataHash.set(url, newHash)
     lastPullTime.set(url, Date.now())
-    setCache(url, data)
-    setQuantumMem(url, data)
+    // setCache() computes hash, compares against prevHash, and notifies subscribers
+    // ONLY when the data actually changed. It also writes quantumMemCache + localStorage.
+    const filtered = applyDeletedFilter(url, data)
+    setCache(url, filtered)
     cache.delete(`__error:${url}`)
-    return data
+    return filtered
   } catch (e: any) {
     if (attempt <= RETRY_ATTEMPTS && (e.name === 'AbortError' || e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
       await new Promise(r => setTimeout(r, RETRY_DELAY * attempt))
@@ -748,6 +779,15 @@ export async function apiDelete(url: string) {
   const listUrl = listUrlOf(url)
   const targetId = idOf(url)
 
+  // Track the deleted ID so any in-flight GET that returns the row before the
+  // server-side soft-delete commits is filtered out (anti-resurrection guard).
+  if (targetId) {
+    if (listUrl.startsWith('/api/jobs')) trackDeleted('jobs', String(targetId))
+    else if (listUrl.startsWith('/api/payments') || listUrl.startsWith('/api/service-payments')) {
+      trackDeleted('payments', String(targetId))
+    }
+  }
+
   const snapshots = new Map<string, any>()
   for (const key of Array.from(cache.keys())) {
     const keyBase = key.split('?')[0].split('#')[0]
@@ -785,7 +825,17 @@ export async function apiDelete(url: string) {
     if (!r.ok) throw new Error(data.error || 'Failed to delete')
     return data
   } catch (e) {
-    // Rollback on failure
+    // Rollback on failure — restore cache snapshot AND untrack the deleted ID
+    // so the row is no longer filtered out by applyDeletedFilter().
+    if (targetId) {
+      if (listUrl.startsWith('/api/jobs')) {
+        recentlyDeletedJobs.delete(String(targetId))
+        deletedExpiry.delete(`jobs:${String(targetId)}`)
+      } else if (listUrl.startsWith('/api/payments') || listUrl.startsWith('/api/service-payments')) {
+        recentlyDeletedPayments.delete(String(targetId))
+        deletedExpiry.delete(`payments:${String(targetId)}`)
+      }
+    }
     for (const [key, snap] of snapshots) {
       setCache(key, snap)
     }

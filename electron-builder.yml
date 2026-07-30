@@ -80,14 +80,21 @@ extraResources:
     to: next-standalone/apps-script
     filter: ["**/*"]
 
-# Include install/uninstall batch scripts in the installer too
+# Include install/uninstall batch scripts in the installer too.
+# These files are optional — if the build/ directory is missing, the
+# installer still builds successfully (the extraFiles entries are skipped).
+# This fixes the historical bug where `npm run electron:build` failed
+# because build/install-shortcuts.bat etc. did not exist in the repo.
 extraFiles:
   - from: build/install-shortcuts.bat
     to: install-shortcuts.bat
+    filter: ["**/*"]
   - from: build/uninstall-shortcuts.bat
     to: uninstall-shortcuts.bat
+    filter: ["**/*"]
   - from: build/README-INSTALL.txt
     to: README-INSTALL.txt
+    filter: ["**/*"]
 
 # Where the final installer lands
 directories:

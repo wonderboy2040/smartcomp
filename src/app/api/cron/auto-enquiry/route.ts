@@ -6,12 +6,24 @@ import { isCloudApiConfigured, sendTemplateMessage, sendTextMessage } from '@/li
 // Cron job: Auto-create enquiries on 1st and 15th of month
 // Vercel cron config in vercel.json: "0 10 1,15 * *"
 // External cron (Render): curl -X POST https://your-app.com/api/cron/auto-enquiry -H "Authorization: Bearer YOUR_SECRET"
+//
+// SECURITY: CRON_SECRET is REQUIRED in production. GET is rejected to prevent CSRF.
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization')
   const secret = process.env.CRON_SECRET
-  if (secret && authHeader !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'CRON_SECRET not configured — cron disabled' },
+        { status: 503 }
+      )
+    }
+    console.warn('[cron/auto-enquiry] CRON_SECRET not set (dev mode) — allowing request')
+  } else {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   try {
@@ -97,6 +109,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  return POST(req)
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Method Not Allowed — use POST with Authorization: Bearer <CRON_SECRET>' },
+    { status: 405, headers: { Allow: 'POST' } }
+  )
 }

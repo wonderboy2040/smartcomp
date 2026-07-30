@@ -14,11 +14,22 @@ export async function POST(req: NextRequest) {
     const targetPhone = String(body.phone || '').replace(/[^\d]/g, '')
     const target = targetPhone.length === 10 ? `91${targetPhone}` : targetPhone
 
-    // Fetch snapshot
+    // Fetch snapshot — forward the auth cookie so the internal request
+    // passes the middleware PIN check when APP_PIN is configured.
+    // Without this, /api/snapshot returns 401 and the WhatsApp send fails
+    // for any logged-in shop owner on a PIN-protected deployment.
     const snapshotUrl = new URL('/api/snapshot?format=whatsapp', req.url)
-    const snapRes = await fetch(snapshotUrl)
+    const authCookie = req.cookies.get('smartcomp_auth')?.value
+    const snapRes = await fetch(snapshotUrl, {
+      headers: {
+        ...(authCookie ? { cookie: `smartcomp_auth=${authCookie}` } : {}),
+      },
+    })
     if (!snapRes.ok) {
-      return NextResponse.json({ error: 'Failed to generate snapshot' }, { status: 500 })
+      return NextResponse.json(
+        { error: 'Failed to generate snapshot', status: snapRes.status },
+        { status: 500 }
+      )
     }
     const snap = await snapRes.json()
     const message = snap.whatsappMessage || ''
