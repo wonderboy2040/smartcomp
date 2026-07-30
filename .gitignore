@@ -26,3 +26,7 @@ server.log
 *.swo
 Thumbs.db
 .zscripts/
+
+# ZAI SDK config (contains JWT token — NEVER commit)
+.z-ai-config
+.z-ai-config.local

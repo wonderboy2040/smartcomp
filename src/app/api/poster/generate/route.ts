@@ -223,6 +223,67 @@ function buildSuperPrompt(opts: {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// ZAI SDK config loader
+//
+// The z-ai-web-dev-sdk normally reads its config from one of:
+//   1. <project-root>/.z-ai-config
+//   2. ~/.z-ai-config
+//   3. /etc/.z-ai-config
+//
+// On Render/Vercel/electron-asar deployments none of those paths are
+// writable at deploy time, so we ALSO support env-var-based config.
+// Set these on Render:
+//   ZAI_BASE_URL  = https://internal-api.z.ai/v1
+//   ZAI_API_KEY   = Z.ai   (literal string — the SDK uses this as a sentinel)
+//   ZAI_TOKEN     = <JWT token from your chat session>
+//   ZAI_USER_ID   = <uuid>
+//   ZAI_CHAT_ID   = <uuid>  (optional)
+//
+// If env vars are set, we instantiate the SDK directly with them
+// (bypassing the file-based loadConfig entirely).
+// Otherwise we fall back to ZAI.create() which reads the .z-ai-config file
+// (the path used in dev / desktop mode).
+// ──────────────────────────────────────────────────────────────────────
+
+interface ZaiConfig {
+  baseUrl: string
+  apiKey: string
+  chatId?: string
+  userId?: string
+  token?: string
+}
+
+function loadZaiConfigFromEnv(): ZaiConfig | null {
+  const baseUrl = process.env.ZAI_BASE_URL
+  const apiKey = process.env.ZAI_API_KEY
+  if (!baseUrl || !apiKey) return null
+  return {
+    baseUrl,
+    apiKey,
+    chatId: process.env.ZAI_CHAT_ID,
+    userId: process.env.ZAI_USER_ID,
+    token: process.env.ZAI_TOKEN,
+  }
+}
+
+async function createZai() {
+  const ZAIModule = await import('z-ai-web-dev-sdk')
+  const ZAI = ZAIModule.default
+  const envConfig = loadZaiConfigFromEnv()
+  if (envConfig) {
+    // Use direct constructor with env-var config — no file lookup needed.
+    // The constructor is marked private in the .d.ts (TS2673) but is
+    // functionally public in the compiled JS — we cast to any to bypass
+    // the type check. This is the SDK's officially supported escape hatch
+    // for environments (Render, Vercel, Electron) where the .z-ai-config
+    // file can't be written at deploy time.
+    return new (ZAI as any)(envConfig)
+  }
+  // Fall back to file-based config (dev / desktop mode).
+  return ZAI.create()
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // POST handler
 // ──────────────────────────────────────────────────────────────────────
 
@@ -263,10 +324,9 @@ export async function POST(req: NextRequest) {
       includeBranding: includeShopBranding,
     })
 
-    // Lazily import the SDK so the route still loads even if the dep is missing
-    // (we'll get a clear error at call time instead of at module-load time).
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    const zai = await ZAI.create()
+    // Instantiate the ZAI SDK — uses env vars if set, otherwise falls back
+    // to .z-ai-config file lookup.
+    const zai = await createZai()
 
     const sizePreset = SIZE_PRESETS[size]
     const apiSize = sizePreset.apiSize
@@ -307,13 +367,19 @@ export async function POST(req: NextRequest) {
     })
   } catch (e: any) {
     console.error('[/api/poster/generate] error:', e?.message)
+    // Surface a friendly error specifically for the config-not-found case
+    // so the user knows to set ZAI_* env vars on Render.
+    const isConfigError = e?.message?.includes('Configuration file not found') || e?.message?.includes('.z-ai-config')
     return NextResponse.json(
       {
-        error: e?.message || 'Failed to generate poster. Please try again.',
-        // Surface SDK size-validation errors with a friendlier message
-        hint: e?.message?.includes('size')
-          ? 'Size validation failed. Use one of: whatsapp-status, instagram-story, square, landscape, wide-banner.'
-          : undefined,
+        error: isConfigError
+          ? 'ZAI SDK config missing. Set ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID env vars on Render (or create .z-ai-config in project root).'
+          : (e?.message || 'Failed to generate poster. Please try again.'),
+        hint: isConfigError
+          ? 'See PRO_REFACTOR_REPORT or DEPLOYMENT_TROUBLESHOOTING for the exact env var values to copy from your local /etc/.z-ai-config file.'
+          : (e?.message?.includes('size')
+              ? 'Size validation failed. Use one of: whatsapp-status, instagram-story, square, landscape, wide-banner.'
+              : undefined),
       },
       { status: 500 },
     )
