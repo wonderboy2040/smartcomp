@@ -128,7 +128,12 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
   }, [discountPercent, calc.subtotal])
 
   const addStockItem = (item: any) => {
-    if (Number(item.quantity) <= 0) {
+    // Invoices: enforce stock availability — can't sell what you don't have.
+    // Quotations: ALLOW 0-qty items (you're just proposing a price to a
+    // customer; the actual stock deduction happens only when the quotation
+    // is converted to an invoice, and even then the conversion validates
+    // fresh stock at that moment).
+    if (docType === 'invoice' && Number(item.quantity) <= 0) {
       toast({ title: 'Out of stock!', description: `${item.name} has 0 quantity`, variant: 'destructive' })
       return
     }
@@ -149,7 +154,15 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
     ])
     setShowItemPicker(false)
     setItemSearch('')
-    toast({ title: `Added: ${item.name}`, description: `Price Rs.${item.sellingPrice} | Stock ${item.quantity} | Profit ${calculateProfitMargin(Number(item.costPrice), Number(item.sellingPrice))}%` })
+    // For quotations on a 0-stock item, mention the low-stock status in the toast
+    // so the user is aware (but the item is still added — no hard block).
+    const stockNote = Number(item.quantity) <= 0
+      ? `⚠️ Stock 0 (quotation only)`
+      : `Stock ${item.quantity}`
+    toast({
+      title: `Added: ${item.name}`,
+      description: `Price Rs.${item.sellingPrice} | ${stockNote} | Profit ${calculateProfitMargin(Number(item.costPrice), Number(item.sellingPrice))}%`,
+    })
   }
 
   const addCustomItem = () => {
@@ -495,6 +508,20 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                   {filteredStock.length === 0 ? <TableRow><TableCell colSpan={4} className="text-center py-8 text-slate-500">No items found for "{itemSearch}" - Try different keyword or add custom item</TableCell></TableRow> : filteredStock.map((item: any) => {
                     const margin = calculateProfitMargin(Number(item.costPrice), Number(item.sellingPrice))
                     const isLow = Number(item.quantity) <= Number(item.minQuantity)
+                    const isZeroStock = Number(item.quantity) <= 0
+                    const isQuotation = docType === 'quotation'
+                    // For quotations: 0-qty items are quotable (show "Quote OK" badge)
+                    // For invoices: 0-qty items are blocked (show "❌ No stock")
+                    const stockBadgeClass = isZeroStock
+                      ? (isQuotation
+                          ? 'bg-cyan-50 text-cyan-700 border-cyan-200'
+                          : 'bg-red-50 text-red-700 border-red-200')
+                      : (isLow
+                          ? 'bg-red-50 text-red-700 border-red-200'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200')
+                    const stockBadgeText = isZeroStock
+                      ? (isQuotation ? `Stock: 0 ${item.unit || 'pcs'} • Quote OK` : `Stock: 0 ${item.unit || 'pcs'} • ❌ Blocked`)
+                      : `Stock: ${item.quantity} ${item.unit || 'pcs'} ${isLow ? '⚠️ LOW' : '✓'}`
                     return (
                       <TableRow key={item.id} className={`hover:bg-slate-50 ${isLow ? 'bg-amber-50/50' : ''}`}>
                         <TableCell>
@@ -502,14 +529,14 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                           <div className="flex gap-1.5 mt-1 flex-wrap">
                             <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 rounded font-mono">{item.sku}</span>
                             <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded">{item.category}</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${isLow ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>Stock: {item.quantity} {item.unit || 'pcs'} {isLow ? '⚠️ LOW' : '✓'}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${stockBadgeClass}`}>{stockBadgeText}</span>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border font-bold ${margin > 30 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : margin > 15 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'}`}>Margin: {margin}%</span>
                           </div>
                           <div className="text-[10px] text-slate-500 mt-1">HSN: {item.hsnCode || '-'} | Min: {item.minQuantity} | Supplier: {item.supplier?.name || '-'}</div>
                         </TableCell>
                         <TableCell className="text-center"><span className={`text-xs font-bold px-2 py-1 rounded-full border ${item.gstApplicable ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>{item.gstApplicable ? `${item.gstRate}%` : 'No GST'}</span></TableCell>
                         <TableCell className="text-right"><div className="text-sm font-bold text-slate-900">Rs.{item.sellingPrice}</div><div className="text-[11px] text-slate-500">Cost Rs.{item.costPrice}</div><div className="text-[10px] font-bold text-emerald-600">Profit Rs.{Number(item.sellingPrice) - Number(item.costPrice)} ({margin}%)</div></TableCell>
-                        <TableCell><Button size="sm" onClick={() => addStockItem(item)} className="bg-slate-900 hover:bg-slate-800 text-white font-bold h-9 w-full"><Plus className="w-4 h-4 mr-1" /> Add</Button></TableCell>
+                        <TableCell><Button size="sm" onClick={() => addStockItem(item)} disabled={isZeroStock && !isQuotation} className={`font-bold h-9 w-full ${isZeroStock && !isQuotation ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 text-white'}`}><Plus className="w-4 h-4 mr-1" /> Add</Button></TableCell>
                       </TableRow>
                     )
                   })}
