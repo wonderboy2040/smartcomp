@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -36,17 +36,17 @@ export function CustomersPanel() {
     undefined
   )
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     setEditing(null)
     setDialogOpen(true)
-  }
+  }, [])
 
-  const handleEdit = (c: any) => {
+  const handleEdit = useCallback((c: any) => {
     setEditing(c)
     setDialogOpen(true)
-  }
+  }, [])
 
-  const handleViewLedger = async (c: any) => {
+  const handleViewLedger = useCallback(async (c: any) => {
     setLedgerCustomer({ ...c, _loading: true })
     try {
       const res = await fetch(`/api/customers/${c.id}`)
@@ -55,9 +55,9 @@ export function CustomersPanel() {
     } catch (e: any) {
       setLedgerCustomer({ ...c, _loading: false, _error: e.message })
     }
-  }
+  }, [])
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Delete this customer? Invoices will remain but reference will be lost.')) return
     try {
       await apiDelete(`/api/customers/${id}`)
@@ -75,7 +75,7 @@ export function CustomersPanel() {
         duration: 6000,
       })
     }
-  }
+  }, [refetch, toast])
 
   return (
     <div className="space-y-4">

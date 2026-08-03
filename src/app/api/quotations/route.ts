@@ -1,18 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createQuotationUltra } from '@/lib/sheets-client'
 import { computeInvoice, type LineItem } from '@/lib/calc'
+import { apiLimiter, writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const check = apiLimiter(ip)
+    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
+
     const url = new URL(req.url)
     const customerId = url.searchParams.get('customerId')
     const status = url.searchParams.get('status')
+    const search = url.searchParams.get('search')
+    const limit = parseInt(url.searchParams.get('limit') || '200')
 
     let quotations = await listRows<any>('Quotations')
     if (customerId) quotations = quotations.filter((q) => q.customerId === customerId)
     if (status) quotations = quotations.filter((q) => q.status === status)
+    if (search) {
+      const s = search.toLowerCase()
+      quotations = quotations.filter(
+        (q) =>
+          String(q.number || '').toLowerCase().includes(s) ||
+          String(q.customerName || '').toLowerCase().includes(s) ||
+          String(q.customerPhone || '').toLowerCase().includes(s),
+      )
+    }
 
     quotations.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime())
+    quotations = quotations.slice(0, limit)
 
     const result = quotations.map((q) => ({
       ...q,
@@ -31,7 +48,11 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(result, {
-      headers: { 'X-Ultra-Fast': 'true', 'X-Version': '6.0' }
+      headers: {
+        'X-Ultra-Fast': 'true',
+        'X-Version': '10.0',
+        'X-RateLimit-Remaining': check.remaining.toString(),
+      },
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
@@ -41,6 +62,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
   try {
+    const ip = getClientIp(req)
+    const check = writeLimiter(ip)
+    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
+
     const body = await req.json()
     const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, notes = '', validTill, status = 'draft', date, template, gstMode = 'gst' } = body
 

@@ -1,33 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, updateRow } from '@/lib/sheets-client'
 import { sendCustomerNotification } from '@/lib/notifications'
+import { cronLimiter, getClientIp } from '@/lib/rate-limit'
 
 /**
  * POST /api/cron/amc
  * Daily cron — checks AMC contracts expiring in 30 days, sends WhatsApp alert.
  * Also marks expired contracts as 'expired'.
  *
- * On Render: use external cron (cron-job.org) to hit this daily at 10 AM.
- * Header: Authorization: Bearer CRON_SECRET
+ * On Vercel: declared in vercel.json (auto-injects VERCEL_CRON_SECRET header).
+ * On Render: use external cron (cron-job.org) with Authorization: Bearer CRON_SECRET.
  *
- * SECURITY: CRON_SECRET is REQUIRED in production. If unset, the endpoint
- * returns 503 — preventing mass-WhatsApp-send abuse. GET is rejected to
- * prevent CSRF (an attacker can craft a GET link the admin might click).
+ * SECURITY: Either CRON_SECRET or VERCEL_CRON_SECRET must match.
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  if (!secret) {
+  const ip = getClientIp(req)
+  const check = cronLimiter(ip)
+  if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
+
+  const secrets = [process.env.CRON_SECRET, process.env.VERCEL_CRON_SECRET].filter(Boolean) as string[]
+  if (secrets.length === 0) {
     if (process.env.NODE_ENV === 'production') {
       return NextResponse.json(
-        { error: 'CRON_SECRET not configured — cron disabled' },
+        { error: 'No CRON_SECRET or VERCEL_CRON_SECRET configured — cron disabled' },
         { status: 503 }
       )
     }
-    // dev: allow without secret, but warn
-    console.warn('[cron/amc] CRON_SECRET not set (dev mode) — allowing request')
+    console.warn('[cron/amc] No cron secret set (dev mode) — allowing request')
   } else {
-    const authHeader = req.headers.get('authorization')
-    if (authHeader !== `Bearer ${secret}`) {
+    const authHeader = req.headers.get('authorization') || ''
+    const ok = secrets.some((s) => authHeader === `Bearer ${s}`)
+    if (!ok) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
   }

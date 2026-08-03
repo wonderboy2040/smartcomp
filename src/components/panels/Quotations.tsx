@@ -1,573 +1,438 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { useFetch, apiPost, apiPut, apiDelete, invalidate } from '@/lib/api'
+import { useState, useMemo } from 'react'
+import { useFetch, apiPost, apiDelete } from '@/lib/api'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Search, Plus, Trash2, FileText, Edit, Eye, UserPlus, X, ChevronDown, ChevronUp } from 'lucide-react'
-import { toast } from 'sonner'
-
-interface QuotationItem {
-  id?: string
-  itemId?: string
-  name: string
-  description?: string
-  quantity: number
-  unitPrice: number
-  gstRate?: number
-  hsnCode?: string
-}
-
-interface Quotation {
-  id: string
-  quotationNumber?: string
-  customerId?: string
-  customerName: string
-  customerPhone?: string
-  customerEmail?: string
-  customerAddress?: string
-  date: string
-  validUntil?: string
-  items: QuotationItem[]
-  subtotal: number
-  gstAmount: number
-  total: number
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
-  notes?: string
-  terms?: string
-}
-
-interface Customer {
-  id: string
-  name: string
-  phone?: string
-  email?: string
-  address?: string
-  gstin?: string
-}
-
-interface Item {
-  id: string
-  name: string
-  description?: string
-  sellPrice?: number
-  gstRate?: number
-  hsnCode?: string
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import { useToast } from '@/hooks/use-toast'
+import { formatCurrency, sumBy } from '@/lib/calc'
+import { usePdfPreview } from '@/lib/preview-context'
+import { DocForm } from './DocForm'
+import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2, Edit3, Download, IndianRupee, CheckCircle2, Percent } from 'lucide-react'
+import { shareWhatsAppPdf } from '@/lib/whatsapp'
+import { toCSV, downloadCSV } from '@/lib/utils'
 
 export function QuotationsPanel() {
-  const { data: rawQuotations, refetch: refetchQuotations } = useFetch<Quotation[]>('/api/quotations', undefined)
-  const { data: rawCustomers } = useFetch<any[]>('/api/customers', undefined)
-  const { data: rawItems } = useFetch<any[]>('/api/items', undefined)
-  const quotations = rawQuotations || []
-  const customers = rawCustomers || []
-  const items = rawItems || []
-
+  const { toast } = useToast()
   const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState<Quotation | null>(null)
-  const [viewing, setViewing] = useState<Quotation | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<any | null>(null)
+  const { openPreview } = usePdfPreview()
+
+  const { data: quotations, loading, refetch } = useFetch<any[]>(
+    `/api/quotations?limit=200`,
+    undefined
+  )
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return quotations
-    const q = search.toLowerCase()
-    return quotations.filter((qt: Quotation) =>
-      qt.customerName?.toLowerCase().includes(q) ||
-      qt.quotationNumber?.toLowerCase().includes(q)
-    )
-  }, [quotations, search])
-
-  const stats = useMemo(() => ({
-    total: quotations.length,
-    draft: quotations.filter((q: Quotation) => q.status === 'draft').length,
-    sent: quotations.filter((q: Quotation) => q.status === 'sent').length,
-    accepted: quotations.filter((q: Quotation) => q.status === 'accepted').length,
-    totalValue: quotations.reduce((s: number, q: Quotation) => s + (q.total || 0), 0),
-  }), [quotations])
-
-  const handleSave = useCallback(async (quotation: Quotation) => {
-    setSaving(true)
-    try {
-      if (quotation.id) {
-        await apiPut(`/api/quotations/${quotation.id}`, quotation)
-      } else {
-        await apiPost('/api/quotations', quotation)
+    return (quotations || []).filter((q) => {
+      if (statusFilter !== 'all' && q.status !== statusFilter) return false
+      if (search) {
+        const s = search.toLowerCase()
+        return (
+          q.number.toLowerCase().includes(s) ||
+          String(q?.customer?.name || q?.customerName || '').toLowerCase().includes(s) ||
+          String(q?.customer?.phone || q?.customerPhone || '').includes(s)
+        )
       }
-      toast.success(quotation.id ? 'Quotation updated' : 'Quotation created')
-      setEditing(null)
-      invalidate('/api/quotations')
-      refetchQuotations()
-    } catch (err: any) {
-      toast.error('Save failed: ' + err.message)
-    } finally {
-      setSaving(false)
-    }
-  }, [refetchQuotations])
+      return true
+    })
+  }, [quotations, statusFilter, search])
 
-  const handleDelete = useCallback(async (id: string) => {
+  // ===== Summary stats =====
+  const summary = useMemo(() => {
+    const total = filtered.length
+    const totalValue = sumBy(filtered, (q) => q.grandTotal)
+    const converted = filtered.filter((q) => q.status === 'converted').length
+    const accepted = filtered.filter((q) => q.status === 'accepted' || q.status === 'converted').length
+    const conversionRate = total > 0 ? (converted / total) * 100 : 0
+    return { total, totalValue, converted, accepted, conversionRate }
+  }, [filtered])
+
+  const handleExportCSV = () => {
+    if (filtered.length === 0) {
+      toast({ title: 'Nothing to export', variant: 'destructive' })
+      return
+    }
+    const rows = filtered.map((q) => ({
+      Number: q.number,
+      Date: q.date ? new Date(q.date).toLocaleDateString('en-IN') : '',
+      ValidTill: q.validTill ? new Date(q.validTill).toLocaleDateString('en-IN') : '',
+      Customer: q.customer?.name || q.customerName || 'Walk-in',
+      Phone: q.customer?.phone || q.customerPhone || '',
+      GrandTotal: Number(q.grandTotal || 0).toFixed(2),
+      Status: q.status || '',
+    }))
+    const csv = toCSV(rows)
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadCSV(csv, `quotations-${stamp}.csv`)
+    toast({ title: `Exported ${rows.length} quotations ✓`, duration: 3000 })
+  }
+
+  const handleCreate = () => {
+    setEditing(null)
+    setDialogOpen(true)
+  }
+
+  const handleEdit = (q: any) => {
+    setEditing(q)
+    setDialogOpen(true)
+  }
+
+  const handleShareWhatsApp = async (q: any) => {
+    await shareWhatsAppPdf({
+      docId: q.id,
+      docType: 'quotation',
+      docNumber: String(q.number || ''),
+      customerName: String(q.customer?.name || q.customerName || 'Customer'),
+      customerPhone: String(q.customerPhone || q.customer?.phone || q.phone || q.mobile || ''),
+      grandTotal: Number(q.grandTotal) || 0,
+      notes: q.notes,
+      toast,
+      gstMode: q.gstMode === 'non-gst' ? 'non-gst' : 'gst',
+    })
+  }
+
+  const handleConvert = async (q: any) => {
+    if (!confirm(`Convert quotation ${q.number} to invoice? Stock will be deducted.`)) return
+    try {
+      const res = await apiPost(`/api/quotations/${q.id}`, { action: 'convert' })
+      toast({
+        title: 'Converted to invoice ✓',
+        description: `Invoice: ${res.invoiceNumber}`,
+        duration: 4500,
+      })
+      refetch()
+    } catch (e: any) {
+      toast({
+        title: 'Conversion failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
+    }
+  }
+
+  const handleDelete = async (id: string) => {
     if (!confirm('Delete this quotation?')) return
     try {
       await apiDelete(`/api/quotations/${id}`)
-      toast.success('Deleted')
-      invalidate('/api/quotations')
-      refetchQuotations()
-    } catch (err: any) {
-      toast.error('Delete failed: ' + err.message)
+      toast({
+        title: 'Quotation deleted ✓',
+        description: 'Removed locally - syncing to cloud',
+        duration: 3500,
+      })
+      refetch()
+    } catch (e: any) {
+      toast({
+        title: 'Delete failed',
+        description: e.message,
+        variant: 'destructive',
+        duration: 6000,
+      })
     }
-  }, [refetchQuotations])
-
-  const statusColors: Record<string, string> = {
-    draft: 'bg-slate-500/10 text-slate-500',
-    sent: 'bg-blue-500/10 text-blue-500',
-    accepted: 'bg-green-500/10 text-green-500',
-    rejected: 'bg-red-500/10 text-red-500',
-    expired: 'bg-amber-500/10 text-amber-500',
   }
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card><CardContent className="p-3"><div className="text-xl font-bold">{stats.total}</div><p className="text-[10px] text-muted-foreground uppercase">Total</p></CardContent></Card>
-        <Card><CardContent className="p-3"><div className="text-xl font-bold text-slate-500">{stats.draft}</div><p className="text-[10px] text-muted-foreground uppercase">Draft</p></CardContent></Card>
-        <Card><CardContent className="p-3"><div className="text-xl font-bold text-blue-500">{stats.sent}</div><p className="text-[10px] text-muted-foreground uppercase">Sent</p></CardContent></Card>
-        <Card><CardContent className="p-3"><div className="text-xl font-bold text-green-500">{stats.accepted}</div><p className="text-[10px] text-muted-foreground uppercase">Accepted</p></CardContent></Card>
-        <Card><CardContent className="p-3"><div className="text-xl font-bold">₹{stats.totalValue.toLocaleString()}</div><p className="text-[10px] text-muted-foreground uppercase">Total Value</p></CardContent></Card>
-      </div>
-
-      {/* Search & Add */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search quotations..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Quotations</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Create quotes and convert to invoices</p>
         </div>
-        <Button onClick={() => setEditing({
-          id: '', customerName: '', date: new Date().toISOString().split('T')[0],
-          items: [], subtotal: 0, gstAmount: 0, total: 0, status: 'draft'
-        })}>
-          <Plus className="h-4 w-4 mr-1" /> New Quotation
+        <Button onClick={handleCreate} className="bg-slate-900 hover:bg-slate-800 h-11">
+          <Plus className="w-4 h-4 mr-1.5" /> <span className="hidden sm:inline">New Quotation</span><span className="sm:hidden">New</span>
         </Button>
       </div>
 
-      {/* Quotations List */}
-      <div className="space-y-3">
-        {filtered.map((qt: Quotation) => {
-          const isExpanded = expandedId === qt.id
-          return (
-            <Card key={qt.id} className="group overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => setExpandedId(isExpanded ? null : qt.id)} className="p-0.5 hover:bg-accent rounded">
-                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                      <span className="font-mono font-medium text-sm">{qt.quotationNumber || qt.id.slice(0, 8)}</span>
-                      <Badge variant="outline" className={`text-[10px] ${statusColors[qt.status] || ''}`}>{qt.status}</Badge>
-                    </div>
-                    <div className="mt-1 font-medium">{qt.customerName}</div>
-                    <div className="text-xs text-muted-foreground">{new Date(qt.date).toLocaleDateString()} — Valid until {qt.validUntil ? new Date(qt.validUntil).toLocaleDateString() : 'N/A'}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-lg">₹{qt.total?.toLocaleString()}</div>
-                    <div className="text-xs text-muted-foreground">{qt.items?.length || 0} items</div>
-                  </div>
-                </div>
-
-                {/* Expanded Items */}
-                {isExpanded && (
-                  <div className="mt-3 pt-3 border-t space-y-2">
-                    {qt.items?.map((item: QuotationItem, idx: number) => (
-                      <div key={idx} className="flex items-start justify-between text-sm">
-                        <div className="flex-1">
-                          <div className="font-medium">{item.name}</div>
-                          {item.description && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
-                          )}
-                        </div>
-                        <div className="text-right text-muted-foreground">
-                          {item.quantity} × ₹{item.unitPrice?.toLocaleString()}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-2 pt-2">
-                      <button onClick={() => setViewing(qt)} className="p-1.5 hover:bg-accent rounded-md"><Eye className="h-4 w-4 text-muted-foreground" /></button>
-                      <button onClick={() => setEditing(qt)} className="p-1.5 hover:bg-accent rounded-md"><Edit className="h-4 w-4 text-muted-foreground" /></button>
-                      <button onClick={() => handleDelete(qt.id)} className="p-1.5 hover:bg-red-500/10 rounded-md"><Trash2 className="h-4 w-4 text-red-500" /></button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
-        {filtered.length === 0 && <div className="text-center text-muted-foreground py-8">No quotations found</div>}
+      {/* ===== Summary stat cards ===== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-cyan-100 flex items-center justify-center"><IndianRupee className="w-4 h-4 text-cyan-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Pipeline Value</p>
+                <p className="text-sm sm:text-base font-bold text-slate-900 truncate">{formatCurrency(summary.totalValue)}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">{summary.total} quotation(s)</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><CheckCircle2 className="w-4 h-4 text-emerald-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Converted</p>
+                <p className="text-sm sm:text-base font-bold text-emerald-700 truncate">{summary.converted}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">{summary.accepted} accepted</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center"><Percent className="w-4 h-4 text-violet-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Conversion</p>
+                <p className="text-sm sm:text-base font-bold text-violet-700 truncate">{summary.conversionRate.toFixed(1)}%</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">Won / Total</p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 bg-white">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center"><FileText className="w-4 h-4 text-amber-600" /></div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-slate-500 uppercase font-medium truncate">Pending</p>
+                <p className="text-sm sm:text-base font-bold text-amber-700 truncate">{summary.total - summary.converted - summary.accepted}</p>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">Awaiting reply</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Edit Modal */}
-      {editing && (
-        <QuotationForm
-          quotation={editing}
-          customers={customers}
-          items={items}
-          onSave={handleSave}
-          onCancel={() => setEditing(null)}
-          saving={saving}
-        />
-      )}
-
-      {/* View Modal */}
-      {viewing && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Quotation #{viewing.quotationNumber}</h3>
-              <button onClick={() => setViewing(null)} className="p-1 hover:bg-accent rounded"><X className="h-5 w-5" /></button>
+      <Card className="border-slate-200">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 absolute left-2.5 top-3 text-slate-400" />
+              <Input
+                placeholder="Search number, customer..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-11"
+              />
             </div>
-            <QuotationPreview quotation={viewing} />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ===== QUOTATION FORM WITH NEW CUSTOMER OPTION =====
-function QuotationForm({ quotation, customers, items, onSave, onCancel, saving }: {
-  quotation: Quotation; customers: Customer[]; items: Item[];
-  onSave: (q: Quotation) => void; onCancel: () => void; saving: boolean
-}) {
-  const [form, setForm] = useState<Quotation>({ ...quotation })
-  const [showNewCustomer, setShowNewCustomer] = useState(false)
-  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', address: '', gstin: '' })
-  const [selectedItemId, setSelectedItemId] = useState('')
-  const [newItemQty, setNewItemQty] = useState(1)
-
-  // Auto-fill customer details when selecting existing customer
-  const handleCustomerSelect = (customerId: string) => {
-    if (customerId === '__new__') {
-      setShowNewCustomer(true)
-      setForm({ ...form, customerId: undefined, customerName: '' })
-      return
-    }
-    const customer = customers.find((c: Customer) => c.id === customerId)
-    if (customer) {
-      setForm({
-        ...form,
-        customerId: customer.id,
-        customerName: customer.name,
-        customerPhone: customer.phone,
-        customerEmail: customer.email,
-        customerAddress: customer.address,
-      })
-      setShowNewCustomer(false)
-    }
-  }
-
-  // Save new customer inline
-  const handleAddNewCustomer = async () => {
-    if (!newCustomer.name) {
-      toast.error('Customer name required')
-      return
-    }
-    try {
-      // Create customer via API
-      const res = await apiPost('/api/customers', newCustomer)
-      const createdCustomer = res.data || res
-      setForm({
-        ...form,
-        customerId: createdCustomer.id,
-        customerName: createdCustomer.name,
-        customerPhone: createdCustomer.phone,
-        customerEmail: createdCustomer.email,
-        customerAddress: createdCustomer.address,
-      })
-      setShowNewCustomer(false)
-      setNewCustomer({ name: '', phone: '', email: '', address: '', gstin: '' })
-      toast.success('Customer added')
-      invalidate('/api/customers')
-    } catch (err: any) {
-      toast.error('Failed to add customer: ' + err.message)
-    }
-  }
-
-  // Add item from stock
-  const handleAddItem = () => {
-    if (!selectedItemId) return
-    const item = items.find((i: Item) => i.id === selectedItemId)
-    if (!item) return
-    const newItem: QuotationItem = {
-      itemId: item.id,
-      name: item.name,
-      description: item.description || '',
-      quantity: newItemQty,
-      unitPrice: item.sellPrice || 0,
-      gstRate: item.gstRate || 18,
-      hsnCode: item.hsnCode || '',
-    }
-    const updatedItems = [...(form.items || []), newItem]
-    recalcTotals(updatedItems)
-    setSelectedItemId('')
-    setNewItemQty(1)
-  }
-
-  // Add custom item
-  const handleAddCustomItem = () => {
-    const newItem: QuotationItem = {
-      name: 'New Item',
-      description: '',
-      quantity: 1,
-      unitPrice: 0,
-      gstRate: 18,
-    }
-    const updatedItems = [...(form.items || []), newItem]
-    recalcTotals(updatedItems)
-  }
-
-  // Remove item
-  const handleRemoveItem = (idx: number) => {
-    const updated = form.items.filter((_, i) => i !== idx)
-    recalcTotals(updated)
-  }
-
-  // Update item
-  const handleUpdateItem = (idx: number, field: keyof QuotationItem, value: any) => {
-    const updated = form.items.map((item, i) => i === idx ? { ...item, [field]: value } : item)
-    recalcTotals(updated)
-  }
-
-  // Recalculate totals
-  const recalcTotals = (items: QuotationItem[]) => {
-    const subtotal = items.reduce((s, item) => s + (item.quantity * item.unitPrice), 0)
-    const gstAmount = items.reduce((s, item) => {
-      const itemTotal = item.quantity * item.unitPrice
-      return s + (itemTotal * (item.gstRate || 0) / 100)
-    }, 0)
-    // Functional update — avoids stale closure on `form` overwriting in-progress edits
-    setForm(prev => ({ ...prev, items, subtotal, gstAmount, total: subtotal + gstAmount }))
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-card border rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">{form.id ? 'Edit Quotation' : 'New Quotation'}</h3>
-            <button onClick={onCancel} className="p-1 hover:bg-accent rounded"><X className="h-5 w-5" /></button>
-          </div>
-
-          {/* Customer Section */}
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Customer</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {!showNewCustomer ? (
-                <div className="space-y-3">
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                      value={form.customerId || ''}
-                      onChange={e => handleCustomerSelect(e.target.value)}
-                    >
-                      <option value="">Select Customer...</option>
-                      {customers.map((c: Customer) => (
-                        <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
-                      ))}
-                      <option value="__new__">+ Add New Customer</option>
-                    </select>
-                  </div>
-                  {form.customerName && (
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div><span className="text-muted-foreground">Name:</span> {form.customerName}</div>
-                      {form.customerPhone && <div><span className="text-muted-foreground">Phone:</span> {form.customerPhone}</div>}
-                      {form.customerEmail && <div><span className="text-muted-foreground">Email:</span> {form.customerEmail}</div>}
-                      {form.customerAddress && <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {form.customerAddress}</div>}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Add New Customer</span>
-                    <button onClick={() => setShowNewCustomer(false)} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="Name *" value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} />
-                    <Input placeholder="Phone" value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="Email" value={newCustomer.email} onChange={e => setNewCustomer({...newCustomer, email: e.target.value})} />
-                    <Input placeholder="GSTIN" value={newCustomer.gstin} onChange={e => setNewCustomer({...newCustomer, gstin: e.target.value})} />
-                  </div>
-                  <Textarea placeholder="Address" value={newCustomer.address} onChange={e => setNewCustomer({...newCustomer, address: e.target.value})} rows={2} />
-                  <Button size="sm" onClick={handleAddNewCustomer} disabled={!newCustomer.name}>
-                    <UserPlus className="h-3.5 w-3.5 mr-1" /> Add Customer
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Date</label>
-              <Input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Valid Until</label>
-              <Input type="date" value={form.validUntil || ''} onChange={e => setForm({...form, validUntil: e.target.value})} />
-            </div>
-          </div>
-
-          {/* Items Section */}
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Items</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {/* Add from Stock */}
-              <div className="flex gap-2">
-                <select
-                  className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                  value={selectedItemId}
-                  onChange={e => setSelectedItemId(e.target.value)}
-                >
-                  <option value="">Add from Stock...</option>
-                  {items.map((i: Item) => (
-                    <option key={i.id} value={i.id}>{i.name} (₹{i.sellPrice})</option>
-                  ))}
-                </select>
-                <Input type="number" className="w-20" value={newItemQty} onChange={e => setNewItemQty(parseInt(e.target.value) || 1)} min={1} />
-                <Button size="sm" onClick={handleAddItem} disabled={!selectedItemId}><Plus className="h-4 w-4" /></Button>
-                <Button size="sm" variant="outline" onClick={handleAddCustomItem}>Custom</Button>
-              </div>
-
-              {/* Items List */}
-              <div className="space-y-2">
-                {form.items?.map((item, idx) => (
-                  <div key={idx} className="border rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Input className="flex-1 text-sm" value={item.name} onChange={e => handleUpdateItem(idx, 'name', e.target.value)} placeholder="Item name" />
-                      <button onClick={() => handleRemoveItem(idx)} className="p-1.5 hover:bg-red-500/10 rounded"><Trash2 className="h-4 w-4 text-red-500" /></button>
-                    </div>
-
-                    {/* ===== PRODUCT DESCRIPTION FIELD ===== */}
-                    <Textarea
-                      className="text-sm resize-none"
-                      rows={2}
-                      placeholder="Product description / specifications (e.g. Intel i5, 16GB RAM, 512GB SSD...)"
-                      value={item.description || ''}
-                      onChange={e => handleUpdateItem(idx, 'description', e.target.value)}
-                    />
-
-                    <div className="grid grid-cols-4 gap-2">
-                      <Input type="number" className="text-sm" value={item.quantity} onChange={e => handleUpdateItem(idx, 'quantity', parseInt(e.target.value) || 0)} placeholder="Qty" />
-                      <Input type="number" className="text-sm" value={item.unitPrice} onChange={e => handleUpdateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)} placeholder="Price" />
-                      <Input type="number" className="text-sm" value={item.gstRate || ''} onChange={e => handleUpdateItem(idx, 'gstRate', parseFloat(e.target.value) || 0)} placeholder="GST %" />
-                      <Input className="text-sm" value={item.hsnCode || ''} onChange={e => handleUpdateItem(idx, 'hsnCode', e.target.value)} placeholder="HSN" />
-                    </div>
-                    <div className="text-right text-xs text-muted-foreground">
-                      Line Total: ₹{(item.quantity * item.unitPrice).toLocaleString()}
-                      {item.gstRate ? ` + ₹${((item.quantity * item.unitPrice) * item.gstRate / 100).toLocaleString()} GST` : ''}
-                    </div>
-                  </div>
-                ))}
-                {(!form.items || form.items.length === 0) && (
-                  <div className="text-center text-muted-foreground text-sm py-4">No items added yet</div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Totals */}
-          <div className="flex justify-end">
-            <div className="text-right space-y-1">
-              <div className="text-sm text-muted-foreground">Subtotal: ₹{form.subtotal?.toLocaleString()}</div>
-              <div className="text-sm text-muted-foreground">GST: ₹{form.gstAmount?.toLocaleString()}</div>
-              <div className="text-xl font-bold">Total: ₹{form.total?.toLocaleString()}</div>
-            </div>
-          </div>
-
-          {/* Notes & Terms */}
-          <div className="grid grid-cols-2 gap-3">
-            <Textarea placeholder="Notes" value={form.notes || ''} onChange={e => setForm({...form, notes: e.target.value})} rows={2} />
-            <Textarea placeholder="Terms & Conditions" value={form.terms || ''} onChange={e => setForm({...form, terms: e.target.value})} rows={2} />
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onCancel}>Cancel</Button>
-            <Button onClick={() => onSave(form)} disabled={saving || !form.customerName || !form.items?.length}>
-              {saving ? 'Saving...' : 'Save Quotation'}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-40 h-11">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="converted">Converted</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={handleExportCSV} className="h-11" title="Export filtered list to CSV">
+              <Download className="w-3.5 h-3.5 mr-1" /> CSV
             </Button>
           </div>
-        </div>
+        </CardContent>
+      </Card>
+
+      {/* Mobile card layout */}
+      <div className="sm:hidden space-y-3">
+        {loading ? (
+          <Card><CardContent className="text-center py-8 text-slate-500">Loading...</CardContent></Card>
+        ) : filtered.length === 0 ? (
+          <Card><CardContent className="text-center py-8 text-slate-500">
+            <FileText className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+            No quotations found
+          </CardContent></Card>
+        ) : (
+          filtered.map((q) => {
+            const expired = new Date(q?.validTill || Date.now()) < new Date() && q.status === 'draft'
+            return (
+              <Card key={q.id} className="border-slate-200">
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-900 text-sm">{q.number}</p>
+                      <p className="text-[10px] text-slate-500">{new Date(q?.date || Date.now()).toLocaleDateString('en-IN')}</p>
+                    </div>
+                    <Badge variant="outline" className={
+                      q.status === 'converted' ? 'bg-green-50 text-green-700 border-green-200 text-[9px]'
+                      : q.status === 'accepted' ? 'bg-blue-50 text-blue-700 border-blue-200 text-[9px]'
+                      : q.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200 text-[9px]'
+                      : q.status === 'sent' ? 'bg-amber-50 text-amber-700 border-amber-200 text-[9px]'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 text-[9px]'
+                    }>{q.status}</Badge>
+                  </div>
+                  <p className="text-sm text-slate-700 mt-1 truncate">{q?.customer?.name || q?.customerName || 'Walk-in'}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <div>
+                      <p className="text-base font-bold text-slate-900">{formatCurrency(q.grandTotal)}</p>
+                      <p className="text-[10px] text-slate-500">
+                        Valid: {new Date(q?.validTill || Date.now()).toLocaleDateString('en-IN')}
+                        {expired && <span className="text-red-500 ml-1">Expired</span>}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      {q.status !== 'converted' && (
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleConvert(q)}>
+                          <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openPreview(q.id, 'quotation', `Quotation ${q.number}`, q.gstMode === 'non-gst' ? 'non-gst' : 'gst')}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(q)} title="Edit Quotation">
+                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleShareWhatsApp(q)}>
+                        <Share2 className="w-3.5 h-3.5 text-green-600" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleDelete(q.id)}>
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })
+        )}
       </div>
-    </div>
-  )
-}
 
-// ===== QUOTATION PREVIEW =====
-function QuotationPreview({ quotation }: { quotation: Quotation }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between">
-        <div>
-          <div className="font-bold text-lg">QUOTATION</div>
-          <div className="text-sm text-muted-foreground">#{quotation.quotationNumber}</div>
-        </div>
-        <div className="text-right text-sm">
-          <div>Date: {new Date(quotation.date).toLocaleDateString()}</div>
-          <div>Valid Until: {quotation.validUntil ? new Date(quotation.validUntil).toLocaleDateString() : 'N/A'}</div>
-        </div>
-      </div>
+      {/* Desktop table */}
+      <Card className="border-slate-200 hidden sm:block">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50">
+                  <TableHead>Quotation #</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Valid Till</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">Loading...</TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                      <FileText className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                      No quotations found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((q) => {
+                    const expired = new Date(q?.validTill || Date.now()) < new Date() && q.status === 'draft'
+                    return (
+                      <TableRow key={q.id} className="hover:bg-slate-50">
+                        <TableCell className="font-medium text-slate-900">{q.number}</TableCell>
+                        <TableCell className="text-sm text-slate-600">
+                          {new Date(q?.date || Date.now()).toLocaleDateString('en-IN')}
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-600">
+                          {new Date(q?.validTill || Date.now()).toLocaleDateString('en-IN')}
+                          {expired && <span className="block text-[10px] text-red-500">Expired</span>}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{q?.customer?.name || q?.customerName || 'Walk-in'}</p>
+                            {q?.customer?.phone && (
+                              <p className="text-[10px] text-slate-500">{q.customer.phone}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">{formatCurrency(q.grandTotal)}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge
+                            variant="outline"
+                            className={
+                              q.status === 'converted' ? 'bg-green-50 text-green-700 border-green-200 text-[10px]'
+                              : q.status === 'accepted' ? 'bg-blue-50 text-blue-700 border-blue-200 text-[10px]'
+                              : q.status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200 text-[10px]'
+                              : q.status === 'sent' ? 'bg-amber-50 text-amber-700 border-amber-200 text-[10px]'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 text-[10px]'
+                            }
+                          >
+                            {q.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {q.status !== 'converted' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleConvert(q)}
+                                title="Convert to Invoice"
+                              >
+                                <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openPreview(q.id, 'quotation', `Quotation ${q.number}`, q.gstMode === 'non-gst' ? 'non-gst' : 'gst')}
+                              title="View PDF"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(q)}
+                              title="Edit Quotation"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleShareWhatsApp(q)}
+                              title="Share on WhatsApp"
+                            >
+                              <Share2 className="w-3.5 h-3.5 text-green-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(q.id)}
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="border rounded-lg p-3">
-        <div className="font-medium">To:</div>
-        <div>{quotation.customerName}</div>
-        {quotation.customerPhone && <div className="text-sm text-muted-foreground">{quotation.customerPhone}</div>}
-        {quotation.customerEmail && <div className="text-sm text-muted-foreground">{quotation.customerEmail}</div>}
-        {quotation.customerAddress && <div className="text-sm text-muted-foreground">{quotation.customerAddress}</div>}
-      </div>
+      <DocForm
+        key={editing?.id || 'new'}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        docType="quotation"
+        editing={editing}
+        onSaved={() => {
+          setDialogOpen(false)
+          refetch()
+        }}
+      />
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b">
-            <th className="text-left py-2">#</th>
-            <th className="text-left py-2">Item</th>
-            <th className="text-left py-2">Description</th>
-            <th className="text-right py-2">Qty</th>
-            <th className="text-right py-2">Price</th>
-            <th className="text-right py-2">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {quotation.items?.map((item, idx) => (
-            <tr key={idx} className="border-b border-dashed">
-              <td className="py-2 text-muted-foreground">{idx + 1}</td>
-              <td className="py-2 font-medium">{item.name}</td>
-              <td className="py-2 text-muted-foreground text-xs">{item.description || '-'}</td>
-              <td className="py-2 text-right">{item.quantity}</td>
-              <td className="py-2 text-right">₹{item.unitPrice?.toLocaleString()}</td>
-              <td className="py-2 text-right">₹{(item.quantity * item.unitPrice).toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div className="flex justify-end">
-        <div className="text-right space-y-1 w-48">
-          <div className="flex justify-between text-sm"><span>Subtotal:</span><span>₹{quotation.subtotal?.toLocaleString()}</span></div>
-          <div className="flex justify-between text-sm"><span>GST:</span><span>₹{quotation.gstAmount?.toLocaleString()}</span></div>
-          <div className="flex justify-between font-bold text-lg border-t pt-1"><span>Total:</span><span>₹{quotation.total?.toLocaleString()}</span></div>
-        </div>
-      </div>
-
-      {quotation.notes && <div className="text-sm"><span className="font-medium">Notes:</span> {quotation.notes}</div>}
-      {quotation.terms && <div className="text-sm"><span className="font-medium">Terms:</span> {quotation.terms}</div>}
     </div>
   )
 }

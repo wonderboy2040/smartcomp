@@ -75,11 +75,6 @@ export function buildWhatsAppMessage(
 
     case 'delivered':
       return `*${bn}*\n\n🤝 *THANK YOU FOR YOUR BUSINESS!*\n\nDear *${job.customerName}*,\n\nYour ${job.deviceType}${job.brandModel ? ' (' + job.brandModel + ')' : ''} has been delivered successfully.\n\n📋 *Job No:* ${job.id}\n📅 *Delivered On:* ${jobDate}\n\n⭐ We hope you are satisfied with our service! If you have 1 minute, please share your valuable feedback.\n\n📞 *Help & Support:* ${shop.businessMobile || ''}\n📍 ${shop.businessAddress || ''}\n\nThank you for choosing ${bn}! 🙏`
-
-    default:
-      // Unknown template type — return a minimal valid message rather than
-      // undefined (which would break the wa.me link with "undefined" text).
-      return `*${bn}*\n\nHello *${job.customerName}*,\n\nThis is a notification regarding Job #${job.id}.\n\n📞 ${shop.businessMobile || ''}`
   }
 }
 

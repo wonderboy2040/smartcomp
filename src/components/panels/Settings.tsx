@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useFetch, apiPost, apiPut } from '@/lib/api'
 import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -182,7 +182,6 @@ function ShopSettings() {
   const { toast } = useToast()
   const [form, setForm] = useState<any>({})
   const [saving, setSaving] = useState(false)
-  const shopInitializedRef = useRef(false)
 
   const { data: shop, refetch } = useFetch<any>('/api/shop', undefined)
   const { data: recentInvoices } = useFetch<any[]>('/api/invoices?limit=1', undefined)
@@ -201,22 +200,9 @@ function ShopSettings() {
     ? `/api/pdf/${previewInvoiceId}?type=invoice&template=${encodeURIComponent(debouncedDesign.template)}&banner=${encodeURIComponent(debouncedDesign.banner)}`
     : null
 
-  // Seed the form ONCE on first successful load. Subsequent refetches (e.g.,
-  // after a save) MUST NOT overwrite the form — the user could be mid-edit.
   useEffect(() => {
-    if (shop && !shopInitializedRef.current) {
-      setForm({
-        ...shop,
-        pdfTemplate: shop.pdfTemplate || 'tally-classic',
-        adBannerVariant: shop.adBannerVariant || 'flyer',
-      })
-      shopInitializedRef.current = true
-    }
+    if (shop) setForm({ ...shop, pdfTemplate: shop.pdfTemplate || 'tally-classic', adBannerVariant: shop.adBannerVariant || 'flyer' })
   }, [shop])
-
-  // Reset the init flag when the component unmounts (so reopening the panel
-  // reseeds from the latest server data).
-  useEffect(() => () => { shopInitializedRef.current = false }, [])
 
   const handleSave = async () => {
     setSaving(true)

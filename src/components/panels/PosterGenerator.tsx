@@ -92,8 +92,6 @@ interface GeneratedPoster {
   height: number
   elapsedMs: number
   createdAt: string
-  provider?: string
-  isPlaceholder?: boolean
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -164,15 +162,13 @@ export function PosterGeneratorPanel() {
         height: data.height,
         elapsedMs: data.elapsedMs,
         createdAt: new Date().toISOString(),
-        provider: data.provider,
-        isPlaceholder: data.isPlaceholder,
       }
 
       setCurrent(poster)
       setHistory((prev) => [poster, ...prev].slice(0, 8)) // keep last 8
       toast({
-        title: data.isPlaceholder ? 'Poster generated (placeholder)' : 'Poster generated ✓',
-        description: `${data.width}×${data.height} • ${(data.elapsedMs / 1000).toFixed(1)}s • ${data.provider || 'unknown provider'}`,
+        title: 'Poster generated ✓',
+        description: `${data.width}×${data.height} • ${data.elapsedMs / 1000}s • ${data.model}`,
       })
     } catch (e: any) {
       setError(e?.message || 'Failed to generate poster')
@@ -248,7 +244,7 @@ export function PosterGeneratorPanel() {
             </Badge>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Generate WhatsApp Status posters & advertising images from text prompts — powered by Pollinations.ai (free, no API key, no rate limits)
+            Generate WhatsApp Status posters & advertising images from text prompts — powered by GLM-class AI (Gemini Nano / DALL-E 3 equivalent)
           </p>
         </div>
         {shop?.name && (
@@ -445,7 +441,7 @@ export function PosterGeneratorPanel() {
             </CardTitle>
             <CardDescription className="text-xs">
               {current
-                ? `${current.width}×${current.height} • ${current.style} • ${(current.elapsedMs / 1000).toFixed(1)}s • ${current.provider || ''}`
+                ? `${current.width}×${current.height} • ${current.style} • ${(current.elapsedMs / 1000).toFixed(1)}s`
                 : 'Generated poster will appear here.'}
             </CardDescription>
           </CardHeader>
@@ -480,13 +476,6 @@ export function PosterGeneratorPanel() {
                     className="max-w-full max-h-[500px] object-contain"
                   />
                 </div>
-
-                {/* Placeholder warning — shown when the AI providers were down */}
-                {current.isPlaceholder && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-                    <strong>⚠ Placeholder generated.</strong> Both Pollinations endpoints were unreachable (likely a transient network issue). A branded text poster was generated so you have something usable right now. Click <strong>Regenerate</strong> (the wand icon below) to try again — it usually works on the second attempt.
-                  </div>
-                )}
 
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2">
@@ -567,8 +556,8 @@ export function PosterGeneratorPanel() {
       {/* ─── Footer info ─── */}
       <div className="text-[10px] text-slate-400 text-center pt-2">
         <p>
-          Powered by <strong className="text-slate-500">Pollinations.ai</strong> (free, no API key, no rate limits).
-          Automatic fallback to an SVG placeholder if the AI service is unreachable — you'll always get a usable poster.
+          Powered by <strong className="text-slate-500">z-ai-web-dev-sdk</strong> (GLM-4V-class image generation — comparable to Gemini Nano, Imagen, DALL-E 3).
+          Free, no API keys, no rate limits. Posters are generated on-demand and never stored on the server.
         </p>
       </div>
     </div>
