@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { useFetch, apiPost, apiPut, apiDelete, invalidate } from '@/lib/api'
+import React, { useState, useCallback, useMemo } from 'react'
+import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -54,7 +54,6 @@ export function StockPanel() {
     const item = items.find((i: Item) => i.id === id)
     if (!item) return
     const newQty = Math.max(0, (item.quantity || 0) + delta)
-    invalidate('/api/items')
     try {
       await apiPut(`/api/items/${id}`, { ...item, quantity: newQty })
       toast.success(`${delta > 0 ? '+' : ''}${delta} stock updated`)
@@ -138,8 +137,8 @@ export function StockPanel() {
                 {filtered.map((item: Item) => {
                   const isExpanded = expandedId === item.id
                   return (
-                    <>
-                      <TableRow key={item.id} className={item.minStock && item.quantity <= item.minStock ? 'bg-amber-500/10' : ''}>
+                    <React.Fragment key={item.id}>
+                      <TableRow className={item.minStock && item.quantity <= item.minStock ? 'bg-amber-500/10' : ''}>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <button
@@ -187,7 +186,7 @@ export function StockPanel() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </React.Fragment>
                   )
                 })}
                 {filtered.length === 0 && (

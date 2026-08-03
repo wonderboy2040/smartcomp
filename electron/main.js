@@ -457,6 +457,17 @@ if (!gotLock) {
       return shell.openPath(getLogPath())
     })
 
+    // Resolve the app version via IPC — preload exposes this as getVersion().
+    // We can't read package.json env vars in packaged Electron, so we use the
+    // authoritative app.getVersion() from the main process.
+    ipcMain.handle('get-app-version', () => {
+      try {
+        return app.getVersion()
+      } catch (e) {
+        return 'unknown'
+      }
+    })
+
     openLog()
     logLine(`Config path: ${getConfigPath()}`)
     logLine(`Log path: ${getLogPath()}`)

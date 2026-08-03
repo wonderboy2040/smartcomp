@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,8 @@ export function CommandCenterPanel({ onNavigate }: { onNavigate?: (tab: string) 
   const [isListening, setIsListening] = useState(false)
   const [voiceResult, setVoiceResult] = useState<string>('')
   const [showShortcuts, setShowShortcuts] = useState(false)
+  // Holds the active SpeechRecognition instance so we can stop/abort it on unmount.
+  const recognitionRef = useRef<any>(null)
 
   const searchResults = useMemo(() => {
     if (!query.trim()) return []
@@ -48,22 +50,39 @@ export function CommandCenterPanel({ onNavigate }: { onNavigate?: (tab: string) 
     })
   }, [invoices, items, jobs, dashboard])
 
+  // Stop the active recognition instance when the panel unmounts — otherwise
+  // the mic stays on and onresult callbacks setState on an unmounted component.
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.abort?.()
+      } catch {}
+      recognitionRef.current = null
+    }
+  }, [])
+
   const handleVoiceToggle = () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       alert('Voice recognition not supported in this browser. Use Chrome/Edge.')
       return
     }
     if (isListening) {
+      // User explicitly stopped — abort the active recognition instance.
+      try { recognitionRef.current?.abort?.() } catch {}
+      recognitionRef.current = null
       setIsListening(false)
       return
     }
-    // @ts-ignore
+    // @ts-expect-error — SpeechRecognition is a non-standard browser API.
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = new SpeechRecognition()
     recognition.lang = 'en-IN'
     recognition.interimResults = false
     recognition.onstart = () => setIsListening(true)
-    recognition.onend = () => setIsListening(false)
+    recognition.onend = () => {
+      setIsListening(false)
+      recognitionRef.current = null
+    }
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript
       setVoiceResult(transcript)
@@ -73,7 +92,15 @@ export function CommandCenterPanel({ onNavigate }: { onNavigate?: (tab: string) 
         onNavigate(cmd.params.tab)
       }
     }
-    recognition.start()
+    // Wrap start() in try/catch — "already started" and "permission denied"
+    // throw synchronously, which would otherwise bubble up as an uncaught error.
+    try {
+      recognition.start()
+      recognitionRef.current = recognition
+    } catch (e) {
+      console.warn('SpeechRecognition.start() failed:', e)
+      setIsListening(false)
+    }
   }
 
   return (

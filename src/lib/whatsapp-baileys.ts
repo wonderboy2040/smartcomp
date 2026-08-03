@@ -157,23 +157,32 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
     sock.ev.on('creds.update', saveCreds)
 
     sock.ev.on('connection.update', async (update: any) => {
+      // Stale-event guard: if this socket is no longer the active one (because
+      // the user called disconnectWhatsApp / startWhatsAppConnection again),
+      // discard the event so we don't clobber the NEW session's state.
+      if (sock !== session.socket) return
+
       const { connection, lastDisconnect, qr } = update
 
       if (qr) {
         session.lastEvent = 'qr_received'
         try {
           const qrDataUrl = await QRCode.toDataURL(qr, { width: 256, margin: 1, color: { dark: '#000000', light: '#ffffff' } })
+          // Re-check after await — socket may have been replaced during the async gap.
+          if (sock !== session.socket) return
           session.qrCode = qrDataUrl
           session.qrRetry += 1
           session.state = 'waiting_qr'
           notifyListeners()
         } catch (qrErr) {
+          if (sock !== session.socket) return
           session.lastEvent = 'qr_error'
           session.error = 'Failed to generate QR image'
         }
       }
 
       if (connection === 'open') {
+        if (sock !== session.socket) return
         session.lastEvent = 'connected'
         session.state = 'connected'
         session.qrCode = null
@@ -188,6 +197,9 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
       }
 
       if (connection === 'close') {
+        // Stale-event guard — if this socket is no longer active, ignore the close event.
+        if (sock !== session.socket) return
+
         const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode
         session.lastEvent = `closed:${statusCode}`
 
@@ -222,6 +234,7 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
       }
 
       if (connection === 'connecting') {
+        if (sock !== session.socket) return
         session.lastEvent = 'ws_connecting'
         notifyListeners()
       }
@@ -261,12 +274,45 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
 }
 
 /**
- * Disconnect from WhatsApp and clear session.
+ * Disconnect from WhatsApp and fully clear the local session.
+ *
+ * Calls Baileys' built-in `logout()` (which deletes the local auth files
+ * from the .wa-auth directory) before resetting in-memory state. Without
+ * this call, the next `startWhatsAppConnection` would silently auto-reconnect
+ * using the stored credentials and never show a fresh QR — confusing the user.
+ *
+ * Falls back to a manual `fs.rmSync(.wa-auth, { recursive: true, force: true })`
+ * if `sock.logout()` throws or if the socket is already gone (e.g., the
+ * connection died before this call).
  */
 export async function disconnectWhatsApp(): Promise<void> {
-  if (session.socket) {
-    try { await session.socket.end(undefined) } catch {}
+  const oldSocket = session.socket
+  if (oldSocket) {
+    try {
+      // Baileys logout — clears local auth files server-side AND notifies
+      // WhatsApp servers to invalidate the linked-device session.
+      await oldSocket.logout()
+    } catch (e) {
+      // Likely "socket already closed" — fall through to manual cleanup.
+      console.warn('[wa] sock.logout() failed, falling back to manual cleanup:', e)
+    }
+    try { await oldSocket.end(undefined) } catch {}
   }
+
+  // Manual fallback — make sure the .wa-auth dir is gone regardless of
+  // whether sock.logout() ran successfully.
+  const authDir = path.join(process.cwd(), '.wa-auth')
+  const tmpAuthDir = '/tmp/wa-auth-smartcomp'
+  for (const dir of [authDir, tmpAuthDir]) {
+    try {
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    } catch (e) {
+      console.warn(`[wa] failed to remove auth dir ${dir}:`, e)
+    }
+  }
+
   session = {
     state: 'disconnected',
     qrCode: null,

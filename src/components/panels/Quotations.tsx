@@ -348,7 +348,8 @@ function QuotationForm({ quotation, customers, items, onSave, onCancel, saving }
       const itemTotal = item.quantity * item.unitPrice
       return s + (itemTotal * (item.gstRate || 0) / 100)
     }, 0)
-    setForm({ ...form, items, subtotal, gstAmount, total: subtotal + gstAmount })
+    // Functional update — avoids stale closure on `form` overwriting in-progress edits
+    setForm(prev => ({ ...prev, items, subtotal, gstAmount, total: subtotal + gstAmount }))
   }
 
   return (

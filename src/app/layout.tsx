@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/lib/theme-context";
 
 const geistSans = localFont({
@@ -75,6 +76,7 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
           <Toaster />
+          <SonnerToaster position="top-right" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

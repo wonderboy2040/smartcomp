@@ -188,10 +188,24 @@ export function AutomationHubPanel() {
                 <Card key={rule.id} className={`border transition-all hover:shadow-md ${isEnabled ? 'border-slate-200 bg-white' : 'border-slate-200 bg-slate-50/50 opacity-75'}`}>
                   <CardContent className="p-4">
                     <div className="flex gap-3">
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${isEnabled ? `bg-${rule.color}-100 text-${rule.color}-600` : 'bg-slate-200 text-slate-500'} border`} style={{ backgroundColor: isEnabled ? undefined : undefined }}>
-                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${rule.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' : rule.color === 'orange' ? 'bg-orange-100 text-orange-600' : rule.color === 'blue' ? 'bg-blue-100 text-blue-600' : rule.color === 'red' ? 'bg-red-100 text-red-600' : rule.color === 'green' ? 'bg-green-100 text-green-600' : rule.color === 'amber' ? 'bg-amber-100 text-amber-600' : rule.color === 'pink' ? 'bg-pink-100 text-pink-600' : rule.color === 'violet' ? 'bg-violet-100 text-violet-600' : rule.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-600'}`}>
-                          <Icon className="w-5 h-5" />
-                        </div>
+                      {/* Icon — uses a static class lookup so Tailwind JIT can
+                          generate the correct CSS at build time. (Dynamic
+                          `bg-${rule.color}-100` strings are NOT detected by
+                          Tailwind and silently render with no color.) */}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                        !isEnabled ? 'bg-slate-200 text-slate-500' :
+                        rule.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+                        rule.color === 'orange' ? 'bg-orange-100 text-orange-600' :
+                        rule.color === 'blue' ? 'bg-blue-100 text-blue-600' :
+                        rule.color === 'red' ? 'bg-red-100 text-red-600' :
+                        rule.color === 'green' ? 'bg-green-100 text-green-600' :
+                        rule.color === 'amber' ? 'bg-amber-100 text-amber-600' :
+                        rule.color === 'pink' ? 'bg-pink-100 text-pink-600' :
+                        rule.color === 'violet' ? 'bg-violet-100 text-violet-600' :
+                        rule.color === 'indigo' ? 'bg-indigo-100 text-indigo-600' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        <Icon className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
@@ -292,7 +306,15 @@ export function AutomationHubPanel() {
                 const pct = count > 0 ? (enabled / count) * 100 : 0
                 return (
                   <div key={item.cat} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
-                    <div className={`w-8 h-8 rounded-lg bg-${item.color}-100 text-${item.color}-600 flex items-center justify-center`}><item.icon className="w-4 h-4" /></div>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                      item.color === 'blue' ? 'bg-blue-100 text-blue-600' :
+                      item.color === 'orange' ? 'bg-orange-100 text-orange-600' :
+                      item.color === 'pink' ? 'bg-pink-100 text-pink-600' :
+                      item.color === 'cyan' ? 'bg-cyan-100 text-cyan-600' :
+                      item.color === 'emerald' ? 'bg-emerald-100 text-emerald-600' :
+                      item.color === 'violet' ? 'bg-violet-100 text-violet-600' :
+                      'bg-slate-100 text-slate-600'
+                    }`}><item.icon className="w-4 h-4" /></div>
                     <div className="flex-1">
                       <div className="flex justify-between"><p className="text-xs font-medium">{item.label}</p><p className="text-[11px] text-slate-500">{enabled}/{count} active</p></div>
                       <div className="mt-1 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div className="h-full bg-indigo-600" style={{ width: `${pct}%` }} /></div>

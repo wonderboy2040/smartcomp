@@ -123,7 +123,11 @@ async function main() {
   const builderArgs = []
 
   if (target === 'win-dir') {
-    // Portable folder build — no NSIS, no Wine required
+    // Portable folder build — no NSIS, no Wine required.
+    // extraResources: only copy the .next/standalone folder (which already
+    // includes .next/static, public/, apps-script/ from Step 2). Duplicating
+    // those subdirs as separate extraResources entries would inflate the
+    // installer size by ~2x for zero benefit.
     const dirConfig = path.join(PROJECT_ROOT, 'electron-builder.portable.yml')
     fs.writeFileSync(dirConfig, [
       'appId: com.smartcomputers.panel',
@@ -151,15 +155,6 @@ async function main() {
       'extraResources:',
       '  - from: .next/standalone',
       '    to: next-standalone',
-      '    filter: ["**/*"]',
-      '  - from: .next/static',
-      '    to: next-standalone/.next/static',
-      '    filter: ["**/*"]',
-      '  - from: public',
-      '    to: next-standalone/public',
-      '    filter: ["**/*"]',
-      '  - from: apps-script',
-      '    to: next-standalone/apps-script',
       '    filter: ["**/*"]',
       'extraFiles:',
       '  - from: build/install-shortcuts.bat',
@@ -197,8 +192,20 @@ async function main() {
       const src = path.join(batSrc, f)
       if (fs.existsSync(src)) fs.copyFileSync(src, path.join(winUnpacked, f))
     })
-    // Run the packaging Python script
-    await run('python3', ['/home/z/my-project/scripts/package-portable-zip.py'])
+    // Run the packaging Python script. Use __dirname-relative path so the
+    // script doesn't depend on /home/z/my-project/ being the project root.
+    const zipScript = path.join(__dirname, 'package-portable-zip.py')
+    if (fs.existsSync(zipScript)) {
+      try {
+        await run('python3', [zipScript])
+      } catch (e) {
+        log(`[build-exe] WARN: package-portable-zip.py failed (non-fatal): ${e.message}`)
+        log('[build-exe] You can still zip win-unpacked/ manually for distribution.')
+      }
+    } else {
+      log('[build-exe] WARN: package-portable-zip.py not found — skipping ZIP creation.')
+      log('[build-exe] The win-unpacked/ folder is still available for manual zipping.')
+    }
   } else {
     log('Step 4/4: (skipped ZIP creation — not a portable dir build)')
   }

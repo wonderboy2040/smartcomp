@@ -50,14 +50,20 @@ export function AIIntelligencePanel() {
     }
   }, [intelligenceInput, invoicesData, itemsData])
 
-  const handleAIQuery = () => {
-    if (!aiQuery.trim() || !superIntelligence) return
+  const handleAIQuery = (queryOverride?: string) => {
+    const q = (queryOverride ?? aiQuery).trim()
+    if (!q || !superIntelligence) return
+    if (queryOverride) setAiQuery(queryOverride)
     setIsAnalyzing(true)
-    setTimeout(() => {
-      const result = processNaturalLanguageQuery(aiQuery, intelligenceInput)
+    try {
+      const result = processNaturalLanguageQuery(q, intelligenceInput)
       setQueryResult(result)
+    } catch (e) {
+      console.error('AI query error', e)
+      setQueryResult(null)
+    } finally {
       setIsAnalyzing(false)
-    }, 600)
+    }
   }
 
   const exampleQueries = [
@@ -202,13 +208,13 @@ export function AIIntelligencePanel() {
                 className="pl-10 h-11 bg-slate-50 border-slate-200"
               />
             </div>
-            <Button onClick={handleAIQuery} disabled={isAnalyzing || !aiQuery.trim()} className="h-11 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-6">
+            <Button onClick={() => handleAIQuery()} disabled={isAnalyzing || !aiQuery.trim()} className="h-11 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-6">
               {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Sparkles className="w-4 h-4 mr-1" /> Ask AI</>}
             </Button>
           </div>
           <div className="flex flex-wrap gap-1.5 mt-3">
             {exampleQueries.map(q => (
-              <button key={q} onClick={() => { setAiQuery(q); setTimeout(() => handleAIQuery(), 100) }} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors">
+              <button key={q} onClick={() => handleAIQuery(q)} className="text-[11px] px-2.5 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors">
                 {q}
               </button>
             ))}

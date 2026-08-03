@@ -18,8 +18,10 @@ const nextConfig: NextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'inline',
   },
+  // serverActions is a top-level config key since Next.js 14 —
+  // placing it under `experimental` was silently ignored (default 1MB).
+  serverActions: { bodySizeLimit: '4mb' },
   experimental: {
-    serverActions: { bodySizeLimit: '4mb' },
     optimizePackageImports: ['lucide-react', 'recharts', 'zod', 'class-variance-authority'],
     // REMOVED: optimizeCss (requires missing 'critters' package)
     // REMOVED: ppr (requires canary)
@@ -45,12 +47,21 @@ const nextConfig: NextConfig = {
     ];
     return [
       {
-        source: '/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg|robots.txt|clear-cache.html).*)',
+        source: '/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg|robots.txt|clear-cache.html|fonts/|ads/|posters/|logo.webp|logo.png).*)',
         headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Pragma', value: 'no-cache' }, { key: 'Expires', value: '0' }, ...sec],
       },
       {
         source: '/_next/static/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }, ...sec],
+      },
+      // Long-lived cache for static public assets (fonts, posters, ads, logos).
+      {
+        source: '/(fonts|ads|posters)/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=2592000, immutable' }, ...sec],
+      },
+      {
+        source: '/(logo.webp|logo.png|logo.svg)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400' }, ...sec],
       },
       {
         source: '/sw.js',
