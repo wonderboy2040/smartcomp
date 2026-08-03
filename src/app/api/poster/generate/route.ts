@@ -5,27 +5,59 @@ import { listRows, isConfigured } from '@/lib/sheets-client'
  * POST /api/poster/generate
  *
  * AI-powered poster generator for Smart Computers shop advertising.
- * Uses z-ai-web-dev-sdk (the same engine behind GLM-4V / Gemini Nano-class
- * image models) to generate FHD / 2K-quality promotional posters from a
- * natural-language prompt + optional item details + shop branding.
  *
- * The endpoint builds a "super-intelligent" prompt by combining:
- *   1. User's free-text prompt (their vision for the poster)
- *   2. Item name + item details (price, specs, features — auto-injected)
- *   3. Shop branding (name, phone, address, UPI — pulled from Shop sheet)
- *   4. Style preset (Cyberpunk / Minimal / Festive / Neon / Premium etc.)
- *   5. Aspect-ratio-specific composition hints (WhatsApp Status 9:16)
- *   6. Quality boosters (FHD, 2K, ultra-detailed, professional lighting)
+ * ──────────────────────────────────────────────────────────────────────
+ * MULTI-PROVIDER IMAGE GENERATION (v9.1.4)
+ * ──────────────────────────────────────────────────────────────────────
+ * Tries each free, no-auth (or token-based) image generation provider in
+ * order until one succeeds:
  *
- * Output sizes (all 32-aligned, max 2^22 pixels — API requirement):
- *   - whatsapp-status  : 768x1344  (9:16, ideal for WhatsApp Status / Stories)
- *   - instagram-story  : 768x1344  (9:16, same as above)
- *   - square           : 1024x1024 (1:1, Instagram feed / Facebook)
- *   - landscape        : 1344x768  (16:9, YouTube thumbnail / banner)
- *   - wide-banner      : 1440x720  (2:1, website hero / billboard)
+ *   1. Pollinations.ai / FLUX        — free, no-auth, public IPs (PRIMARY)
+ *   2. Pollinations.ai / OpenAI      — same host, "openai" alias
+ *   3. Pollinations.ai / SANA        — always works, default model
+ *   4. Pollinations.ai / Turbo       — faster fallback
+ *   5. Hugging Face / FLUX.1-schnell — free with HF_TOKEN env var
  *
- * The response returns a base64-encoded PNG the client can render directly
- * (and offer as a download) — no file system writes, no S3, fully stateless.
+ * ─── Why NOT Gemini / ChatGPT / DALL-E 3? ───
+ *
+ *   • Google Gemini image gen (Imagen): NO free public API. Requires
+ *     Google Cloud project + billing + API key. Even the "free tier"
+ *     asks for a credit card.
+ *
+ *   • OpenAI DALL-E 3: ~$0.04 per image. Pre-paid credits required.
+ *
+ *   • OpenAI GPT-Image-1 (gpt-4o image gen): ~$0.07 per image.
+ *     Pre-paid credits required.
+ *
+ *   • Midjourney: NO public API at all. Discord-only.
+ *
+ *   • Stability AI (SDXL) via their own API: Has free tier but
+ *     requires account + API key + email verification.
+ *
+ *   • Adobe Firefly: Paid only.
+ *
+ *   • z-ai-web-dev-sdk (GLM-class image gen): FREE and works locally,
+ *     BUT calls `internal-api.z.ai` which resolves to PRIVATE IP
+ *     addresses (172.25.x.x). Render/Vercel/AWS cannot reach private
+ *     IPs → "Connect Timeout Error". Only works from inside Z.ai corp
+ *     network.
+ *
+ *   • Groq: Groq is a TEXT-ONLY inference platform (Llama, Mixtral).
+ *     It does NOT have an image generation model. Their API is great
+ *     for chat/embeddings but cannot generate images.
+ *
+ * Pollinations.ai is the only free, no-auth, public-IP image gen API
+ * that works from any server.
+ *
+ * ──────────────────────────────────────────────────────────────────────
+ * OPTIONAL: Hugging Face FLUX.1-schnell (free, requires free token)
+ *
+ *   1. Create free account at https://huggingface.co/join
+ *   2. Generate a "Read" token at https://huggingface.co/settings/tokens
+ *   3. Set HF_TOKEN env var on Render
+ *
+ * Once set, provider #5 becomes active and you get the highest-quality
+ * FLUX.1-schnell images (1024x1024 native, no downscaling).
  */
 
 // ──────────────────────────────────────────────────────────────────────
@@ -81,49 +113,44 @@ const STYLE_PRESETS: Record<PosterStyle, string> = {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Size presets — 32-aligned, all under 2^22 pixels (API requirement)
+// Size presets — Pollinations preserves aspect ratio
 // ──────────────────────────────────────────────────────────────────────
 
-const SIZE_PRESETS: Record<PosterSize, { w: number; h: number; apiSize: string; composition: string }> = {
+const SIZE_PRESETS: Record<PosterSize, { w: number; h: number; composition: string }> = {
   'whatsapp-status': {
     w: 768,
     h: 1344,
-    apiSize: '768x1344',
     composition:
       'vertical 9:16 composition, subject centered, large bold headline at top, product hero shot in middle, shop logo and contact info at bottom, leave space for text overlay',
   },
   'instagram-story': {
     w: 768,
     h: 1344,
-    apiSize: '768x1344',
     composition:
       'vertical 9:16 composition, full-bleed product hero, gradient overlay at bottom for text, swipe-up arrow indicator, story-friendly layout',
   },
   square: {
     w: 1024,
     h: 1024,
-    apiSize: '1024x1024',
     composition:
       'square 1:1 composition, central product focus, balanced negative space, symmetrical layout, feed-optimized',
   },
   landscape: {
     w: 1344,
     h: 768,
-    apiSize: '1344x768',
     composition:
       'horizontal 16:9 composition, product on left third, headline text on right third, cinematic wide aspect, YouTube thumbnail energy',
   },
   'wide-banner': {
-    w: 1440,
-    h: 720,
-    apiSize: '1440x720',
+    w: 1920,
+    h: 1080,
     composition:
-      'ultra-wide 2:1 banner composition, panoramic product display, hero text centered, billboard-scale visual impact',
+      'ultra-wide 16:9 banner composition, panoramic product display, hero text centered, billboard-scale visual impact',
   },
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Shop branding loader (with graceful fallback if Apps Script is down)
+// Shop branding loader
 // ──────────────────────────────────────────────────────────────────────
 
 interface ShopBranding {
@@ -154,8 +181,6 @@ async function loadShopBranding(): Promise<ShopBranding | null> {
 
 // ──────────────────────────────────────────────────────────────────────
 // Super-intelligent prompt builder
-// Combines user prompt + item details + shop branding + style + composition
-// into a single richly-detailed image prompt the AI can render accurately.
 // ──────────────────────────────────────────────────────────────────────
 
 function buildSuperPrompt(opts: {
@@ -175,32 +200,23 @@ function buildSuperPrompt(opts: {
 
   const parts: string[] = []
 
-  // 1. Lead with the user's vision (their words matter most)
-  if (userPrompt?.trim()) {
-    parts.push(userPrompt.trim())
-  }
+  if (userPrompt?.trim()) parts.push(userPrompt.trim())
 
-  // 2. Item hero details — if the user gave an item name, make it the star
   if (itemName?.trim()) {
     parts.push(
       `featuring ${itemName.trim()} as the hero product, prominently displayed and well-lit, product shot takes up 40-60% of the frame`,
     )
   }
   if (itemDetails?.trim()) {
-    // Item details often contain specs / features — inject as descriptive context
     parts.push(`product context: ${itemDetails.trim().slice(0, 300)}`)
   }
   if (itemPrice !== undefined && itemPrice !== '' && Number(itemPrice) > 0) {
     parts.push(`with a visible price tag area showing "Rs. ${itemPrice}" in bold typography`)
   }
 
-  // 3. Style preset
   parts.push(stylePreset)
-
-  // 4. Composition / layout hint (size-specific)
   parts.push(sizePreset.composition)
 
-  // 5. Shop branding — only inject if user wants it AND we have shop data
   if (includeBranding && shop) {
     const brandingBits: string[] = []
     if (shop.name) brandingBits.push(`shop name "${shop.name}"`)
@@ -214,7 +230,6 @@ function buildSuperPrompt(opts: {
     }
   }
 
-  // 6. Quality boosters — push the AI to produce FHD/2K-grade output
   parts.push(
     'ultra high quality, FHD 1080p clarity, 2K resolution detail, sharp focus, professional commercial advertising poster, vibrant colors, high dynamic range, photorealistic textures, no watermark, no blurry artifacts',
   )
@@ -223,188 +238,166 @@ function buildSuperPrompt(opts: {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// ZAI SDK config loader
-//
-// The z-ai-web-dev-sdk normally reads its config from one of:
-//   1. <project-root>/.z-ai-config
-//   2. ~/.z-ai-config
-//   3. /etc/.z-ai-config
-//
-// On Render/Vercel/electron-asar deployments none of those paths are
-// writable at deploy time, so we ALSO support env-var-based config.
-// Set these on Render:
-//   ZAI_BASE_URL  = https://internal-api.z.ai/v1
-//   ZAI_API_KEY   = Z.ai   (literal string — the SDK uses this as a sentinel)
-//   ZAI_TOKEN     = <JWT token from your chat session>
-//   ZAI_USER_ID   = <uuid>
-//   ZAI_CHAT_ID   = <uuid>  (optional)
-//
-// If env vars are set, we instantiate the SDK directly with them
-// (bypassing the file-based loadConfig entirely).
-// Otherwise we fall back to ZAI.create() which reads the .z-ai-config file
-// (the path used in dev / desktop mode).
+// Provider implementations
 // ──────────────────────────────────────────────────────────────────────
 
-interface ZaiConfig {
-  baseUrl: string
-  apiKey: string
-  chatId?: string
-  userId?: string
-  token?: string
+interface ImageGenResult {
+  base64: string
+  contentType: string
+  actualWidth: number
+  actualHeight: number
+  provider: string
+  model: string
 }
 
-function loadZaiConfigFromEnv(): ZaiConfig | null {
-  const baseUrl = process.env.ZAI_BASE_URL
-  const apiKey = process.env.ZAI_API_KEY
-  if (!baseUrl || !apiKey) return null
-  return {
-    baseUrl,
-    apiKey,
-    chatId: process.env.ZAI_CHAT_ID,
-    userId: process.env.ZAI_USER_ID,
-    token: process.env.ZAI_TOKEN,
-  }
-}
-
-async function createZai() {
-  const ZAIModule = await import('z-ai-web-dev-sdk')
-  const ZAI = ZAIModule.default
-  const envConfig = loadZaiConfigFromEnv()
-  if (envConfig) {
-    // Use direct constructor with env-var config — no file lookup needed.
-    // The constructor is marked private in the .d.ts (TS2673) but is
-    // functionally public in the compiled JS — we cast to any to bypass
-    // the type check. This is the SDK's officially supported escape hatch
-    // for environments (Render, Vercel, Electron) where the .z-ai-config
-    // file can't be written at deploy time.
-    return new (ZAI as any)(envConfig)
-  }
-  // Fall back to file-based config (dev / desktop mode).
-  return ZAI.create()
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Direct image generation — bypasses the SDK's bare `fetch` (which has
-// no timeout and no retry, and on Render free-tier reliably fails with
-// "fetch failed" after ~10s). We do the HTTP call ourselves with:
-//   - 90s explicit timeout (image gen takes 25-40s)
-//   - 2 retries with exponential backoff
-//   - Detailed error messages that surface the ACTUAL cause (DNS, ECONNRESET,
-//     timeout, non-2xx, etc.) instead of a generic "fetch failed"
-// ──────────────────────────────────────────────────────────────────────
-
-async function generateImageDirect(opts: {
+async function tryPollinations(opts: {
   superPrompt: string
-  apiSize: string
-  config: ZaiConfig
-}): Promise<{ base64: string; raw: any }> {
-  const { superPrompt, apiSize, config } = opts
-  const url = `${config.baseUrl}/images/generations`
+  width: number
+  height: number
+  model: string
+  providerLabel: string
+}): Promise<ImageGenResult | null> {
+  const { superPrompt, width, height, model, providerLabel } = opts
+  const seed = Math.floor(Math.random() * 1000000)
+  const encodedPrompt = encodeURIComponent(superPrompt.slice(0, 1500))
+  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}&enhance=true`
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${config.apiKey}`,
-    'X-Z-AI-From': 'Z',
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort('timeout'), 120000)
+
+  try {
+    console.log(`[/api/poster/generate] ${providerLabel} → GET ${url.slice(0, 100)}…`)
+    const startMs = Date.now()
+    const response = await fetch(url, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { 'Accept': 'image/jpeg, image/png, image/*' },
+    })
+    clearTimeout(timeout)
+    const elapsedMs = Date.now() - startMs
+    console.log(`[/api/poster/generate] ${providerLabel} response: ${response.status} in ${elapsedMs}ms`)
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '<no body>')
+      console.warn(`[/api/poster/generate] ${providerLabel} failed: HTTP ${response.status} — ${errorBody.slice(0, 150)}`)
+      return null
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg'
+    if (!contentType.startsWith('image/')) {
+      console.warn(`[/api/poster/generate] ${providerLabel} returned non-image content-type: ${contentType}`)
+      return null
+    }
+
+    const arrayBuffer = await response.arrayBuffer()
+    if (arrayBuffer.byteLength < 1000) {
+      console.warn(`[/api/poster/generate] ${providerLabel} returned suspiciously small image: ${arrayBuffer.byteLength} bytes`)
+      return null
+    }
+
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    return {
+      base64,
+      contentType,
+      actualWidth: width,
+      actualHeight: height,
+      provider: 'pollinations.ai',
+      model: providerLabel,
+    }
+  } catch (e: any) {
+    clearTimeout(timeout)
+    console.warn(`[/api/poster/generate] ${providerLabel} error: ${e?.name} — ${e?.message}`)
+    return null
   }
-  if (config.chatId) headers['X-Chat-Id'] = config.chatId
-  if (config.userId) headers['X-User-Id'] = config.userId
-  if (config.token) headers['X-Token'] = config.token
+}
 
-  const requestBody = {
-    prompt: superPrompt,
-    size: apiSize,
-    // Some ZAI endpoints accept user_id in body — harmless if ignored
-    user_id: config.userId,
+async function tryHuggingFace(opts: {
+  superPrompt: string
+  width: number
+  height: number
+}): Promise<ImageGenResult | null> {
+  const { superPrompt, width, height } = opts
+  const token = process.env.HF_TOKEN
+  if (!token) return null // HF requires auth
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort('timeout'), 120000)
+
+  try {
+    console.log(`[/api/poster/generate] HuggingFace FLUX.1-schnell → POST`)
+    const response = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: superPrompt.slice(0, 1000),
+        parameters: { width, height },
+      }),
+    })
+    clearTimeout(timeout)
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '<no body>')
+      console.warn(`[/api/poster/generate] HuggingFace failed: HTTP ${response.status} — ${errorBody.slice(0, 150)}`)
+      return null
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/png'
+    if (!contentType.startsWith('image/')) return null
+
+    const arrayBuffer = await response.arrayBuffer()
+    if (arrayBuffer.byteLength < 1000) return null
+
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    return {
+      base64,
+      contentType,
+      actualWidth: width,
+      actualHeight: height,
+      provider: 'huggingface.co',
+      model: 'FLUX.1-schnell',
+    }
+  } catch (e: any) {
+    clearTimeout(timeout)
+    console.warn(`[/api/poster/generate] HuggingFace error: ${e?.name} — ${e?.message}`)
+    return null
   }
+}
 
-  let lastErr: any = null
+async function generateImage(opts: {
+  superPrompt: string
+  width: number
+  height: number
+}): Promise<ImageGenResult> {
+  const { superPrompt, width, height } = opts
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const controller = new AbortController()
-    const timeoutMs = 90000 // 90s — image gen takes 25-40s, give buffer for cold starts
-    const timeout = setTimeout(() => controller.abort(`Image generation timed out after ${timeoutMs / 1000}s`), timeoutMs)
+  // Try each provider in order. Each returns null on failure (no throw),
+  // so we can fall through to the next one.
+  const providers: Array<() => Promise<ImageGenResult | null>> = [
+    // 1. Pollinations with FLUX (best quality if available)
+    () => tryPollinations({ superPrompt, width, height, model: 'flux', providerLabel: 'Pollinations/flux' }),
+    // 2. Pollinations with OpenAI alias (DALL-E 3 equivalent)
+    () => tryPollinations({ superPrompt, width, height, model: 'openai', providerLabel: 'Pollinations/openai' }),
+    // 3. Pollinations with Turbo (faster)
+    () => tryPollinations({ superPrompt, width, height, model: 'turbo', providerLabel: 'Pollinations/turbo' }),
+    // 4. Pollinations with default SANA model (always works)
+    () => tryPollinations({ superPrompt, width, height, model: 'sana', providerLabel: 'Pollinations/sana' }),
+    // 5. Hugging Face FLUX schnell (if HF_TOKEN env var is set)
+    () => tryHuggingFace({ superPrompt, width, height }),
+  ]
 
-    try {
-      console.log(`[/api/poster/generate] attempt ${attempt}/3 → POST ${url} (size=${apiSize})`)
-      const startMs = Date.now()
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-        // @ts-ignore — Node 20+ fetch supports these
-        keepalive: false,
-      })
-      clearTimeout(timeout)
-      const elapsedMs = Date.now() - startMs
-      console.log(`[/api/poster/generate] attempt ${attempt} response: ${response.status} in ${elapsedMs}ms`)
-
-      if (!response.ok) {
-        const errorBody = await response.text().catch(() => '<no body>')
-        // 4xx errors are not retryable
-        if (response.status >= 400 && response.status < 500) {
-          throw new Error(`ZAI API ${response.status}: ${errorBody.slice(0, 300)}`)
-        }
-        // 5xx — retry
-        throw new Error(`ZAI API ${response.status} (server error, will retry): ${errorBody.slice(0, 200)}`)
-      }
-
-      const result = await response.json()
-      if (!result?.data?.[0]) {
-        throw new Error('ZAI API returned 200 but no image data in response')
-      }
-
-      // SDK converts URLs to base64 — we do the same here if needed
-      const first = result.data[0]
-      if (first.base64) {
-        return { base64: first.base64, raw: result }
-      }
-      if (first.url) {
-        console.log(`[/api/poster/generate] ZAI returned URL, downloading: ${first.url.slice(0, 80)}…`)
-        const imgRes = await fetch(first.url, { signal: controller.signal })
-        if (!imgRes.ok) throw new Error(`Failed to download generated image (${imgRes.status})`)
-        const arrayBuffer = await imgRes.arrayBuffer()
-        const base64 = Buffer.from(arrayBuffer).toString('base64')
-        return { base64, raw: result }
-      }
-      throw new Error('ZAI API response had neither base64 nor url in data[0]')
-    } catch (e: any) {
-      clearTimeout(timeout)
-      lastErr = e
-
-      // Classify the error for better user feedback
-      const errName = e?.name || ''
-      const errMsg = String(e?.message || '')
-      const isAbort = errName === 'AbortError' || errMsg.includes('aborted') || errMsg.includes('timed out')
-      const isNetwork = errName === 'TypeError' || errMsg.includes('fetch failed') || errMsg.includes('ECONNRESET') || errMsg.includes('ENOTFOUND') || errMsg.includes('ETIMEDOUT')
-
-      // Don't retry 4xx (those are request errors, not transient)
-      if (errMsg.includes('ZAI API 4') && !errMsg.includes('5')) {
-        throw e
-      }
-
-      console.warn(`[/api/poster/generate] attempt ${attempt} failed: ${errName} — ${errMsg}`)
-
-      if (attempt === 3) {
-        // Final attempt failed — surface a helpful error
-        if (isAbort) {
-          throw new Error(`Image generation timed out after 90s. The ZAI API may be overloaded — try again in a minute, or try a simpler prompt.`)
-        }
-        if (isNetwork) {
-          throw new Error(`Network error reaching ZAI API (${errMsg}). This is usually transient on Render free-tier — the service may be cold-starting. Tried 3 times. Wait 30s and retry.`)
-        }
-        throw new Error(`Image generation failed after 3 attempts: ${errMsg}`)
-      }
-
-      // Exponential backoff: 2s, 4s
-      const backoffMs = 2000 * Math.pow(2, attempt - 1)
-      console.log(`[/api/poster/generate] retrying in ${backoffMs}ms…`)
-      await new Promise((r) => setTimeout(r, backoffMs))
+  for (let i = 0; i < providers.length; i++) {
+    const result = await providers[i]()
+    if (result) {
+      console.log(`[/api/poster/generate] ✓ Success with provider ${i + 1}: ${result.provider}/${result.model}`)
+      return result
     }
   }
 
-  throw lastErr || new Error('Image generation failed (unknown cause)')
+  throw new Error('All image generation providers failed. This is usually a transient network issue — wait 1 minute and try again.')
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -433,28 +426,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Load ZAI config from env vars (preferred) or .z-ai-config file (fallback)
-    let zaiConfig = loadZaiConfigFromEnv()
-    if (!zaiConfig) {
-      // Try file-based config (dev / desktop mode)
-      try {
-        const ZAIModule = await import('z-ai-web-dev-sdk')
-        const ZAI = ZAIModule.default
-        const zai = await ZAI.create()
-        // Extract config from the SDK instance (it's stored as `config` private field)
-        zaiConfig = (zai as any).config
-      } catch (e: any) {
-        return NextResponse.json(
-          {
-            error: 'ZAI SDK config missing. Set ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID env vars on Render.',
-            hint: 'See .z-ai-config.example file for the format. Values can be copied from /etc/.z-ai-config on the dev machine.',
-          },
-          { status: 500 },
-        )
-      }
-    }
-
-    // Load shop branding in parallel (best-effort)
+    // Load shop branding (best-effort)
     const shop = includeShopBranding ? await loadShopBranding() : null
 
     // Build the super-prompt
@@ -470,46 +442,40 @@ export async function POST(req: NextRequest) {
     })
 
     const sizePreset = SIZE_PRESETS[size]
-    const apiSize = sizePreset.apiSize
 
-    // Generate the image (direct HTTP call with timeout + retries)
-    const { base64: imageBase64 } = await generateImageDirect({
+    // Generate the image via multi-provider fallback chain
+    const result = await generateImage({
       superPrompt,
-      apiSize,
-      config: zaiConfig!,
+      width: sizePreset.w,
+      height: sizePreset.h,
     })
 
     const elapsedMs = Date.now() - startTime
+    const mimePrefix = result.contentType.includes('png') ? 'data:image/png;base64,' : 'data:image/jpeg;base64,'
 
     return NextResponse.json({
       success: true,
-      image: `data:image/png;base64,${imageBase64}`,
+      image: `${mimePrefix}${result.base64}`,
       prompt: superPrompt,
       style,
       size,
-      width: sizePreset.w,
-      height: sizePreset.h,
+      width: result.actualWidth,
+      height: result.actualHeight,
       elapsedMs,
       shopBrandingUsed: !!shop && includeShopBranding,
-      model: 'z-ai-image-gen (GLM-class)',
+      model: result.model,
+      provider: result.provider,
     })
   } catch (e: any) {
     console.error('[/api/poster/generate] final error:', e?.message)
-    const isConfigError = e?.message?.includes('Configuration file not found') || e?.message?.includes('.z-ai-config')
     return NextResponse.json(
       {
-        error: isConfigError
-          ? 'ZAI SDK config missing. Set ZAI_BASE_URL, ZAI_API_KEY, ZAI_TOKEN, ZAI_USER_ID, ZAI_CHAT_ID env vars on Render.'
-          : (e?.message || 'Failed to generate poster.'),
-        hint: isConfigError
-          ? 'See .z-ai-config.example file for the format.'
-          : (e?.message?.includes('size')
-              ? 'Size validation failed. Use one of: whatsapp-status, instagram-story, square, landscape, wide-banner.'
-              : e?.message?.includes('timed out')
-                ? 'The AI model is busy. Wait 1 minute and try again.'
-                : e?.message?.includes('Network error')
-                  ? 'Transient network issue on Render. Wait 30s and retry.'
-                  : undefined),
+        error: e?.message || 'Failed to generate poster.',
+        hint: e?.message?.includes('timed out')
+          ? 'The AI model is busy. Wait 1 minute and try again.'
+          : e?.message?.includes('Network error')
+            ? 'Transient network issue. Wait 30s and retry.'
+            : undefined,
       },
       { status: 500 },
     )
@@ -517,7 +483,7 @@ export async function POST(req: NextRequest) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// GET — quick metadata endpoint (lists styles + sizes for the UI)
+// GET — quick metadata endpoint (lists styles + sizes + providers for UI)
 // ──────────────────────────────────────────────────────────────────────
 
 export async function GET() {
@@ -527,6 +493,13 @@ export async function GET() {
       id: k,
       ...SIZE_PRESETS[k as PosterSize],
     })),
-    model: 'z-ai-image-gen (GLM-class, free, FHD/2K quality)',
+    providers: [
+      { id: 'pollinations-flux', label: 'Pollinations / FLUX (free, no-auth)', default: true },
+      { id: 'pollinations-openai', label: 'Pollinations / OpenAI alias (free, no-auth)' },
+      { id: 'pollinations-turbo', label: 'Pollinations / Turbo (free, no-auth)' },
+      { id: 'pollinations-sana', label: 'Pollinations / SANA (free, no-auth)' },
+      { id: 'huggingface-flux', label: 'Hugging Face / FLUX.1-schnell (requires HF_TOKEN env var)' },
+    ],
+    note: 'Gemini / ChatGPT (DALL-E 3 / GPT-Image-1) are NOT free — they require paid API keys. This endpoint uses Pollinations.ai (free) + optional Hugging Face (free with token) for fallback.',
   })
 }
