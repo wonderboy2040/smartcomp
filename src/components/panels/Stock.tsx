@@ -95,7 +95,6 @@ export function StockPanel() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card><CardContent className="p-4"><div className="text-2xl font-bold">{items.length}</div><p className="text-xs text-muted-foreground">Total Items</p></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-2xl font-bold text-amber-500">{lowStock.length}</div><p className="text-xs text-muted-foreground">Low Stock</p></CardContent></Card>
@@ -103,7 +102,6 @@ export function StockPanel() {
         <Card><CardContent className="p-4"><div className="text-2xl font-bold">₹{items.reduce((s: number, i: Item) => s + ((i.sellPrice || 0) * (i.quantity || 0)), 0).toLocaleString()}</div><p className="text-xs text-muted-foreground">Stock Value</p></CardContent></Card>
       </div>
 
-      {/* Search & Add */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -119,7 +117,6 @@ export function StockPanel() {
         </Button>
       </div>
 
-      {/* Items Table */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Stock List</CardTitle></CardHeader>
         <CardContent className="p-0">
@@ -201,7 +198,6 @@ export function StockPanel() {
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
       {editing && (
         <Dialog open onOpenChange={() => setEditing(null)}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -224,11 +220,10 @@ function ItemForm({ item, onSave, onCancel, saving }: { item: Item; onSave: (i: 
         <Input placeholder="Category" value={form.category || ''} onChange={e => setForm({ ...form, category: e.target.value })} />
       </div>
 
-      {/* ===== PRODUCT DESCRIPTION / SPECIFICATIONS ===== */}
       <div>
         <label className="text-xs font-medium text-muted-foreground mb-1 block">Product Description / Specifications</label>
         <Textarea
-          placeholder="e.g. Intel i5 12th Gen, 16GB DDR4 RAM, 512GB NVMe SSD, 15.6" FHD Display, Windows 11..."
+          placeholder={'e.g. Intel i5 12th Gen, 16GB DDR4 RAM, 512GB NVMe SSD, 15.6\" FHD Display, Windows 11...'}
           value={form.description || ''}
           onChange={e => setForm({ ...form, description: e.target.value })}
           rows={4}
