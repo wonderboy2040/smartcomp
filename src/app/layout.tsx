@@ -1,12 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/lib/theme-context";
 
-const geistSans = Geist({
+const geistSans = localFont({
+  src: [
+    { path: "../../public/fonts/GeistVF.woff2", weight: "100 900", style: "normal" },
+  ],
   variable: "--font-geist-sans",
-  subsets: ["latin"],
   display: "swap",
   preload: true,
 });

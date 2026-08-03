@@ -60,9 +60,12 @@ interface Item {
 }
 
 export function QuotationsPanel() {
-  const { data: quotations = [], refresh: refreshQuotations } = useFetch('/api/quotations', undefined, { sheet: 'Quotations' })
-  const { data: customers = [] } = useFetch('/api/customers', undefined, { sheet: 'Customers' })
-  const { data: items = [] } = useFetch('/api/items', undefined, { sheet: 'Items' })
+  const { data: rawQuotations, refetch: refetchQuotations } = useFetch<Quotation[]>('/api/quotations', undefined)
+  const { data: rawCustomers } = useFetch<any[]>('/api/customers', undefined)
+  const { data: rawItems } = useFetch<any[]>('/api/items', undefined)
+  const quotations = rawQuotations || []
+  const customers = rawCustomers || []
+  const items = rawItems || []
 
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Quotation | null>(null)
@@ -98,25 +101,25 @@ export function QuotationsPanel() {
       toast.success(quotation.id ? 'Quotation updated' : 'Quotation created')
       setEditing(null)
       invalidate('/api/quotations')
-      refreshQuotations()
+      refetchQuotations()
     } catch (err: any) {
       toast.error('Save failed: ' + err.message)
     } finally {
       setSaving(false)
     }
-  }, [refreshQuotations])
+  }, [refetchQuotations])
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Delete this quotation?')) return
     try {
-      await apiDelete(`/api/quotations/${id}`, { id, sheet: 'Quotations' })
+      await apiDelete(`/api/quotations/${id}`)
       toast.success('Deleted')
       invalidate('/api/quotations')
-      refreshQuotations()
+      refetchQuotations()
     } catch (err: any) {
       toast.error('Delete failed: ' + err.message)
     }
-  }, [refreshQuotations])
+  }, [refetchQuotations])
 
   const statusColors: Record<string, string> = {
     draft: 'bg-slate-500/10 text-slate-500',

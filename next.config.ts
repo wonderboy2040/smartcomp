@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: '4mb' },
     optimizePackageImports: ['lucide-react', 'recharts', 'zod', 'class-variance-authority'],
-    optimizeCss: true,
+    // REMOVED: optimizeCss (requires missing 'critters' package)
     // REMOVED: ppr (requires canary)
     // REMOVED: turbo (deprecated, moved to root turbopack)
   },

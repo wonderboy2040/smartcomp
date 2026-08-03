@@ -27,7 +27,8 @@ interface Item {
 }
 
 export function StockPanel() {
-  const { data: items = [], refresh } = useFetch('/api/items', undefined, { sheet: 'Items' })
+  const { data: rawItems, refetch } = useFetch<Item[]>('/api/items', undefined)
+  const items = rawItems || []
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Item | null>(null)
   const [saving, setSaving] = useState(false)
@@ -57,23 +58,23 @@ export function StockPanel() {
     try {
       await apiPut(`/api/items/${id}`, { ...item, quantity: newQty })
       toast.success(`${delta > 0 ? '+' : ''}${delta} stock updated`)
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Stock update failed: ' + err.message)
-      refresh()
+      refetch()
     }
-  }, [items, refresh])
+  }, [items, refetch])
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Delete this item?')) return
     try {
-      await apiDelete(`/api/items/${id}`, { id, sheet: 'Items' })
+      await apiDelete(`/api/items/${id}`)
       toast.success('Item deleted')
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Delete failed: ' + err.message)
     }
-  }, [refresh])
+  }, [refetch])
 
   const handleSave = useCallback(async (item: Item) => {
     setSaving(true)
@@ -85,13 +86,13 @@ export function StockPanel() {
       }
       toast.success(item.id ? 'Item updated' : 'Item created')
       setEditing(null)
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Save failed: ' + err.message)
     } finally {
       setSaving(false)
     }
-  }, [refresh])
+  }, [refetch])
 
   return (
     <div className="space-y-4 animate-fade-in">

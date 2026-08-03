@@ -267,7 +267,7 @@ function loadZaiConfigFromEnv(): ZaiConfig | null {
 }
 
 async function createZai() {
-  const ZAIModule = await import('z-ai-web-dev-sdk')
+  const ZAIModule = await import(/* webpackIgnore: true */ 'z-ai-web-dev-sdk')
   const ZAI = ZAIModule.default
   const envConfig = loadZaiConfigFromEnv()
   if (envConfig) {
@@ -438,7 +438,7 @@ export async function POST(req: NextRequest) {
     if (!zaiConfig) {
       // Try file-based config (dev / desktop mode)
       try {
-        const ZAIModule = await import('z-ai-web-dev-sdk')
+        const ZAIModule = await import(/* webpackIgnore: true */ 'z-ai-web-dev-sdk')
         const ZAI = ZAIModule.default
         const zai = await ZAI.create()
         // Extract config from the SDK instance (it's stored as `config` private field)

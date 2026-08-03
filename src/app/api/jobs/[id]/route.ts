@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRow, updateRow, listRows } from '@/lib/sheets-client'
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const job = await getRow('Jobs', id)
 
     if (job?.partsUsedJson) {

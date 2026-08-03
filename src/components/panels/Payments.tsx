@@ -21,7 +21,8 @@ interface Payment {
 }
 
 export function PaymentsPanel() {
-  const { data: payments = [], refresh } = useFetch('/api/payments', undefined, { sheet: 'Payments' })
+  const { data: rawPayments, refetch } = useFetch<Payment[]>('/api/payments', undefined)
+  const payments = rawPayments || []
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -54,25 +55,25 @@ export function PaymentsPanel() {
       setShowForm(false)
       setForm({ customerName: '', amount: 0, method: 'cash', notes: '' })
       invalidate('/api/payments')
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Failed: ' + err.message)
     } finally {
       setSaving(false)
     }
-  }, [form, saving, refresh])
+  }, [form, saving, refetch])
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Delete this payment?')) return
     try {
-      await apiDelete(`/api/payments/${id}`, { id, sheet: 'Payments' })
+      await apiDelete(`/api/payments/${id}`)
       toast.success('Deleted')
       invalidate('/api/payments')
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Delete failed: ' + err.message)
     }
-  }, [refresh])
+  }, [refetch])
 
   return (
     <div className="space-y-4 animate-fade-in">

@@ -22,7 +22,8 @@ interface AMC {
 }
 
 export function AMCPanel() {
-  const { data: contracts = [], refresh } = useFetch('/api/amc', undefined, { sheet: 'AMCContracts' })
+  const { data: rawContracts, refetch } = useFetch<AMC[]>('/api/amc', undefined)
+  const contracts = rawContracts || []
   const [editing, setEditing] = useState<AMC | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -38,11 +39,11 @@ export function AMCPanel() {
       await apiPut(`/api/amc/${contract.id}`, { ...contract, visitLog: JSON.stringify(updatedLogs) })
       toast.success('Visit logged')
       invalidate('/api/amc')
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Failed: ' + err.message)
     }
-  }, [refresh])
+  }, [refetch])
 
   const handleSave = useCallback(async (contract: AMC) => {
     setSaving(true)
@@ -55,13 +56,13 @@ export function AMCPanel() {
       toast.success(contract.id ? 'Updated' : 'Created')
       setEditing(null)
       invalidate('/api/amc')
-      refresh()
+      refetch()
     } catch (err: any) {
       toast.error('Failed: ' + err.message)
     } finally {
       setSaving(false)
     }
-  }, [refresh])
+  }, [refetch])
 
   return (
     <div className="space-y-4 animate-fade-in">
