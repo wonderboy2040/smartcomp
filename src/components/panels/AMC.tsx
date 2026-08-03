@@ -1,128 +1,340 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { useFetch, apiPost, apiPut, invalidate } from '@/lib/api'
+import { useState, useMemo } from 'react'
+import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Calendar, Edit, Trash2, CheckCircle } from 'lucide-react'
-import { toast } from 'sonner'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useToast } from '@/hooks/use-toast'
+import { formatCurrency } from '@/lib/calc'
+import { safeJsonParse } from '@/lib/utils'
+import {
+  FileText, Plus, Trash2, Edit3, Clock, RefreshCw, Wrench, Calendar, AlertTriangle, CheckCircle2,
+} from 'lucide-react'
 
-interface AMC {
-  id: string
-  customerName: string
-  deviceType?: string
-  startDate: string
-  endDate: string
-  amount: number
-  status: 'active' | 'expired' | 'cancelled'
-  notes?: string
-  visitLog?: string
+const STATUS_COLORS: Record<string, string> = {
+  active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  expiring: 'bg-amber-50 text-amber-700 border-amber-200',
+  expired: 'bg-red-50 text-red-700 border-red-200',
 }
 
 export function AMCPanel() {
-  const { data: rawContracts, refetch } = useFetch<AMC[]>('/api/amc', undefined)
-  const contracts = rawContracts || []
-  const [editing, setEditing] = useState<AMC | null>(null)
-  const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editing, setEditing] = useState<any | null>(null)
 
-  const handleLogVisit = useCallback(async (contract: AMC) => {
-    const visitNotes = prompt('Enter visit notes:', '')
-    if (visitNotes === null) return
+  const { data: contracts, loading, refetch } = useFetch<any[]>('/api/amc', undefined)
 
-    const newLog = { date: new Date().toISOString(), notes: visitNotes }
-    const existingLogs = contract.visitLog ? JSON.parse(contract.visitLog) : []
-    const updatedLogs = [...existingLogs, newLog]
-
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this AMC contract?')) return
     try {
-      await apiPut(`/api/amc/${contract.id}`, { ...contract, visitLog: JSON.stringify(updatedLogs) })
-      toast.success('Visit logged')
-      invalidate('/api/amc')
+      await apiDelete(`/api/amc/${id}`)
+      toast({ title: 'Contract deleted' })
       refetch()
-    } catch (err: any) {
-      toast.error('Failed: ' + err.message)
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
     }
-  }, [refetch])
+  }
 
-  const handleSave = useCallback(async (contract: AMC) => {
-    setSaving(true)
-    try {
-      if (contract.id) {
-        await apiPut(`/api/amc/${contract.id}`, contract)
-      } else {
-        await apiPost('/api/amc', contract)
-      }
-      toast.success(contract.id ? 'Updated' : 'Created')
-      setEditing(null)
-      invalidate('/api/amc')
-      refetch()
-    } catch (err: any) {
-      toast.error('Failed: ' + err.message)
-    } finally {
-      setSaving(false)
+  const handleLogVisit = async (c: any) => {
+    // Prompt for fresh visit notes instead of silently re-using the contract's
+    // existing notes (which would overwrite visit history with stale data).
+    // window.prompt returns null on Cancel, '' on OK-empty.
+    let visitNotes = ''
+    if (typeof window !== 'undefined') {
+      const prompted = window.prompt(
+        `Log a service visit for ${c.customerName}?\nVisits used: ${c.visitsUsed}/${c.visitsIncluded}\n\nVisit notes (optional):`,
+        ''
+      )
+      if (prompted === null) return // user cancelled
+      visitNotes = prompted
     }
-  }, [refetch])
+    try {
+      await apiPut(`/api/amc/${c.id}`, { action: 'logVisit', notes: visitNotes })
+      toast({ title: 'Visit logged', description: `Visits: ${Number(c.visitsUsed || 0) + 1}/${c.visitsIncluded}` })
+      refetch()
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleRenew = async (c: any) => {
+    if (!confirm(`Renew contract ${c.contractNumber}?\nEnd date will extend by 1 ${c.frequency} period.`)) return
+    try {
+      await apiPut(`/api/amc/${c.id}`, { action: 'renew', fee: c.fee })
+      toast({ title: 'Contract renewed!' })
+      refetch()
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleEdit = (c: any) => { setEditing(c); setDialogOpen(true) }
+  const handleAdd = () => { setEditing(null); setDialogOpen(true) }
+
+  const monthlyFee = (c: any) => {
+    const fee = Number(c.fee) || 0
+    switch (c.frequency) {
+      case 'monthly': return fee
+      case 'quarterly': return fee / 3
+      case 'half-yearly': return fee / 6
+      case 'yearly': return fee / 12
+      default: return fee
+    }
+  }
+
+  const stats = useMemo(() => {
+    const list = contracts || []
+    return {
+      total: list.length,
+      active: list.filter((c) => c.dynamicStatus === 'active').length,
+      expiring: list.filter((c) => c.dynamicStatus === 'expiring').length,
+      expired: list.filter((c) => c.dynamicStatus === 'expired').length,
+      totalFee: list.filter((c) => c.dynamicStatus === 'active').reduce((s, c) => s + monthlyFee(c), 0),
+    }
+  }, [contracts])
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">AMC Contracts</h2>
-        <Button onClick={() => setEditing({ id: '', customerName: '', startDate: '', endDate: '', amount: 0, status: 'active' })}>
-          <Plus className="h-4 w-4 mr-1" /> New AMC
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 flex-shrink-0" />
+            <span className="truncate">AMC Contracts</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Annual Maintenance Contracts — offices, schools, recurring revenue
+          </p>
+        </div>
+        <Button onClick={handleAdd} className="bg-blue-600 hover:bg-blue-700 h-11">
+          <Plus className="w-4 h-4 mr-1.5" /> <span className="hidden sm:inline">New Contract</span><span className="sm:hidden">New</span>
         </Button>
       </div>
 
-      <div className="grid gap-3">
-        {contracts.map((c: AMC) => (
-          <Card key={c.id} className="group">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-medium">{c.customerName}</div>
-                  <div className="text-sm text-muted-foreground">{c.deviceType || 'Device'}</div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {new Date(c.startDate).toLocaleDateString()} - {new Date(c.endDate).toLocaleDateString()}</span>
-                    <span>₹{c.amount?.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={c.status === 'active' ? 'default' : 'secondary'}>{c.status}</Badge>
-                  <button onClick={() => handleLogVisit(c)} className="p-1.5 hover:bg-green-500/10 rounded-md" title="Log Visit">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                  </button>
-                  <button onClick={() => setEditing(c)} className="p-1.5 hover:bg-accent rounded-md">
-                    <Edit className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-        {contracts.length === 0 && <div className="text-center text-muted-foreground py-8">No AMC contracts</div>}
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
+        <Card className="border-slate-200"><CardContent className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase">Total</p>
+          <p className="text-lg font-bold text-slate-900">{stats.total}</p>
+        </CardContent></Card>
+        <Card className="border-emerald-200 bg-emerald-50"><CardContent className="p-3">
+          <p className="text-[10px] text-emerald-700 uppercase">Active</p>
+          <p className="text-lg font-bold text-emerald-700">{stats.active}</p>
+        </CardContent></Card>
+        <Card className="border-amber-200 bg-amber-50"><CardContent className="p-3">
+          <p className="text-[10px] text-amber-700 uppercase">Expiring</p>
+          <p className="text-lg font-bold text-amber-700">{stats.expiring}</p>
+        </CardContent></Card>
+        <Card className="border-red-200 bg-red-50"><CardContent className="p-3">
+          <p className="text-[10px] text-red-700 uppercase">Expired</p>
+          <p className="text-lg font-bold text-red-700">{stats.expired}</p>
+        </CardContent></Card>
+        <Card className="border-slate-200"><CardContent className="p-3">
+          <p className="text-[10px] text-slate-500 uppercase">Monthly Revenue</p>
+          <p className="text-lg font-bold text-emerald-600">{formatCurrency(stats.totalFee)}</p>
+        </CardContent></Card>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-card border rounded-xl p-6 w-full max-w-md space-y-3 shadow-2xl">
-            <h3 className="text-lg font-semibold">{editing.id ? 'Edit AMC' : 'New AMC'}</h3>
-            <Input placeholder="Customer Name" value={editing.customerName} onChange={e => setEditing({...editing, customerName: e.target.value})} />
-            <Input placeholder="Device Type" value={editing.deviceType || ''} onChange={e => setEditing({...editing, deviceType: e.target.value})} />
-            <div className="grid grid-cols-2 gap-3">
-              <Input type="date" value={editing.startDate?.split('T')[0]} onChange={e => setEditing({...editing, startDate: e.target.value})} />
-              <Input type="date" value={editing.endDate?.split('T')[0]} onChange={e => setEditing({...editing, endDate: e.target.value})} />
-            </div>
-            <Input type="number" placeholder="Amount" value={editing.amount || ''} onChange={e => setEditing({...editing, amount: parseFloat(e.target.value) || 0})} />
-            <Input placeholder="General Notes" value={editing.notes || ''} onChange={e => setEditing({...editing, notes: e.target.value})} />
-            <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-              <Button onClick={() => handleSave(editing)} disabled={saving || !editing.customerName}>
-                {saving ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
+      {/* Contracts table */}
+      <Card className="border-slate-200">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50">
+                  <TableHead className="text-xs">Contract</TableHead>
+                  <TableHead className="text-xs">Customer</TableHead>
+                  <TableHead className="text-xs hidden sm:table-cell">Period</TableHead>
+                  <TableHead className="text-xs text-right">Fee</TableHead>
+                  <TableHead className="text-xs text-center hidden sm:table-cell">Visits</TableHead>
+                  <TableHead className="text-xs text-center">Status</TableHead>
+                  <TableHead className="text-xs text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-slate-500">Loading...</TableCell></TableRow>
+                ) : !contracts || contracts.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-slate-500">
+                    <FileText className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                    No AMC contracts yet. Create one for recurring revenue.
+                  </TableCell></TableRow>
+                ) : (
+                  contracts.map((c: any) => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-mono text-xs">{c.contractNumber}</TableCell>
+                      <TableCell>
+                        <p className="font-medium text-sm">{c.customerName}</p>
+                        <p className="text-[10px] text-slate-500">{c.customerPhone}</p>
+                      </TableCell>
+                      <TableCell className="text-xs hidden sm:table-cell">
+                        <p>{c.startDate ? new Date(c.startDate).toLocaleDateString('en-IN') : '-'}</p>
+                        <p className="text-slate-400">to {c.endDate ? new Date(c.endDate).toLocaleDateString('en-IN') : '-'}</p>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-sm">{formatCurrency(c.fee)}</TableCell>
+                      <TableCell className="text-center text-xs hidden sm:table-cell">
+                        {c.visitsIncluded > 0 ? `${c.visitsUsed}/${c.visitsIncluded}` : 'Unlimited'}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className={`text-[9px] ${STATUS_COLORS[c.dynamicStatus] || ''}`}>
+                          {c.dynamicStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {c.dynamicStatus === 'active' && (
+                            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => handleLogVisit(c)} title="Log Visit">
+                              <Wrench className="w-3.5 h-3.5 text-blue-600" />
+                            </Button>
+                          )}
+                          {(c.dynamicStatus === 'expiring' || c.dynamicStatus === 'expired') && (
+                            <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => handleRenew(c)} title="Renew">
+                              <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleEdit(c)}>
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleDelete(c.id)}>
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
-        </div>
+        </CardContent>
+      </Card>
+
+      {dialogOpen && (
+        <ContractDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} onSaved={() => { setDialogOpen(false); refetch() }} />
       )}
     </div>
+  )
+}
+
+function ContractDialog({ open, onOpenChange, editing, onSaved }: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  editing: any | null
+  onSaved: () => void
+}) {
+  const { toast } = useToast()
+  const [form, setForm] = useState({
+    customerId: editing?.customerId || '',
+    customerName: editing?.customerName || '',
+    customerPhone: editing?.customerPhone || '',
+    customerAddress: editing?.customerAddress || '',
+    devices: editing?.devicesCovered?.map((d: any) => d.name || d).join('\n') || '',
+    startDate: editing?.startDate ? new Date(editing.startDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    fee: editing?.fee || 0,
+    frequency: editing?.frequency || 'yearly',
+    visitsIncluded: editing?.visitsIncluded || 12,
+    notes: editing?.notes || '',
+  })
+  const [saving, setSaving] = useState(false)
+
+  const submit = async () => {
+    if (!form.customerName) {
+      toast({ title: 'Customer name required', variant: 'destructive' })
+      return
+    }
+    setSaving(true)
+    try {
+      const devices = form.devices.split('\n').map((s) => s.trim()).filter(Boolean).map((name) => ({ name }))
+      const payload = { ...form, devicesCovered: devices }
+      if (editing) {
+        await apiPut(`/api/amc/${editing.id}`, { action: 'update', ...payload })
+        toast({ title: 'Contract updated' })
+      } else {
+        await apiPost('/api/amc', payload)
+        toast({ title: 'Contract created' })
+      }
+      onSaved()
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md max-h-[100dvh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            {editing ? 'Edit Contract' : 'New AMC Contract'}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Customer Name *</Label>
+              <Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} className="h-10" />
+            </div>
+            <div>
+              <Label className="text-xs">Phone</Label>
+              <Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} className="h-10" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Address</Label>
+            <Textarea value={form.customerAddress} onChange={(e) => setForm({ ...form, customerAddress: e.target.value })} rows={2} />
+          </div>
+          <div>
+            <Label className="text-xs">Devices Covered (one per line)</Label>
+            <Textarea value={form.devices} onChange={(e) => setForm({ ...form, devices: e.target.value })} rows={3} placeholder={'HP Laptop\nDell Desktop\nCanon Printer'} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Start Date</Label>
+              <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="h-10" />
+            </div>
+            <div>
+              <Label className="text-xs">Fee (Rs.)</Label>
+              <Input type="number" value={form.fee} onChange={(e) => setForm({ ...form, fee: Number(e.target.value) })} className="h-10" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Frequency</Label>
+              <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v })}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="half-yearly">Half-Yearly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Visits Included</Label>
+              <Input type="number" value={form.visitsIncluded} onChange={(e) => setForm({ ...form, visitsIncluded: Number(e.target.value) })} className="h-10" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Notes</Label>
+            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={submit} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+            {saving ? 'Saving...' : (editing ? 'Update' : 'Create Contract')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

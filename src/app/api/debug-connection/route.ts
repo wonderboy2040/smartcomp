@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isConfigured } from '@/lib/sheets-client'
-import { getAppsScriptUrl } from '@/lib/runtime-config'
 
 /**
  * POST /api/debug-connection
@@ -18,14 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'APPS_SCRIPT_URL not configured' }, { status: 503 })
     }
 
-    // Use the runtime config resolver — works in BOTH the standard env-var
-    // flow AND the Electron desktop flow (where the URL is stored in a local
-    // config file referenced by SMARTCOMP_CONFIG_PATH).
-    const APPS_SCRIPT_URL = getAppsScriptUrl()
-    if (!APPS_SCRIPT_URL) {
-      return NextResponse.json({ error: 'APPS_SCRIPT_URL not configured' }, { status: 503 })
-    }
-
+    const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL!
     const body = await req.json().catch(() => ({}))
     const method = (body.method || 'GET').toUpperCase() as 'GET' | 'POST'
     const action = body.action || 'test'

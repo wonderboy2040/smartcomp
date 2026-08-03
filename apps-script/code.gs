@@ -23,12 +23,7 @@
  * DATA PROTECTION: SOFT-DELETE only, replaceAll blocked, data-safe migration
  */
 
-// ===== SCHEMAS =====
-// Use `var` + typeof guard so that "Copy of Code" files (which Google
-// Sheets auto-creates when a script is duplicated) don't blow up with
-// "Identifier 'SCHEMAS' has already been declared". This is the safe
-// idempotent pattern recommended in docs/GOOGLE_SHEETS_DUPLICATE_FILE_FIX.md.
-var SCHEMAS = (typeof SCHEMAS !== 'undefined' && SCHEMAS) ? SCHEMAS : {
+const SCHEMAS = {
   Shop: ['id', 'name', 'owner', 'phone', 'email', 'address', 'gstNumber', 'state', 'invoicePrefix', 'quotationPrefix', 'termsInvoice', 'termsQuotation', 'upiId', 'bankName', 'bankAccount', 'bankIfsc', 'bankBranch', 'pdfTemplate', 'adBannerVariant', 'createdAt', 'updatedAt', 'deleted'],
   Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'warrantyDays', 'createdAt', 'updatedAt', 'deleted'],
   Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'creditLimit', 'creditDays', 'creditScore', 'birthday', 'createdAt', 'updatedAt', 'deleted'],
@@ -47,7 +42,7 @@ var SCHEMAS = (typeof SCHEMAS !== 'undefined' && SCHEMAS) ? SCHEMAS : {
   Settings: ['id', 'value', 'deleted']
 };
 
-var SHEET_NAMES = (typeof SHEET_NAMES !== 'undefined' && SHEET_NAMES) ? SHEET_NAMES : Object.keys(SCHEMAS);
+const SHEET_NAMES = Object.keys(SCHEMAS);
 
 // ===== QUANTUM ULTRA FAST CACHE =====
 var _sheetsEnsured = false;

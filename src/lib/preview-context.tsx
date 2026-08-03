@@ -37,9 +37,18 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
   const [visible, setVisible] = useState(false)
   const [mounted, setMounted] = useState<boolean>(typeof window !== 'undefined')
   const rafRef = useRef<number>(0)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  // Cleanup any pending rAF / timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    }
   }, [])
 
   const openPreview = useCallback((docId: string, docType: 'invoice' | 'quotation' | 'service' = 'invoice', title?: string, gstMode?: 'gst' | 'non-gst') => {
@@ -89,8 +98,10 @@ export function PdfPreviewProvider({ children }: { children: React.ReactNode }) 
   const closePreview = useCallback(() => {
     setVisible(false)
     // Allow exit animation to complete
-    setTimeout(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = setTimeout(() => {
       setPreview(null)
+      closeTimerRef.current = null
     }, 150)
   }, [])
 

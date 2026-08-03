@@ -25,10 +25,9 @@ services:
     # The standalone bundle includes only the production deps needed to run,
     # so it boots faster and uses less memory than `next start`.
     startCommand: node .next/standalone/server.js
-    # Use the liveness probe (no `?live=1`) so Render's health check returns
-    # immediately. The default /api/health does a live ping to the Apps Script
-    # backend which can hang on slow responses — that would trigger Render
-    # restart loops even though the app process itself is fine.
+    # /api/health is public and returns live diagnostics — better health check
+    # than '/' which requires PIN cookie and would always 302 to /login when
+    # APP_PIN is set, causing Render to mark the service as unhealthy.
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:

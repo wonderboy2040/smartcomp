@@ -1,22 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
+import { Geist } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/lib/theme-context";
 
-const geistSans = localFont({
-  src: [
-    { path: "../../public/fonts/GeistVF.woff2", weight: "100 900", style: "normal" },
-  ],
+const geistSans = Geist({
   variable: "--font-geist-sans",
+  subsets: ["latin"],
   display: "swap",
-  preload: true,
 });
 
 export const metadata: Metadata = {
   title: {
-    default: "Smart Computers — Sales & Service Panel v10.0 Ultra",
+    default: "Smart Computers — Sales & Service Panel v6.2 Premium",
     template: "%s · Smart Computers",
   },
   description:
@@ -37,9 +33,6 @@ export const metadata: Metadata = {
     ],
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
-  other: {
-    'google-site-verification': process.env.GOOGLE_SITE_VERIFICATION || '',
-  },
 };
 
 export const viewport: Viewport = {
@@ -55,8 +48,25 @@ export const viewport: Viewport = {
   colorScheme: "light dark",
 };
 
+// Runs before React hydrates to prevent a light/dark flash. The selected
+// preference is persisted by ThemeProvider in localStorage.
 const themeScript = `
-(function(){try{var s=localStorage.getItem('smartcomp-theme'),t=s==='light'?'light':'dark',r=document.documentElement;if(t==='dark'){r.classList.add('dark');r.style.colorScheme='dark'}else{r.classList.remove('dark');r.style.colorScheme='light'}var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#020617':'#f8fafc')}catch(e){}})()
+(function() {
+  try {
+    var stored = localStorage.getItem('smartcomp-theme');
+    var theme = stored === 'light' ? 'light' : 'dark';
+    var root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    } else {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    }
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'dark' ? '#020617' : '#f8fafc');
+  } catch(e) {}
+})();
 `;
 
 export default function RootLayout({
@@ -69,14 +79,11 @@ export default function RootLayout({
       <head>
         <script src="/sw-register.js" defer />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-        <link rel="preconnect" href="https://fonts.googleapis.com" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://script.google.com" />
       </head>
       <body className={`${geistSans.variable} antialiased min-h-screen bg-background text-foreground`}>
         <ThemeProvider>
           {children}
           <Toaster />
-          <SonnerToaster position="top-right" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

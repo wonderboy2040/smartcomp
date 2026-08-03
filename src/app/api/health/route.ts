@@ -1,53 +1,31 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { isConfigured, getCacheStats, testConnection } from '@/lib/sheets-client'
 import { getAppsScriptUrl, getAppPin } from '@/lib/runtime-config'
 
 /**
- * GET /api/health[?live=1]
+ * GET /api/health
+ * Public diagnostics endpoint — helps debug "data not loading" issues.
  *
- * Two modes:
- *   - Default (no `?live=1`): "liveness" probe — returns immediately with
- *     `status: 'ok'` and cached config flags. This is what Render's health
- *     check should hit so it doesn't restart on slow Apps Script responses.
- *   - `?live=1`: "readiness" probe — does a live ping to the Apps Script
- *     backend and includes reachability + version in the response.
+ * Returns:
+ *   - status: 'ok' if the server process is alive
+ *   - configured: whether APPS_SCRIPT_URL is set and ends with /exec
+ *   - pinRequired: whether APP_PIN is set (auth gate is active)
+ *   - appsScriptReachable: live ping result to the Apps Script backend
+ *   - appsScriptVersion: version string returned by the Apps Script
+ *   - cache: server-side cache stats
  *
  * This endpoint is intentionally PUBLIC (in proxy.ts PUBLIC_PATHS) so it can
  * be hit even before login — useful for diagnosing deployment issues.
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const url = new URL(req.url)
-    const liveProbe = url.searchParams.get('live') === '1'
-
-    const appsScriptUrl = getAppsScriptUrl()
+    const url = getAppsScriptUrl()
     const pin = getAppPin()
     const configured = isConfigured()
 
-    // Always include the basic "alive" signal so the liveness probe never
-    // hangs even if the Apps Script backend is slow/down.
-    if (!liveProbe) {
-      return NextResponse.json({
-        status: 'ok',
-        version: '10.0.0-ultra',
-        codename: 'SmartComp Ultra',
-        timestamp: new Date().toISOString(),
-        uptime: typeof process.uptime === 'function' ? process.uptime() : 0,
-        configured,
-        pinRequired: !!pin,
-        appsScriptUrlSet: !!appsScriptUrl,
-        appsScriptUrlEndsWithExec: !!appsScriptUrl && appsScriptUrl.includes('/exec'),
-        cache: getCacheStats(),
-        env: {
-          nodeVersion: process.version,
-          platform: process.platform,
-          runtimeConfigActive: !!process.env.SMARTCOMP_CONFIG_PATH,
-        },
-        hint: 'Add ?live=1 for a live Apps Script reachability check.',
-      })
-    }
-
-    // Live probe — ping the Apps Script backend.
+    // If configured, do a live ping to verify the Apps Script is reachable.
+    // This catches: wrong URL, deleted deployment, network egress restrictions,
+    // Apps Script runtime errors, etc.
     let appsScriptReachable: boolean | null = null
     let appsScriptError: string | null = null
     let appsScriptVersion: string | null = null
@@ -58,6 +36,8 @@ export async function GET(req: NextRequest) {
         appsScriptReachable = result.success
         if (!result.success) {
           appsScriptError = result.message
+          // Detect the specific "Apps Script has its OWN auth check" pattern
+          // that fires when the deployed Apps Script is an older/custom version
           if (result.message && result.message.includes('Apps Script has its OWN auth')) {
             appsScriptAuthMismatch = true
           }
@@ -73,14 +53,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       status: 'ok',
-      version: '10.0.0-ultra',
-      codename: 'SmartComp Ultra',
+      version: '9.0.3',
+      codename: 'SmartComp Pro',
       timestamp: new Date().toISOString(),
       uptime: typeof process.uptime === 'function' ? process.uptime() : 0,
       configured,
       pinRequired: !!pin,
-      appsScriptUrlSet: !!appsScriptUrl,
-      appsScriptUrlEndsWithExec: !!appsScriptUrl && appsScriptUrl.includes('/exec'),
+      appsScriptUrlSet: !!url,
+      appsScriptUrlEndsWithExec: !!url && url.includes('/exec'),
       appsScriptReachable,
       appsScriptError,
       appsScriptVersion,
@@ -91,13 +71,14 @@ export async function GET(req: NextRequest) {
         platform: process.platform,
         runtimeConfigActive: !!process.env.SMARTCOMP_CONFIG_PATH,
       },
-      hints: generateHints({ configured, pinRequired: !!pin, appsScriptReachable, appsScriptAuthMismatch, url: appsScriptUrl }),
+      // Quick triage hints for common "data not loading" causes
+      hints: generateHints({ configured, pinRequired: !!pin, appsScriptReachable, appsScriptAuthMismatch, url }),
     })
   } catch (e: any) {
     return NextResponse.json({
       status: 'error',
       error: e?.message,
-      version: '10.0.0-ultra',
+      version: '9.0.3',
     }, { status: 500 })
   }
 }

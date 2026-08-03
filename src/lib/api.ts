@@ -129,21 +129,37 @@ function computeHash(data: any): string {
   try {
     if (Array.isArray(data)) {
       if (data.length === 0) return 'empty_0'
-      const first = data[0]?.id || data[0]?.updatedAt || data[0]?.number || ''
-      const last = data[data.length - 1]?.id || data[data.length - 1]?.updatedAt || data[data.length - 1]?.number || ''
-      const mid = data[Math.floor(data.length / 2)]?.id || ''
-      return `arr_${data.length}_${first}_${mid}_${last}`
+      // Stronger hash: combine length + first/mid/last IDs + a sampled
+      // checksum over the JSON of every element. Catches edits to middle
+      // rows that the old hash silently missed.
+      let h = data.length
+      const len = data.length
+      const step = Math.max(1, Math.floor(len / 12))
+      for (let i = 0; i < len; i += step) {
+        const row = data[i]
+        const id = row?.id || row?.jobId || row?.number || row?.updatedAt || ''
+        const updatedAt = row?.updatedAt || ''
+        h = ((h << 5) - h) + String(id).length
+        h = ((h << 5) - h) + String(updatedAt).length
+        h = h & h
+      }
+      return `arr_${data.length}_${h.toString(36)}`
     }
     const str = typeof data === 'string' ? data : JSON.stringify(data)
     const len = str.length
     if (len === 0) return 'str_0'
-    let h = 0
-    const step = len > 250 ? Math.floor(len / 250) : 1
+    // cyrb53-style hash — much better distribution than the old sampler
+    let h1 = 0xdeadbeef ^ len
+    let h2 = 0x41c6ce57 ^ len
+    const step = len > 500 ? Math.floor(len / 500) : 1
     for (let i = 0; i < len; i += step) {
-      h = ((h << 5) - h) + str.charCodeAt(i)
-      h = h & h
+      const ch = str.charCodeAt(i)
+      h1 = Math.imul(h1 ^ ch, 2654435761)
+      h2 = Math.imul(h2 ^ ch, 1597334677)
     }
-    return `h_${h.toString(36)}_${len}`
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+    return `h_${(h2 >>> 0).toString(36)}_${(h1 >>> 0).toString(36)}_${len}`
   } catch {
     return Date.now().toString(36)
   }

@@ -379,26 +379,15 @@ function DocViewInner() {
           </div>
         )}
 
-        {/* Download PDF — actual PDF endpoint (not the HTML preview) */}
-        <a
-          href={`/api/pdf/${id}?type=${type}`}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-2 w-full py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
-        >
-          <Download className="w-4 h-4" />
-          View / Download PDF
-        </a>
-
-        {/* HTML Preview — for users who want to see the printable HTML version */}
+        {/* Download PDF */}
         <a
           href={`/api/doc-html/${id}?type=${type}`}
           target="_blank"
           rel="noreferrer"
           className="flex items-center justify-center gap-2 w-full py-3 bg-white border border-slate-200 rounded-2xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
         >
-          <ExternalLink className="w-4 h-4" />
-          View HTML Preview
+          <Download className="w-4 h-4" />
+          View / Download PDF
         </a>
 
         {/* Google Review CTA — only show for paid invoices */}

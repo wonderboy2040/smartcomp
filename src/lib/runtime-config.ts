@@ -16,6 +16,8 @@
  *   behaviour and lets the same code run on web + desktop unchanged.
  */
 
+import { existsSync, readFileSync } from 'fs'
+
 interface RuntimeConfig {
   appsScriptUrl?: string
   appPin?: string
@@ -34,9 +36,8 @@ function read(): RuntimeConfig {
     cache = {}
   } else {
     try {
-      const fs = require('fs')
-      if (fs.existsSync(path)) {
-        const raw = fs.readFileSync(path, 'utf-8')
+      if (existsSync(path)) {
+        const raw = readFileSync(path, 'utf-8')
         const parsed = JSON.parse(raw) as RuntimeConfig
         cache = {
           appsScriptUrl: parsed.appsScriptUrl?.trim() || undefined,
