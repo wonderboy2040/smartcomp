@@ -1,60 +1,42 @@
 import type { NextConfig } from "next";
 
-/**
- * Smart Computers Panel v3.0 - Optimized Next.js Config
- *
- * Upgrades in v3.0:
- * - Removed framer-motion from optimizePackageImports (dep removed)
- * - Added zod to optimizePackageImports
- * - Stricter security headers + CSP
- * - Better caching strategy
- * - Bundle analyzer friendly
- * - Improved image optimization
- */
-
 const nextConfig: NextConfig = {
-  // Standalone output so Electron can ship the server bundle without node_modules
   output: 'standalone',
-  // Type-check on build — was previously ignored, which let real type errors
-  // ship to production silently. If type errors block a deploy, fix them
-  // rather than disabling this flag again.
-  typescript: {
-    ignoreBuildErrors: false,
-  },
-  // ESLint on build — keep build validation active. Same rationale as above.
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
+  distDir: '.next',
+  typescript: { ignoreBuildErrors: false },
+  eslint: { ignoreDuringBuilds: false },
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
   productionBrowserSourceMaps: false,
   cleanDistDir: true,
-
+  generateEtags: true,
+  crossOrigin: 'anonymous',
   images: {
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60 * 60 * 24,
-    remotePatterns: [],
+    minimumCacheTTL: 60 * 60 * 24 * 30,
     dangerouslyAllowSVG: true,
+    contentDispositionType: 'inline',
   },
-
+  // serverActions is a top-level config key since Next.js 14 —
+  // placing it under `experimental` was silently ignored (default 1MB).
+  serverActions: { bodySizeLimit: '4mb' },
   experimental: {
-    serverActions: {
-      bodySizeLimit: '4mb',
-    },
-    optimizePackageImports: [
-      'lucide-react',
-      'recharts',
-      'zod',
-    ],
+    optimizePackageImports: ['lucide-react', 'recharts', 'zod', 'class-variance-authority'],
+    // REMOVED: optimizeCss (requires missing 'critters' package)
+    // REMOVED: ppr (requires canary)
+    // REMOVED: turbo (deprecated, moved to root turbopack)
   },
-
-  outputFileTracingIncludes: {
-    '/api/apps-script-code': ['./apps-script/code.gs'],
+  turbopack: {
+    resolveExtensions: ['.tsx', '.ts', '.jsx', '.js', '.json'],
   },
-
+  serverExternalPackages: ['@whiskeysockets/baileys'],
+  outputFileTracingIncludes: { '/api/apps-script-code': ['./apps-script/code.gs'] },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
+  },
   async headers() {
-    const securityHeaders = [
+    const sec = [
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
@@ -62,100 +44,42 @@ const nextConfig: NextConfig = {
       { key: 'X-DNS-Prefetch-Control', value: 'on' },
       { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
       { key: 'X-XSS-Protection', value: '1; mode=block' },
-      // Content-Security-Policy: restricts what origins can serve scripts,
-      // styles, images, etc. for this app. Allows self + inline (Next needs
-      // inline for hydration scripts) + Google Scripts (Apps Script backend)
-      // + Meta Graph API (WhatsApp Cloud) + Razorpay (payment gateway).
-      {
-        key: 'Content-Security-Policy',
-        value: [
-          "default-src 'self'",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-          "img-src 'self' data: blob: https:",
-          "font-src 'self' data:",
-          "connect-src 'self' https://script.google.com https://*.googleusercontent.com https://graph.facebook.com https://api.razorpay.com https://*.razorpay.com",
-          "frame-ancestors 'self'",
-          "form-action 'self' https://api.razorpay.com",
-          "base-uri 'self'",
-          "object-src 'none'",
-        ].join('; '),
-      },
-    ]
-
+    ];
     return [
       {
-        source: '/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg|robots.txt).*)',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Pragma', value: 'no-cache' },
-          { key: 'Expires', value: '0' },
-          ...securityHeaders,
-        ],
+        source: '/((?!_next/static|_next/image|favicon.ico|icon-|apple-|sw.js|sw-register.js|manifest.json|offline.html|logo.svg|robots.txt|clear-cache.html|fonts/|ads/|posters/|logo.webp|logo.png).*)',
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Pragma', value: 'no-cache' }, { key: 'Expires', value: '0' }, ...sec],
       },
       {
         source: '/_next/static/:path*',
-        headers: securityHeaders,
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }, ...sec],
+      },
+      // Long-lived cache for static public assets (fonts, posters, ads, logos).
+      {
+        source: '/(fonts|ads|posters)/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=2592000, immutable' }, ...sec],
+      },
+      {
+        source: '/(logo.webp|logo.png|logo.svg)',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=86400' }, ...sec],
       },
       {
         source: '/sw.js',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Service-Worker-Allowed', value: '/' },
-          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
-          ...securityHeaders,
-        ],
-      },
-      {
-        source: '/sw-register.js',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Content-Type', value: 'application/javascript; charset=utf-8' },
-          ...securityHeaders,
-        ],
+        headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }, { key: 'Service-Worker-Allowed', value: '/' }, { key: 'Content-Type', value: 'application/javascript; charset=utf-8' }, ...sec],
       },
       {
         source: '/manifest.json',
-        headers: [
-          { key: 'Content-Type', value: 'application/manifest+json; charset=utf-8' },
-          { key: 'Cache-Control', value: 'public, max-age=3600' },
-          ...securityHeaders,
-        ],
+        headers: [{ key: 'Content-Type', value: 'application/manifest+json; charset=utf-8' }, { key: 'Cache-Control', value: 'public, max-age=3600, must-revalidate' }, ...sec],
       },
       {
-        source: '/clear-cache.html',
-        headers: [
-          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-          ...securityHeaders,
-        ],
-      },
-      {
-        source: '/:path*(logo|icon|apple-touch-icon|favicon).svg',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=604800, immutable' },
-          ...securityHeaders,
-        ],
-      },
-      {
-        // Public tracking pages - cache 5 min for performance
         source: '/track/:path*',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=300, stale-while-revalidate=600' },
-          ...securityHeaders,
-        ],
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=300, stale-while-revalidate=600' }, ...sec],
       },
-    ]
+    ];
   },
-
   async redirects() {
-    return [
-      {
-        source: '/admin',
-        destination: '/',
-        permanent: true,
-      },
-    ]
+    return [{ source: '/admin', destination: '/', permanent: true }];
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;

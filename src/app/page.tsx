@@ -7,7 +7,6 @@ import { useFetch, prefetch, invalidate } from '@/lib/api'
 import { SetupWizard } from '@/components/SetupWizard'
 import { useTheme } from '@/lib/theme-context'
 import { PdfPreviewProvider } from '@/lib/preview-context'
-import { PanelErrorBoundary } from '@/components/PanelErrorBoundary'
 import { DashboardView } from '@/components/panels/Dashboard'
 import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
@@ -102,28 +101,17 @@ function HomeInner() {
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: dashData } = useFetch<any>('/api/dashboard', undefined)
 
-  // Eager Background Bundle Preloader (staggered to avoid network contention)
+  // Eager Background Bundle Preloader
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const panels = [
-      () => import('@/components/panels/Invoices'),
-      () => import('@/components/panels/Quotations'),
-      () => import('@/components/panels/Jobs'),
-      () => import('@/components/panels/Stock'),
-      () => import('@/components/panels/Customers'),
-      () => import('@/components/panels/Payments'),
-      () => import('@/components/panels/Settings'),
-    ]
-    let i = 0
     const preload = () => {
-      if (i >= panels.length) return
-      panels[i]()
-        .catch(() => {})
-        .finally(() => {
-          i++
-          // Stagger 80ms between preloads to avoid saturating the network
-          setTimeout(preload, 80)
-        })
+      import('@/components/panels/Invoices')
+      import('@/components/panels/Quotations')
+      import('@/components/panels/Jobs')
+      import('@/components/panels/Stock')
+      import('@/components/panels/Customers')
+      import('@/components/panels/Payments')
+      import('@/components/panels/Settings')
     }
     if ('requestIdleCallback' in window) {
       ; (window as any).requestIdleCallback(preload)
@@ -165,40 +153,13 @@ function HomeInner() {
     }
   }, [isConfigured])
 
-  // Periodic dashboard refresh — pauses when tab is hidden (saves battery + Apps Script quota)
+  // Periodic dashboard refresh (every 2 min, no aggressive live sync)
   useEffect(() => {
     if (!isConfigured) return
-    let id: ReturnType<typeof setInterval> | null = null
-
-    const start = () => {
-      if (id) return
-      id = setInterval(() => {
-        if (typeof document !== 'undefined' && document.hidden) return
-        invalidate('/api/dashboard')
-      }, 120000)
-    }
-    const stop = () => {
-      if (id) {
-        clearInterval(id)
-        id = null
-      }
-    }
-    const onVisibility = () => {
-      if (document.hidden) {
-        stop()
-      } else {
-        // Refresh immediately on resume, then restart interval
-        invalidate('/api/dashboard')
-        start()
-      }
-    }
-
-    start()
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      stop()
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
+    const id = setInterval(() => {
+      invalidate('/api/dashboard')
+    }, 120000)
+    return () => clearInterval(id)
   }, [isConfigured])
 
   useEffect(() => {
@@ -237,9 +198,15 @@ function HomeInner() {
     }
   }, [])
 
-  // NOTE: Auto-seed call removed — was surprising side-effect (mutating user's
-  // Google Sheet on every fresh localStorage). Seeding now happens only via
-  // the explicit "Load sample data" button in the Setup Wizard.
+  useEffect(() => {
+    if (!isConfigured) return
+    const seeded = localStorage.getItem('seeded')
+    if (!seeded) {
+      fetch('/api/seed/init', { method: 'POST' })
+        .then(() => localStorage.setItem('seeded', 'true'))
+        .catch(() => { })
+    }
+  }, [isConfigured])
 
   const handleNavigate = useCallback((tab: string) => {
     setActive(tab)
@@ -298,7 +265,6 @@ function HomeInner() {
     <div className="min-h-screen flex bg-background premium-app-shell">
       {/* Sidebar */}
       <aside
-        aria-label="Primary navigation"
         className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           } lg:translate-x-0 fixed lg:sticky top-0 left-0 z-50 lg:z-40 w-[300px] sm:w-80 h-[100dvh] safe-top clay-sidebar premium-sidebar text-white flex flex-col transition-transform duration-300`}
       >
@@ -405,7 +371,7 @@ function HomeInner() {
 
       {/* Main Content */}
       <PdfPreviewProvider>
-        <main aria-label="Main content" className="flex-1 min-w-0 flex flex-col w-full premium-main">
+        <main className="flex-1 min-w-0 flex flex-col w-full premium-main">
           {/* Top bar - mobile only */}
           <header className="lg:hidden sticky top-0 z-30 p-3 flex items-center justify-between safe-top bg-card border-b border-border shadow-sm">
             <button
@@ -577,20 +543,18 @@ const PanelBoundary = memo(function PanelBoundary({
   const isSelected = active === id
   return (
     <div className={isSelected ? 'block premium-panel animate-in' : 'hidden'}>
-      <PanelErrorBoundary panelId={id}>
-        <Suspense
-          fallback={
-            <div className="flex items-center justify-center py-16">
-              <div className="text-center">
-                <Loader2 className="w-7 h-7 animate-spin text-violet-500 mx-auto" />
-                <p className="text-xs text-slate-500 mt-2">Loading {id}…</p>
-              </div>
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <Loader2 className="w-7 h-7 animate-spin text-violet-500 mx-auto" />
+              <p className="text-xs text-slate-500 mt-2">Loading {id}…</p>
             </div>
-          }
-        >
-          {children}
-        </Suspense>
-      </PanelErrorBoundary>
+          </div>
+        }
+      >
+        {children}
+      </Suspense>
     </div>
   )
 })

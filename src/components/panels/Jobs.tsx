@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { safeJsonParse, str } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
@@ -124,7 +124,7 @@ export function JobsPanel() {
     }
   }, [jobs])
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Delete this job? Job record will be soft-deleted (data safe in Sheets).')) return
     try {
       await apiDelete(`/api/jobs/${id}`)
@@ -133,7 +133,7 @@ export function JobsPanel() {
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
     }
-  }, [refetch, toast])
+  }
 
   return (
     <div className="space-y-4">
@@ -298,11 +298,6 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   const [serviceCharge, setServiceCharge] = useState(Number(job?.serviceCharge) || 0)
   const [paymentMode, setPaymentMode] = useState(job?.paymentMode || 'Cash')
   const [stockSearch, setStockSearch] = useState('')
-  const [debouncedStockSearch, setDebouncedStockSearch] = useState('')
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedStockSearch(stockSearch), 250)
-    return () => clearTimeout(t)
-  }, [stockSearch])
   const [showStock, setShowStock] = useState(false)
   const [newPart, setNewPart] = useState({ name: '', costPrice: 0, sellPrice: 0, qty: 1, itemId: '', sku: '', warranty: 'No Warranty' })
   const [quickPayAmount, setQuickPayAmount] = useState('')
@@ -311,16 +306,12 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   const [showComplete, setShowComplete] = useState(false)
   const [deductStock, setDeductStock] = useState(true)
 
-  // Server-side search — only fetches when the user types (capped at 30 results).
-  const stockItemsUrl = debouncedStockSearch
-    ? `/api/items?search=${encodeURIComponent(debouncedStockSearch)}&limit=30`
-    : '/api/items?limit=30'
-  const { data: stockItems } = useFetch<any[]>(stockItemsUrl, undefined)
+  const { data: stockItems } = useFetch<any[]>('/api/items?limit=500', undefined)
 
   const filteredStock = useMemo(() => {
     if (!stockSearch) return (stockItems || []).slice(0, 10)
     const q = stockSearch.toLowerCase()
-    return (stockItems || []).filter((it: any) =>
+    return (stockItems || []).filter((it: any) => 
       String(it.name || '').toLowerCase().includes(q) ||
       String(it.sku || '').toLowerCase().includes(q) ||
       String(it.category || '').toLowerCase().includes(q)

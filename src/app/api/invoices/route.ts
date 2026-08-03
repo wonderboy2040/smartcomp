@@ -1,38 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createInvoiceUltra } from '@/lib/sheets-client'
 import { computeInvoice, type LineItem } from '@/lib/calc'
-import { apiLimiter, writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   try {
-    const ip = getClientIp(req)
-    const check = apiLimiter(ip)
-    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
-
     const url = new URL(req.url)
     const status = url.searchParams.get('status')
     const paymentType = url.searchParams.get('paymentType')
     const customerId = url.searchParams.get('customerId')
     const limit = parseInt(url.searchParams.get('limit') || '200')
-    const search = url.searchParams.get('search')
 
     let invoices = await listRows<any>('Invoices')
-
+    
     if (status) invoices = invoices.filter((i) => i.paymentStatus === status)
     if (paymentType) invoices = invoices.filter((i) => i.paymentType === paymentType)
     if (customerId) invoices = invoices.filter((i) => i.customerId === customerId)
-    if (search) {
-      const q = search.toLowerCase()
-      invoices = invoices.filter(
-        (i) =>
-          String(i.number || '').toLowerCase().includes(q) ||
-          String(i.customerName || '').toLowerCase().includes(q) ||
-          String(i.customerPhone || '').toLowerCase().includes(q),
-      )
-    }
 
     invoices.sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime())
-
+    
     invoices = invoices.slice(0, limit).map((inv) => ({
       ...inv,
       customer: {
@@ -54,11 +39,7 @@ export async function GET(req: NextRequest) {
     }))
 
     return NextResponse.json(invoices, {
-      headers: {
-        'X-Ultra-Fast': 'true',
-        'X-Version': '10.0',
-        'X-RateLimit-Remaining': check.remaining.toString(),
-      },
+      headers: { 'X-Ultra-Fast': 'true', 'X-Version': '6.0' }
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
@@ -68,10 +49,6 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
   try {
-    const ip = getClientIp(req)
-    const check = writeLimiter(ip)
-    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
-
     const body = await req.json()
     const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, paymentType = 'cash', amountPaid = 0, notes = '', date, deductStock = true, template, gstMode = 'gst' } = body
 

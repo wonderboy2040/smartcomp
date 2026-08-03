@@ -54,12 +54,10 @@ export function rateLimit(options: RateLimitOptions) {
 }
 
 // Pre-configured limiters
-export const apiLimiter = rateLimit({ max: 120, windowMs: 60 * 1000, keyPrefix: 'api' })
+export const apiLimiter = rateLimit({ max: 100, windowMs: 60 * 1000, keyPrefix: 'api' })
 export const authLimiter = rateLimit({ max: 5, windowMs: 60 * 1000, keyPrefix: 'auth' })
 export const writeLimiter = rateLimit({ max: 30, windowMs: 60 * 1000, keyPrefix: 'write' })
 export const exportLimiter = rateLimit({ max: 10, windowMs: 60 * 1000, keyPrefix: 'export' })
-export const errorLogLimiter = rateLimit({ max: 30, windowMs: 60 * 1000, keyPrefix: 'errlog' })
-export const cronLimiter = rateLimit({ max: 60, windowMs: 60 * 1000, keyPrefix: 'cron' })
 
 export function getClientIp(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for')

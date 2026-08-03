@@ -49,19 +49,8 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
   const [gstMode, setGstMode] = useState<'gst' | 'non-gst'>('gst')
 
   const { data: customers } = useFetch<any[]>('/api/customers', undefined)
-  // Debounced item search — only fetches when the user types, capped at 30 results.
-  // Previously fetched 500 items on every dialog open (200KB+ JSON through Apps Script).
+  const { data: stockItems } = useFetch<any[]>('/api/items?limit=500', undefined)
   const [itemSearch, setItemSearch] = useState('')
-  const [debouncedItemSearch, setDebouncedItemSearch] = useState('')
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedItemSearch(itemSearch), 250)
-    return () => clearTimeout(t)
-  }, [itemSearch])
-  // Pass null when no search term — skips the fetch entirely.
-  const itemsUrl = debouncedItemSearch
-    ? `/api/items?search=${encodeURIComponent(debouncedItemSearch)}&limit=30`
-    : '/api/items?limit=30'
-  const { data: stockItems } = useFetch<any[]>(itemsUrl, undefined)
   const [showItemPicker, setShowItemPicker] = useState(false)
   const [customItem, setCustomItem] = useState({ name: '', rate: 0, qty: 1, gst: false, gstRate: 18 })
 

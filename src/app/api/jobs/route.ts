@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, isConfigured } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
 import { generateTrackToken } from '@/lib/notifications'
-import { apiLimiter, writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 const money = (value: any) => Math.round((Number(value) || 0) * 100) / 100
 
@@ -27,10 +26,6 @@ function ageDays(createdAt: any) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const ip = getClientIp(req)
-    const check = apiLimiter(ip)
-    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
-
     if (!isConfigured()) return NextResponse.json([])
     const url = new URL(req.url)
     const statusFilter = url.searchParams.get('status')
@@ -98,9 +93,7 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json(result, {
-      headers: { 'X-RateLimit-Remaining': check.remaining.toString() },
-    })
+    return NextResponse.json(result)
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 })
   }
@@ -113,10 +106,6 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const ip = getClientIp(req)
-    const check = writeLimiter(ip)
-    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
-
     const body = await req.json()
 
     const customerName = String(body?.customerName || '').trim()

@@ -95,12 +95,13 @@ export default function GlobalError({
             <button
               onClick={async () => {
                 try {
-                  // Clear caches that might hold stale assets.
-                  // Note: don't unregister the SW — that would defeat offline support.
-                  // sw.js handles version cleanup via SW_VERSION bump on every deploy.
                   if ('caches' in window) {
                     const ks = await caches.keys()
                     await Promise.all(ks.map((k) => caches.delete(k)))
+                  }
+                  if ('serviceWorker' in navigator) {
+                    const rs = await navigator.serviceWorker.getRegistrations()
+                    await Promise.all(rs.map((r) => r.unregister()))
                   }
                 } catch {}
                 window.location.href = window.location.pathname + '?t=' + Date.now()
@@ -119,7 +120,7 @@ export default function GlobalError({
                 boxShadow: '0 8px 24px rgba(16, 185, 129, 0.25)',
               }}
             >
-              Clear Cache &amp; Reload
+              Clear Cache & Reload
             </button>
             <button
               onClick={() => { window.location.href = '/' }}

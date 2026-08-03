@@ -15,7 +15,7 @@
  * deploy so existing clients pick up the new precache list.
  */
 
-const SW_VERSION = 'smartcomp-v9-0-2-pro'
+const SW_VERSION = 'smartcomp-v10-0-0-ultra'
 const STATIC_CACHE = `${SW_VERSION}-static`
 const RUNTIME_CACHE = `${SW_VERSION}-runtime`
 

@@ -69,12 +69,9 @@ export function DocumentHtmlViewer({ docId, docType = 'invoice', title, onClose,
   useEffect(() => {
     setIframeLoaded(false)
     setIframeError(false)
-    // Timeout for slow loads
+    // Timeout for slow loads — fallback to "loaded" so user can retry / interact
     loadTimerRef.current = setTimeout(() => {
-      if (!iframeLoaded) {
-        // Still show iframe even if load event didn't fire (for cached responses)
-        setIframeLoaded(true)
-      }
+      setIframeLoaded(true)
     }, 5000)
     return () => {
       if (loadTimerRef.current) clearTimeout(loadTimerRef.current)

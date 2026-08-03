@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { useFetch, apiPost, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -59,10 +59,10 @@ export function InvoicesPanel() {
     return { total, totalValue, totalDue, totalProfit, paidCount, overdueCount: overdue.length, overdueValue: sumBy(overdue, (i) => i.amountDue) }
   }, [filtered])
 
-  const handleCreate = useCallback(() => { setEditing(null); setDialogOpen(true) }, [])
-  const handleEdit = useCallback((invoice: any) => { setEditing(invoice); setDialogOpen(true) }, [])
+  const handleCreate = () => { setEditing(null); setDialogOpen(true) }
+  const handleEdit = (invoice: any) => { setEditing(invoice); setDialogOpen(true) }
 
-  const handleShareWhatsApp = useCallback(async (invoice: any) => {
+  const handleShareWhatsApp = async (invoice: any) => {
     await shareWhatsAppPdf({
       docId: invoice.id,
       docType: 'invoice',
@@ -75,9 +75,9 @@ export function InvoicesPanel() {
       toast,
       gstMode: invoice.gstMode === 'non-gst' ? 'non-gst' : 'gst',
     })
-  }, [toast])
+  }
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Delete this invoice? Stock will be restored and customer credit adjusted.')) return
     try {
       await apiDelete(`/api/invoices/${id}`)
@@ -86,27 +86,27 @@ export function InvoicesPanel() {
     } catch (e: any) {
       toast({ title: 'Delete failed', description: e.message, variant: 'destructive', duration: 6000 })
     }
-  }, [refetch, toast])
+  }
 
   // ===== Bulk selection helpers =====
-  const toggleSelect = useCallback((id: string) => {
+  const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
-  }, [])
-  const toggleSelectAll = useCallback(() => {
+  }
+  const toggleSelectAll = () => {
     setSelected((prev) => {
       if (prev.size === filtered.length) return new Set()
       return new Set(filtered.map((i) => i.id))
     })
-  }, [filtered])
-  const clearSelection = useCallback(() => setSelected(new Set()), [])
+  }
+  const clearSelection = () => setSelected(new Set())
 
   // Bulk WhatsApp share — iterates through selected invoices sequentially
-  const handleBulkWhatsApp = useCallback(async () => {
+  const handleBulkWhatsApp = async () => {
     if (selected.size === 0) return
     if (!confirm(`Send ${selected.size} invoice(s) on WhatsApp one by one?`)) return
     const items = filtered.filter((i) => selected.has(i.id))
@@ -117,10 +117,10 @@ export function InvoicesPanel() {
     }
     toast({ title: `Sent ${items.length} invoices to WhatsApp ✓`, duration: 4000 })
     clearSelection()
-  }, [selected, filtered, handleShareWhatsApp, toast, clearSelection])
+  }
 
   // CSV export — current filtered list (or selected subset)
-  const handleExportCSV = useCallback((onlySelected: boolean = false) => {
+  const handleExportCSV = (onlySelected: boolean = false) => {
     const rows = (onlySelected ? filtered.filter((i) => selected.has(i.id)) : filtered).map((i) => ({
       Number: i.number,
       Date: i.date ? new Date(i.date).toLocaleDateString('en-IN') : '',
@@ -143,7 +143,7 @@ export function InvoicesPanel() {
     const stamp = new Date().toISOString().slice(0, 10)
     downloadCSV(csv, `invoices-${onlySelected ? 'selected' : 'all'}-${stamp}.csv`)
     toast({ title: `Exported ${rows.length} invoices ✓`, duration: 3000 })
-  }, [filtered, selected, toast])
+  }
 
   return (
     <div className="space-y-4">
@@ -337,10 +337,10 @@ export function InvoicesPanel() {
                     <TableCell className="text-center"><Badge variant="outline" className={`${inv.paymentStatus === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : inv.paymentStatus === 'partial' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'} text-[10px] font-bold`}>{inv.paymentStatus}</Badge></TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" aria-label={`Preview invoice ${inv.number}`} onClick={() => openPreview(inv.id, 'invoice', `Invoice ${inv.number}`, inv.gstMode === 'non-gst' ? 'non-gst' : 'gst')} className="h-8 w-8 p-0 bg-white border hover:bg-slate-50"><Eye className="w-4 h-4" /></Button>
-                        <Button variant="ghost" size="sm" aria-label={`Edit invoice ${inv.number}`} onClick={() => handleEdit(inv)} className="h-8 w-8 p-0 bg-white border hover:bg-blue-50"><Edit3 className="w-4 h-4 text-blue-600" /></Button>
-                        <Button variant="ghost" size="sm" aria-label={`Share invoice ${inv.number} on WhatsApp`} onClick={() => handleShareWhatsApp(inv)} className="h-8 w-8 p-0 bg-white border hover:bg-green-50"><Share2 className="w-4 h-4 text-green-600" /></Button>
-                        <Button variant="ghost" size="sm" aria-label={`Delete invoice ${inv.number}`} onClick={() => handleDelete(inv.id)} className="h-8 w-8 p-0 bg-white border hover:bg-red-50"><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => openPreview(inv.id, 'invoice', `Invoice ${inv.number}`, inv.gstMode === 'non-gst' ? 'non-gst' : 'gst')} className="h-8 w-8 p-0 bg-white border hover:bg-slate-50"><Eye className="w-4 h-4" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(inv)} className="h-8 w-8 p-0 bg-white border hover:bg-blue-50"><Edit3 className="w-4 h-4 text-blue-600" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleShareWhatsApp(inv)} className="h-8 w-8 p-0 bg-white border hover:bg-green-50"><Share2 className="w-4 h-4 text-green-600" /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(inv.id)} className="h-8 w-8 p-0 bg-white border hover:bg-red-50"><Trash2 className="w-4 h-4 text-red-500" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>

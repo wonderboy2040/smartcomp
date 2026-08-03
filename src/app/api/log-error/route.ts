@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAppPin } from '@/lib/runtime-config'
-import { errorLogLimiter, getClientIp } from '@/lib/rate-limit'
 
 /**
  * Client-side error logger.
@@ -10,7 +9,6 @@ import { errorLogLimiter, getClientIp } from '@/lib/rate-limit'
  * logs — this lets us see the actual stack trace and fix the root cause.
  *
  * This endpoint is public (no PIN) because errors can happen before login.
- * Rate-limited (30/min/IP) to prevent log poisoning / buffer flooding.
  */
 
 // In-memory ring buffer of recent errors (kept for debugging)
@@ -19,10 +17,6 @@ const MAX_BUFFER = 50
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = getClientIp(req)
-    const check = errorLogLimiter(ip)
-    if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
-
     const body = await req.json()
     const entry = {
       time: body?.time || new Date().toISOString(),

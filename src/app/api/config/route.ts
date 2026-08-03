@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isConfigured, testConnection } from '@/lib/sheets-client'
 import { getAppsScriptUrl, getAppPin, clearRuntimeConfigCache } from '@/lib/runtime-config'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
-import { dirname } from 'path'
 
 // GET /api/config - check if app is configured (for setup wizard)
 export async function GET() {
@@ -36,12 +34,14 @@ export async function POST(req: NextRequest) {
   // If the desktop app is sending a save request, persist to the runtime config file
   if (configPath && body && (body.appsScriptUrl !== undefined || body.appPin !== undefined)) {
     try {
-      const dir = dirname(configPath)
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+      const fs = require('fs')
+      const path = require('path')
+      const dir = path.dirname(configPath)
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
       // Merge with existing config
-      const existing: any = existsSync(configPath)
-        ? JSON.parse(readFileSync(configPath, 'utf-8'))
+      const existing: any = fs.existsSync(configPath)
+        ? JSON.parse(fs.readFileSync(configPath, 'utf-8'))
         : {}
 
       if (typeof body.appsScriptUrl === 'string') {
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
         existing.appPin = body.appPin.trim() || undefined
       }
 
-      writeFileSync(configPath, JSON.stringify(existing, null, 2), 'utf-8')
+      fs.writeFileSync(configPath, JSON.stringify(existing, null, 2), 'utf-8')
       clearRuntimeConfigCache()
 
       return NextResponse.json({

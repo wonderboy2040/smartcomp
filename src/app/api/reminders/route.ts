@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, isConfigured } from '@/lib/sheets-client'
+import { normalizePhone } from '@/lib/whatsapp-cloud'
 
 /**
  * GET /api/reminders
@@ -50,8 +51,10 @@ export async function GET(req: NextRequest) {
       const invDate = new Date(inv.date || inv.createdAt || Date.now())
       const ageDays = Math.floor((now - invDate.getTime()) / (1000 * 60 * 60 * 24))
 
-      const cleanPhone = customerPhone.replace(/[^\d]/g, '')
-      const targetPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone.length > 10 ? cleanPhone : ''
+      // Use the shared normalizer — handles 10-digit (auto-prefix 91),
+      // 11-digit numbers starting with 0 (strip leading 0, prefix 91),
+      // and full international numbers consistently with the rest of the app.
+      const targetPhone = normalizePhone(customerPhone)
 
       const message =
         `*${shopName}*\n\n` +

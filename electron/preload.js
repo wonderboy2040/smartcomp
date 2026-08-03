@@ -51,7 +51,10 @@ function safeOpenExternal(url) {
 contextBridge.exposeInMainWorld('smartcomp', {
   platform: process.platform,
   isElectron: true,
-  version: process.env.npm_package_version || 'unknown',
+  // process.env.npm_package_version is NOT set in packaged Electron apps.
+  // Resolve the version lazily via IPC — main process returns app.getVersion().
+  version: 'unknown',
+  getVersion: () => ipcRenderer.invoke('get-app-version'),
   openExternal: safeOpenExternal,
   // Open the next-server.log file (used by the error window's "Open Log File" button)
   openLog: () => ipcRenderer.invoke('open-log-file'),
