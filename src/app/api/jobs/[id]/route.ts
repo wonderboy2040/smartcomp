@@ -345,16 +345,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (action === 'update') {
-      const data: any = {}
-      const fields = [
+      const data: any = { updatedAt: new Date().toISOString() }
+      // String fields - safe to copy directly
+      const stringFields = [
         'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber',
-        'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount',
-        'advanceAmount', 'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes',
-        'warrantyDays', 'serviceCharge', 'finalAmount', 'status', 'partsProfit', 'serviceProfit'
+        'problemDesc', 'accessories', 'serviceType', 'priority',
+        'advanceMode', 'assignedEngineer', 'notes', 'diagnosisNotes',
       ]
-      for (const f of fields) {
-        if (body[f] !== undefined) data[f] = body[f]
+      for (const f of stringFields) {
+        if (body[f] !== undefined) data[f] = String(body[f] ?? '')
       }
+      // Number fields - must coerce to avoid string values in sheet
+      const numberFields = [
+        'estimatedAmount', 'advanceAmount', 'warrantyDays',
+        'serviceCharge', 'finalAmount',
+      ]
+      for (const f of numberFields) {
+        if (body[f] !== undefined) data[f] = money(body[f])
+      }
+      if (body.warrantyDays !== undefined) data.warrantyDays = Math.max(0, Number(body.warrantyDays) || 0)
       if (body.partsUsed !== undefined || body.partsUsedJson !== undefined) {
         const parts = normalizeParts(body.partsUsed || safeJsonParse(body.partsUsedJson, []))
         data.partsUsedJson = JSON.stringify(parts)

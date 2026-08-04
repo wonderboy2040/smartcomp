@@ -704,16 +704,27 @@ export async function apiPostUltraFast(url: string, body: any, options: { instan
   }
 }
 
-// ===== apiPut with unwrapping — OPTIMISTIC v7.0 =====
+// ===== apiPut with unwrapping — OPTIMISTIC v7.1 FIXED =====
 // Instant local update (UI reflects change immediately), server sync in background.
 // If server fails, snapshot is restored and an error is thrown.
+// v7.1 FIX: Strip request-control fields (action, deductStock, etc.) from
+// optimistic entity to prevent polluting cached list items with API metadata.
 export async function apiPut(url: string, body: any) {
   // Compute the list URL + entity ID from the URL
   const listUrl = listUrlOf(url)
   const targetId = idOf(url)
 
-  // Build the optimistic entity (from body + id)
-  const optimisticEntity: any = { ...body, id: targetId }
+  // Strip API-control fields that should never be merged into cached entities.
+  // These are request parameters, not entity data.
+  const API_CONTROL_FIELDS = new Set([
+    'action', 'deductStock', 'paymentReceivedNow', '_pending', '_failed',
+    '_optimistic', '_clientGenerated', '_queued', '_offline',
+  ])
+  const cleanBody: any = {}
+  for (const [k, v] of Object.entries(body || {})) {
+    if (!API_CONTROL_FIELDS.has(k)) cleanBody[k] = v
+  }
+  const optimisticEntity: any = { ...cleanBody, id: targetId }
 
   // Snapshot current cache state for rollback
   const snapshots = new Map<string, any>()
@@ -760,7 +771,8 @@ export async function apiPut(url: string, body: any) {
     const data = await r.json()
     if (!r.ok) throw new Error(data.error || 'Failed to update')
 
-    let entity: any = data
+    // Extract the actual entity from wrapper responses like { success: true, job: {...} }
+    let entity: any = null
     if (data && typeof data === 'object' && !Array.isArray(data)) {
       const wrapperKeys = ['job', 'invoice', 'quotation', 'customer', 'supplier', 'item', 'payment', 'expense', 'amc', 'campaign', 'serial', 'exp', 'enquiry']
       for (const wk of wrapperKeys) {
@@ -769,6 +781,26 @@ export async function apiPut(url: string, body: any) {
           break
         }
       }
+    }
+
+    // If no entity was found in wrapper, don't merge raw response
+    // (which could contain {success:true} etc.) into cached items.
+    // Instead, invalidate + refetch to get fresh data.
+    if (!entity) {
+      // Force cache invalidation so next render fetches fresh from server
+      for (const key of affectedKeys) {
+        timestamps.set(key, 0)
+      }
+      // Restore the snapshot temporarily — the refetch will update with real data
+      for (const [key, snap] of snapshots) {
+        setCache(key, snap)
+      }
+      // Trigger background refetch for all affected keys
+      for (const key of affectedKeys) {
+        const subs = subscribers.get(key)
+        if (subs && subs.size > 0) doFetch(key)
+      }
+      return data
     }
 
     const updatedId = entity?.id || targetId

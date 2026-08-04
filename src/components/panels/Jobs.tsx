@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
+import { useFetch, apiPost, apiPut, apiDelete, invalidate } from '@/lib/api'
 import { safeJsonParse, str } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -85,7 +85,7 @@ export function JobsPanel() {
   const [invoiceJobId, setInvoiceJobId] = useState<string | null>(null)
   const [whatsappJobId, setWhatsappJobId] = useState<string | null>(null)
 
-  const { data: jobs, loading, refetch } = useFetch<any[]>('/api/jobs', undefined)
+  const { data: jobs, loading, refetch } = useFetch<any[]>('/api/jobs')
 
   const filtered = useMemo(() => {
     return (jobs || []).filter((j) => {
@@ -129,11 +129,11 @@ export function JobsPanel() {
     try {
       await apiDelete(`/api/jobs/${id}`)
       toast({ title: 'Job deleted' })
-      refetch()
+      // apiDelete already optimistically removes item from cache — no need for refetch()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
     }
-  }, [refetch, toast])
+  }, [toast])
 
   return (
     <div className="space-y-4">
@@ -219,6 +219,8 @@ export function JobsPanel() {
 
 function NewJobDialog({ open, onOpenChange, editing, onSaved }: { open: boolean, onOpenChange: (v: boolean) => void, editing: any | null, onSaved: () => void }) {
   const { toast } = useToast()
+  // v3.0.5 FIX: Use Number() with nullish coalescing to preserve 0 values
+  // (previously `|| 0` would treat existing 0 as falsy and overwrite)
   const [form, setForm] = useState({
     customerName: editing?.customerName || '',
     customerMobile: editing?.customerMobile || '',
@@ -229,8 +231,8 @@ function NewJobDialog({ open, onOpenChange, editing, onSaved }: { open: boolean,
     accessories: editing?.accessories || '',
     serviceType: editing?.serviceType || 'InShop',
     priority: editing?.priority || 'Low',
-    estimatedAmount: editing?.estimatedAmount || 0,
-    advanceAmount: editing?.advanceAmount || 0,
+    estimatedAmount: Number(editing?.estimatedAmount ?? 0),
+    advanceAmount: Number(editing?.advanceAmount ?? 0),
     advanceMode: editing?.advanceMode || 'Cash',
     assignedEngineer: editing?.assignedEngineer || '',
     notes: editing?.notes || '',
@@ -251,6 +253,8 @@ function NewJobDialog({ open, onOpenChange, editing, onSaved }: { open: boolean,
         await apiPost('/api/jobs', form)
         toast({ title: 'Job created ✓' })
       }
+      // Invalidate jobs list to force fresh fetch from server
+      invalidate('/api/jobs')
       onSaved()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -342,6 +346,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
         finalAmount: calculatedFinal,
       })
       toast({ title: 'Job saved ✓', description: `Parts & charges saved for ${job.jobId}` })
+      invalidate('/api/jobs')
       onUpdated()
     } catch (e: any) {
       toast({ title: 'Error saving job', description: e.message, variant: 'destructive' })
@@ -353,6 +358,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
     try {
       await apiPut(`/api/jobs/${job.id}`, { action: 'updateStatus', status })
       toast({ title: 'Status updated ✓', description: `Job is now ${status}` })
+      invalidate('/api/jobs')
       onUpdated()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -392,9 +398,13 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
   }
 
   const handleComplete = async () => {
-    // AUTO-FIX (v3.0.4 Pro): Recalculate final amount from parts + service charge
+    // AUTO-FIX (v3.0.5 Pro): Recalculate final amount from parts + service charge
     // to ensure invoice always shows correct total matching saved details
     const calculatedTotal = serviceCharge > 0 ? (serviceCharge + partsTotalSell) : (finalAmount > 0 ? finalAmount : partsTotalSell)
+    if (calculatedTotal <= 0) {
+      toast({ title: 'Final amount must be > 0', description: 'Set service charge or add parts first', variant: 'destructive' })
+      return
+    }
     setSaving(true)
     try {
       await apiPut(`/api/jobs/${job.id}`, {
@@ -402,11 +412,11 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
         partsUsed,
         finalAmount: calculatedTotal,
         serviceCharge,
-        paidAmount: Number(job?.paidAmount) || 0,
         paymentMode,
         deductStock,
       })
       toast({ title: 'Job completed! ✓', description: 'Profit calculated & stock updated' })
+      invalidate('/api/jobs')
       onUpdated()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -424,6 +434,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
       await apiPut(`/api/jobs/${job.id}`, { action: 'recordPayment', amount: amt, mode: quickPayMode })
       toast({ title: 'Payment recorded ✓', description: `Rs.${amt} via ${quickPayMode}` })
       setQuickPayAmount('')
+      invalidate('/api/jobs')
       onUpdated()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
@@ -436,6 +447,7 @@ function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsAp
     try {
       await apiPut(`/api/jobs/${job.id}`, { action: 'deliver' })
       toast({ title: 'Job delivered ✓' })
+      invalidate('/api/jobs')
       onUpdated()
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' })
