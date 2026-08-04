@@ -3,6 +3,8 @@
 export interface LineItem {
   itemId?: string
   name: string
+  description?: string
+  specification?: string
   sku?: string
   hsnCode?: string
   quantity: number

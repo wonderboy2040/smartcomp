@@ -311,6 +311,8 @@ export async function generateInvoiceHtml(
           <td class="num">${i + 1}</td>
           <td class="name">
             <div class="iname">${escapeHtml(item.name)}${item.sku ? ` <span style="font-size:8px;color:#94a3b8;">SKU: ${escapeHtml(item.sku)}</span>` : ''}</div>
+            ${(item as any).description ? `<div style="font-size:9px;color:#475569;margin-top:2px;">${escapeHtml((item as any).description)}</div>` : ''}
+            ${(item as any).specification ? `<div style="font-size:9px;color:#1e40af;margin-top:1px;font-style:italic;">Spec: ${escapeHtml((item as any).specification)}</div>` : ''}
           </td>
           <td class="center">${item.quantity}</td>
           <td class="right">${formatCurrency(item.rate).replace('Rs. ', '')}</td>
@@ -325,6 +327,8 @@ export async function generateInvoiceHtml(
           <td class="num">${i + 1}</td>
           <td class="name">
             <div class="iname">${escapeHtml(item.name)}${item.sku ? ` <span style="font-size:8px;color:#94a3b8;">SKU: ${escapeHtml(item.sku)}</span>` : ''}</div>
+            ${(item as any).description ? `<div style="font-size:9px;color:#475569;margin-top:2px;">${escapeHtml((item as any).description)}</div>` : ''}
+            ${(item as any).specification ? `<div style="font-size:9px;color:#1e40af;margin-top:1px;font-style:italic;">Spec: ${escapeHtml((item as any).specification)}</div>` : ''}
           </td>
           <td class="center">${escapeHtml(item.hsnCode || '-')}</td>
           <td class="center">${item.quantity}</td>
