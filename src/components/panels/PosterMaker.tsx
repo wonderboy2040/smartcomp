@@ -13,7 +13,7 @@ import { toPng } from 'html-to-image'
 import {
   Image as ImageIcon, Download, Plus, Trash2, Palette, Phone, MapPin,
   Shield, Zap, Star, CheckCircle, Cpu, HardDrive, Monitor, Keyboard, Mouse, Printer,
-  Upload, AlertCircle, Loader2, Eye
+  Upload, AlertCircle, Loader2, Eye, Sparkles
 } from 'lucide-react'
 
 const RESOLUTIONS = [
@@ -23,6 +23,7 @@ const RESOLUTIONS = [
 ]
 
 const TEMPLATES = [
+  { id: 'chatgpt-pro', name: 'ChatGPT Pro', bg: 'linear-gradient(180deg, #f8fafc 0%, #eef2ff 55%, #e0e7ff 100%)', headerBg: '#0f172a', accent: '#f97316', accent2: '#ef4444', style: 'chatgpt' },
   { id: 'apex-tech', name: 'Apex Tech', bg: '#f0f2f5', headerBg: '#1e293b', accent: '#3b82f6', accent2: '#ffffff', style: 'apex' },
   { id: 'teal-product', name: 'Teal Product', bg: 'linear-gradient(180deg, #134e4a 0%, #0d9488 60%, #115e59 100%)', headerBg: 'transparent', accent: '#5eead4', accent2: '#fbbf24', style: 'teal' },
   { id: 'service-pro', name: 'Service Pro', bg: '#1e3a5f', headerBg: '#1e3a5f', accent: '#f97316', accent2: '#fbbf24', style: 'service' },
@@ -41,15 +42,17 @@ export function PosterMakerPanel() {
   const exportRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: shop } = useFetch<any>('/api/shop', undefined)
+  const { data: stockItems } = useFetch<any[]>('/api/items', undefined)
 
   const [template, setTemplate] = useState(TEMPLATES[0])
   const [resolution, setResolution] = useState(RESOLUTIONS[0])
   const [exporting, setExporting] = useState(false)
+  const [aiGenerating, setAiGenerating] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [product, setProduct] = useState({
     name: 'ASUS Vivobook 15',
     model: 'X1504VAP-BQ224WS',
-    headline: 'PERFORMANCE THAT KEEPS UP',
+    headline: 'POWERFUL STYLISH PRODUCTIVE',
     subheadline: 'STYLE THAT STANDS OUT',
     imageUrl: '',
     imageBase64: '',
@@ -61,9 +64,11 @@ export function PosterMakerPanel() {
       { icon: 'keyboard', label: 'Backlit Keyboard', desc: 'Type in Comfort' },
       { icon: 'shield', label: 'Windows 11 + Office', desc: 'Pre-installed' },
     ],
-    offerText: '1 Year Warranty + Free Backpack',
+    badges: ['1 YEAR WARRANTY', 'MICROSOFT OFFICE', 'FREE BACKPACK'],
+    offerText: 'Biggest Deal of the Year',
+    mrpText: '₹65,500',
     priceText: '₹49,990',
-    ctaText: 'ORDER NOW!',
+    ctaText: 'BUY NOW!',
     phone: '9876543210',
     address: 'SP Road, Bangalore',
   })
@@ -75,6 +80,75 @@ export function PosterMakerPanel() {
   const textColor = isDark || t.style === 'apex' ? '#ffffff' : '#1e293b'
   const subTextColor = isDark ? '#ffffff99' : '#64748b'
   const bodyBg = t.bg
+
+  // ── AI PRODUCT IMAGE (FREE) ─────────────────────────────────────────
+  // Calls /api/poster/generate in 'product-image' mode — Pollinations.ai
+  // renders a clean textless product photo; the template draws all text on
+  // top, so prices/specs/phone are always crisp (no garbled AI text).
+  const handleAIGenerate = useCallback(async () => {
+    if (!product.name.trim()) {
+      toast({ title: 'Product name required', description: 'Enter the product name first (e.g. ASUS Vivobook 16)', variant: 'destructive' })
+      return
+    }
+    setAiGenerating(true)
+    setImageError(false)
+    try {
+      const specsSummary = product.specs.map((s) => s.label).filter(Boolean).join(', ').slice(0, 250)
+      const res = await fetch('/api/poster/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: '',
+          itemName: product.name,
+          itemDetails: `${product.model ? product.model + ' — ' : ''}${specsSummary}`,
+          itemPrice: '',
+          style: 'photorealistic',
+          size: 'square',
+          includeShopBranding: false,
+          mode: 'product-image',
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.success) throw new Error(data.error || `Failed (${res.status})`)
+      setProduct((p) => ({ ...p, imageBase64: data.image, imageUrl: '' }))
+      const providerLabel =
+        data.provider === 'svg-product-art'
+          ? 'AI free providers busy — smart vector art used (still looks pro!)'
+          : `${data.provider}${data.provider === 'pollinations-256' ? ' (256px, upscaled)' : ''}`
+      toast({
+        title: '✅ Product image ready!',
+        description: `${(data.elapsedMs / 1000).toFixed(1)}s • ${providerLabel} • FREE`,
+      })
+    } catch (e: any) {
+      toast({ title: 'AI image failed', description: e?.message, variant: 'destructive' })
+    } finally {
+      setAiGenerating(false)
+    }
+  }, [product.name, product.model, product.specs, toast])
+
+  // ── LOAD FROM STOCK ─────────────────────────────────────────────────
+  const handleLoadFromStock = useCallback((itemId: string) => {
+    const item = (stockItems || []).find((i) => String(i.id) === itemId)
+    if (!item) return
+    const price = item.sellingPrice ? `₹${Number(item.sellingPrice).toLocaleString('en-IN')}` : ''
+    const details = item.description || item.category || ''
+    setProduct((p) => ({
+      ...p,
+      name: item.name || p.name,
+      model: item.sku || p.model,
+      headline: p.headline,
+      imageUrl: '',
+      imageBase64: '',
+      specs: details
+        ? [
+            ...details.split(',').slice(0, 4).map((d: string) => ({ icon: 'check', label: d.trim(), desc: '' })),
+            ...p.specs,
+          ].slice(0, 8)
+        : p.specs,
+      priceText: price || p.priceText,
+    }))
+    toast({ title: 'Loaded from stock', description: `${item.name} — ₹${Number(item.sellingPrice || 0).toLocaleString('en-IN')}` })
+  }, [stockItems, toast])
 
   const previewScale = Math.min(340 / resolution.w, 500 / resolution.h)
   const previewMarginBottom = -(resolution.h * previewScale) + 16
@@ -208,9 +282,9 @@ export function PosterMakerPanel() {
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Palette className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 flex-shrink-0" />
             <span className="truncate">Poster Maker</span>
-            <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v3.0.3 Fixed</span>
+            <span className="text-[10px] px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full">v4.0 AI</span>
           </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">10 premium designs · 3 FHD resolutions · Fixed CORS & HD export</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">✨ AI product image (FREE) · 11 premium designs · 3 FHD resolutions · ChatGPT-style promo posters</p>
         </div>
         <Button onClick={handleDownload} disabled={exporting} className="bg-purple-600 hover:bg-purple-700 h-11 min-w-[140px]">
           {exporting ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Generating...</> : <><Download className="w-4 h-4 mr-1.5" /> Download FHD</>}
@@ -263,15 +337,28 @@ export function PosterMakerPanel() {
             <Label className="text-xs font-medium">Product Details</Label>
             
             <div>
-              <Label className="text-[11px] text-slate-600">Product Image - Fixed CORS Handling</Label>
-              <div className="flex gap-2 mt-1">
-                <Input value={product.imageUrl} onChange={(e) => { setProduct({ ...product, imageUrl: e.target.value, imageBase64: '' }); setImageError(false) }} placeholder="https://example.com/image.jpg (may have CORS)" className="h-9 text-xs flex-1" />
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-9 text-xs whitespace-nowrap">
-                  <Upload className="w-3.5 h-3.5 mr-1" /> Upload Local
+              <Label className="text-[11px] text-slate-600">Product Image — ✨ AI Generate (FREE) or Upload</Label>
+              <div className="flex flex-col gap-2 mt-1">
+                <Button
+                  onClick={handleAIGenerate}
+                  disabled={aiGenerating || !product.name.trim()}
+                  className="w-full h-10 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white text-xs font-bold"
+                >
+                  {aiGenerating ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> AI drawing product photo… (10–20s)</>
+                  ) : (
+                    <><Sparkles className="w-4 h-4 mr-2" /> AI Generate Product Image — Free, no key</>
+                  )}
                 </Button>
+                <div className="flex gap-2">
+                  <Input value={product.imageUrl} onChange={(e) => { setProduct({ ...product, imageUrl: e.target.value, imageBase64: '' }); setImageError(false) }} placeholder="https://example.com/image.jpg (may have CORS)" className="h-9 text-xs flex-1" />
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-9 text-xs whitespace-nowrap">
+                    <Upload className="w-3.5 h-3.5 mr-1" /> Upload Local
+                  </Button>
+                </div>
               </div>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-              <p className="text-[10px] text-slate-500 mt-1">💡 Tip: Local upload avoids CORS errors. Max 5MB. External URLs may fail due to CORS.</p>
+              <p className="text-[10px] text-slate-500 mt-1">💡 Type product name → tap <strong>AI Generate</strong> → AI photo appears (Pollinations FLUX, free). Or upload local (no CORS issues).</p>
               {displayImage && (
                 <div className="mt-2 p-2 bg-slate-50 rounded-lg border flex items-center gap-2">
                   <img src={displayImage} alt="preview" className="w-12 h-12 object-contain rounded bg-white border" onError={() => setImageError(true)} onLoad={() => setImageError(false)} />
@@ -284,19 +371,46 @@ export function PosterMakerPanel() {
               )}
             </div>
 
+            {(stockItems && stockItems.length > 0) && (
+              <div>
+                <Label className="text-[11px] text-slate-600">Load from Stock (auto-fill)</Label>
+                <Select onValueChange={handleLoadFromStock}>
+                  <SelectTrigger className="h-9 text-xs bg-white">
+                    <SelectValue placeholder="Pick an item from your stock…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stockItems.slice(0, 50).map((it) => (
+                      <SelectItem key={it.id} value={String(it.id)}>
+                        {it.name} {it.sellingPrice ? `— ₹${Number(it.sellingPrice).toLocaleString('en-IN')}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Input value={product.name} onChange={(e) => setProduct({ ...product, name: e.target.value })} placeholder="Product name e.g. ASUS Vivobook 15" className="h-9 text-sm" />
             <Input value={product.model} onChange={(e) => setProduct({ ...product, model: e.target.value })} placeholder="Model e.g. X1504VAP-BQ224WS" className="h-9 text-sm" />
             <Input value={product.headline} onChange={(e) => setProduct({ ...product, headline: e.target.value })} placeholder="Headline e.g. PERFORMANCE THAT KEEPS UP" className="h-9 text-sm font-bold" />
             <Input value={product.subheadline} onChange={(e) => setProduct({ ...product, subheadline: e.target.value })} placeholder="Subheadline e.g. STYLE THAT STANDS OUT" className="h-9 text-sm" />
-            <div className="grid grid-cols-2 gap-2">
-              <Input value={product.offerText} onChange={(e) => setProduct({ ...product, offerText: e.target.value })} placeholder="Offer: 1 Year Warranty" className="h-9 text-xs" />
-              <Input value={product.priceText} onChange={(e) => setProduct({ ...product, priceText: e.target.value })} placeholder="Price ₹49,990" className="h-9 text-xs font-bold" />
+            <div className="grid grid-cols-3 gap-2">
+              <Input value={product.offerText} onChange={(e) => setProduct({ ...product, offerText: e.target.value })} placeholder="Offer" className="h-9 text-xs" />
+              <Input value={product.mrpText} onChange={(e) => setProduct({ ...product, mrpText: e.target.value })} placeholder="MRP ₹65,500 (strike)" className="h-9 text-xs" />
+              <Input value={product.priceText} onChange={(e) => setProduct({ ...product, priceText: e.target.value })} placeholder="NETT ₹49,990" className="h-9 text-xs font-bold" />
+            </div>
+            <div>
+              <Label className="text-[11px] text-slate-600">Badges (comma separated) — shown under headline</Label>
+              <Input
+                value={product.badges.join(', ')}
+                onChange={(e) => setProduct({ ...product, badges: e.target.value.split(',').map((b) => b.trim()).filter(Boolean) })}
+                placeholder="1 YEAR WARRANTY, MICROSOFT OFFICE, FREE BACKPACK"
+                className="h-9 text-xs mt-1"
+              />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Input value={product.phone} onChange={(e) => setProduct({ ...product, phone: e.target.value })} placeholder="Phone 9876543210" className="h-9 text-xs" />
               <Input value={product.address} onChange={(e) => setProduct({ ...product, address: e.target.value })} placeholder="Address SP Road..." className="h-9 text-xs" />
             </div>
-            <Input value={product.ctaText} onChange={(e) => setProduct({ ...product, ctaText: e.target.value })} placeholder="CTA ORDER NOW!" className="h-9 text-sm font-bold" />
+            <Input value={product.ctaText} onChange={(e) => setProduct({ ...product, ctaText: e.target.value })} placeholder="CTA BUY NOW!" className="h-9 text-sm font-bold" />
           </CardContent></Card>
 
           <Card><CardContent className="p-3 space-y-2">
@@ -354,8 +468,14 @@ export function PosterMakerPanel() {
                   borderBottom: t.style === 'apex' ? `${fs(3)} solid ${t.accent}` : 'none',
                 }}>
                   <div>
-                    <div style={{ fontSize: fs(18), fontWeight: 800, color: textColor, letterSpacing: '0.5px' }}>{shopName.toUpperCase()}</div>
-                    <div style={{ fontSize: fs(10), color: t.accent2, marginTop: '2px', fontWeight: 600 }}>{shopTagline}</div>
+                    <div style={{ fontSize: fs(18), fontWeight: 800, color: t.style === 'chatgpt' ? '#ffffff' : textColor, letterSpacing: '0.5px' }}>{shopName.toUpperCase()}</div>
+                    <div style={{ fontSize: fs(10), color: t.style === 'chatgpt' ? '#fbbf24' : t.accent2, marginTop: '2px', fontWeight: 600 }}>{shopTagline}</div>
+                    {t.style === 'chatgpt' && (
+                      <div style={{ display: 'flex', gap: fs(10), marginTop: fs(6), flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: fs(9), color: '#ffffffcc', fontWeight: 700 }}>📍 {product.address || 'Your City'}</span>
+                        <span style={{ fontSize: fs(9), color: '#fbbf24', fontWeight: 800 }}>📞 {product.phone || 'Phone'}</span>
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: fs(10) }}>
                     {[Shield, Star, Zap].map((Ico, i) => (
@@ -373,6 +493,26 @@ export function PosterMakerPanel() {
                 {product.model && <div style={{ fontSize: fs(11), color: subTextColor, marginTop: '4px', fontWeight: 500 }}>{product.model}</div>}
                 <div style={{ fontSize: fs(18), fontWeight: 800, color: textColor, marginTop: '8px', letterSpacing: '0.3px' }}>{product.headline}</div>
                 <div style={{ fontSize: fs(13), color: t.accent2, fontWeight: 700, marginTop: '2px' }}>{product.subheadline}</div>
+                {/* Badges row — like ChatGPT promo posters (WARRANTY / OFFICE / OFFER) */}
+                {product.badges.length > 0 && (
+                  <div style={{ display: 'flex', gap: fs(6), marginTop: fs(10), flexWrap: 'wrap' }}>
+                    {product.badges.slice(0, 6).map((badge, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: fs(8.5), fontWeight: 800, letterSpacing: '0.3px',
+                          padding: `${fs(3.5)} ${fs(10)}`, borderRadius: fs(20),
+                          background: i === 0 ? t.accent : `${t.accent}18`,
+                          color: i === 0 ? '#ffffff' : t.accent,
+                          border: `1px solid ${i === 0 ? t.accent : `${t.accent}45`}`,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {badge.toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: `${fs(8)} ${fs(28)}`, height: fs(260) }}>
@@ -425,7 +565,17 @@ export function PosterMakerPanel() {
                   boxShadow: `0 4px 12px ${t.accent}15`
                 }}>
                   {product.offerText && <div style={{ fontSize: fs(12), fontWeight: 700, color: textColor }}>{product.offerText}</div>}
-                  {product.priceText && <div style={{ fontSize: fs(26), fontWeight: 900, color: t.accent2, textShadow: `0 2px 4px ${t.accent}30` }}>{product.priceText}</div>}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: fs(8) }}>
+                    {product.mrpText && (
+                      <span style={{ fontSize: fs(13), fontWeight: 700, color: subTextColor, textDecoration: 'line-through' }}>{product.mrpText}</span>
+                    )}
+                    {product.priceText && (
+                      <span style={{ fontSize: fs(26), fontWeight: 900, color: t.accent2, textShadow: `0 2px 4px ${t.accent}30` }}>{product.priceText}</span>
+                    )}
+                    {product.mrpText && product.priceText && (
+                      <span style={{ fontSize: fs(9), fontWeight: 900, background: '#dc2626', color: '#fff', padding: `${fs(2)} ${fs(6)}`, borderRadius: fs(4) }}>NETT</span>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -451,10 +601,15 @@ export function PosterMakerPanel() {
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ display: 'flex', gap: fs(6), justifyContent: 'flex-end', flexWrap: 'wrap', maxWidth: fs(180) }}>
-                    {['100% ORIGINAL', 'FAST DELIVERY', 'WARRANTY'].map((txt, i) => (
+                    {(t.style === 'chatgpt' ? ['ORIGINAL PRODUCTS', 'TRUSTED SERVICE', 'BEST PRICES', 'AFTER SALES SUPPORT'] : ['100% ORIGINAL', 'FAST DELIVERY', 'WARRANTY']).map((txt, i) => (
                       <div key={i} style={{ fontSize: fs(7), color: '#ffffffcc', padding: `${fs(4)} ${fs(8)}`, border: `1px solid #ffffff30`, borderRadius: fs(4), fontWeight: 600 }}>{txt}</div>
                     ))}
                   </div>
+                  {t.style === 'chatgpt' && (
+                    <div style={{ fontSize: fs(8), color: '#fbbf24', fontWeight: 800, marginTop: fs(6), letterSpacing: '0.5px' }}>
+                      FAST • RELIABLE • AFFORDABLE
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

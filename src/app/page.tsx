@@ -35,7 +35,7 @@ const CampaignsPanel = lazy(() => import('@/components/panels/Campaigns').then(m
 const CreditControlPanel = lazy(() => import('@/components/panels/CreditControl').then(m => ({ default: m.CreditControlPanel })))
 const AMCPanel = lazy(() => import('@/components/panels/AMC').then(m => ({ default: m.AMCPanel })))
 const GrowthHubPanel = lazy(() => import('@/components/panels/GrowthHub').then(m => ({ default: m.GrowthHubPanel })))
-const PosterGeneratorPanel = lazy(() => import('@/components/panels/PosterGenerator').then(m => ({ default: m.PosterGeneratorPanel })))
+const PosterHubPanel = lazy(() => import('@/components/panels/PosterHub').then(m => ({ default: m.PosterHubPanel })))
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-slate-600' },
@@ -553,7 +553,7 @@ function HomeInner() {
               <GrowthHubPanel />
             </PanelBoundary>
             <PanelBoundary active={active} id="poster" mounted={mountedPanels.has('poster')}>
-              <PosterGeneratorPanel />
+              <PosterHubPanel />
             </PanelBoundary>
           </div>
         </main>

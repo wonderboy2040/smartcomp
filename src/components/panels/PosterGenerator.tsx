@@ -91,6 +91,7 @@ interface GeneratedPoster {
   width: number
   height: number
   elapsedMs: number
+  mime?: string
   createdAt: string
 }
 
@@ -161,6 +162,7 @@ export function PosterGeneratorPanel() {
         width: data.width,
         height: data.height,
         elapsedMs: data.elapsedMs,
+        mime: data.mime,
         createdAt: new Date().toISOString(),
       }
 
@@ -188,7 +190,8 @@ export function PosterGeneratorPanel() {
     if (!link) return
     link.href = current.image
     const safeName = (itemName || 'poster').replace(/[^a-z0-9]/gi, '_').toLowerCase()
-    link.download = `smartcomp_${safeName}_${current.width}x${current.height}.png`
+    const ext = current.mime?.includes('svg') ? 'svg' : current.mime?.includes('png') ? 'png' : 'jpg'
+    link.download = `smartcomp_${safeName}_${current.width}x${current.height}.${ext}`
     link.click()
     toast({ title: 'Downloaded ✓', description: link.download })
   }, [current, itemName, toast])
@@ -244,7 +247,7 @@ export function PosterGeneratorPanel() {
             </Badge>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Generate WhatsApp Status posters & advertising images from text prompts — powered by GLM-class AI (Gemini Nano / DALL-E 3 equivalent)
+            Generate WhatsApp Status posters & advertising images from text prompts — powered by FREE Pollinations.ai FLUX (no API key)
           </p>
         </div>
         {shop?.name && (
@@ -556,8 +559,9 @@ export function PosterGeneratorPanel() {
       {/* ─── Footer info ─── */}
       <div className="text-[10px] text-slate-400 text-center pt-2">
         <p>
-          Powered by <strong className="text-slate-500">z-ai-web-dev-sdk</strong> (GLM-4V-class image generation — comparable to Gemini Nano, Imagen, DALL-E 3).
-          Free, no API keys, no rate limits. Posters are generated on-demand and never stored on the server.
+          Powered by <strong className="text-slate-500">Pollinations.ai FLUX</strong> — free, no API keys, no rate limits.
+          Posters are generated on-demand and never stored on the server. For posters with prices/specs/phone in
+          perfect text, use the <strong>Poster Maker</strong> tab (AI product photo + crisp text overlay).
         </p>
       </div>
     </div>

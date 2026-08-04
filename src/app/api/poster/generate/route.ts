@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, isConfigured } from '@/lib/sheets-client'
+import { generateImage as generateImageShared } from '@/lib/image-gen'
 
 /**
  * POST /api/poster/generate
@@ -85,6 +86,14 @@ interface GenerateRequest {
   style?: PosterStyle
   size?: PosterSize
   includeShopBranding?: boolean
+  /**
+   * 'poster' (default) — full advertising poster with text baked in by the AI.
+   * 'product-image' — CLEAN textless product photo on a plain background,
+   *   meant to be placed into a poster template (Poster Maker) where the
+   *   browser renders all text perfectly (prices, specs, phone — no garbled
+   *   AI text). 100% free via the same provider chain.
+   */
+  mode?: 'poster' | 'product-image'
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -192,9 +201,38 @@ function buildSuperPrompt(opts: {
   size: PosterSize
   shop: ShopBranding | null
   includeBranding: boolean
+  mode?: 'poster' | 'product-image'
 }): string {
-  const { userPrompt, itemName, itemDetails, itemPrice, style, size, shop, includeBranding } = opts
+  const { userPrompt, itemName, itemDetails, itemPrice, style, size, shop, includeBranding, mode } = opts
 
+  // ── PRODUCT-IMAGE MODE ──────────────────────────────────────────────
+  // Poster Maker flow: we ONLY need the hero artwork (no text — the browser
+  // draws crisp text on top). Explicitly forbid text so prices/phone/shop
+  // names never come out garbled, which is what pure text-to-image posters
+  // suffer from.
+  if (mode === 'product-image') {
+    const parts: string[] = []
+    if (itemName?.trim()) {
+      parts.push(`professional product photography of a ${itemName.trim()}`)
+    } else if (userPrompt?.trim()) {
+      parts.push(`professional product photography of: ${userPrompt.trim()}`)
+    } else {
+      parts.push('professional product photography of a modern tech gadget')
+    }
+    if (itemDetails?.trim()) {
+      parts.push(`product features: ${itemDetails.trim().slice(0, 250)}`)
+    }
+    parts.push(STYLE_PRESETS[style])
+    parts.push(
+      'centered composition, product fills 60-75% of frame, clean seamless studio background with soft gradient, soft shadows, slight angle showing the product, commercial catalog quality, ultra sharp focus, vibrant colors, high dynamic range',
+    )
+    parts.push(
+      'IMPORTANT: absolutely no text, no words, no letters, no numbers, no logos, no watermark, no captions, no price tags — the image must contain the product ONLY on a clean background',
+    )
+    return parts.join(', ')
+  }
+
+  // ── POSTER MODE (original full-AI poster) ───────────────────────────
   const stylePreset = STYLE_PRESETS[style]
   const sizePreset = SIZE_PRESETS[size]
 
@@ -238,7 +276,11 @@ function buildSuperPrompt(opts: {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Provider implementations
+// Provider implementations (shared chain lives in src/lib/image-gen.ts)
+// Chain: HuggingFace FLUX (if HF_TOKEN set) → Pollinations @requested size
+//        → Pollinations @256 (free tier) → Pollinations POST @256
+//        → always-works SVG fallback (product art for template posters,
+//          text placeholder for full-AI posters)
 // ──────────────────────────────────────────────────────────────────────
 
 interface ImageGenResult {
@@ -250,154 +292,39 @@ interface ImageGenResult {
   model: string
 }
 
-async function tryPollinations(opts: {
-  superPrompt: string
-  width: number
-  height: number
-  model: string
-  providerLabel: string
-}): Promise<ImageGenResult | null> {
-  const { superPrompt, width, height, model, providerLabel } = opts
-  const seed = Math.floor(Math.random() * 1000000)
-  const encodedPrompt = encodeURIComponent(superPrompt.slice(0, 1500))
-  const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&model=${model}&nologo=true&seed=${seed}&enhance=true`
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort('timeout'), 120000)
-
-  try {
-    console.log(`[/api/poster/generate] ${providerLabel} → GET ${url.slice(0, 100)}…`)
-    const startMs = Date.now()
-    const response = await fetch(url, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: { 'Accept': 'image/jpeg, image/png, image/*' },
-    })
-    clearTimeout(timeout)
-    const elapsedMs = Date.now() - startMs
-    console.log(`[/api/poster/generate] ${providerLabel} response: ${response.status} in ${elapsedMs}ms`)
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '<no body>')
-      console.warn(`[/api/poster/generate] ${providerLabel} failed: HTTP ${response.status} — ${errorBody.slice(0, 150)}`)
-      return null
-    }
-
-    const contentType = response.headers.get('content-type') || 'image/jpeg'
-    if (!contentType.startsWith('image/')) {
-      console.warn(`[/api/poster/generate] ${providerLabel} returned non-image content-type: ${contentType}`)
-      return null
-    }
-
-    const arrayBuffer = await response.arrayBuffer()
-    if (arrayBuffer.byteLength < 1000) {
-      console.warn(`[/api/poster/generate] ${providerLabel} returned suspiciously small image: ${arrayBuffer.byteLength} bytes`)
-      return null
-    }
-
-    const base64 = Buffer.from(arrayBuffer).toString('base64')
-    return {
-      base64,
-      contentType,
-      actualWidth: width,
-      actualHeight: height,
-      provider: 'pollinations.ai',
-      model: providerLabel,
-    }
-  } catch (e: any) {
-    clearTimeout(timeout)
-    console.warn(`[/api/poster/generate] ${providerLabel} error: ${e?.name} — ${e?.message}`)
-    return null
-  }
-}
-
-async function tryHuggingFace(opts: {
-  superPrompt: string
-  width: number
-  height: number
-}): Promise<ImageGenResult | null> {
-  const { superPrompt, width, height } = opts
-  const token = process.env.HF_TOKEN
-  if (!token) return null // HF requires auth
-
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort('timeout'), 120000)
-
-  try {
-    console.log(`[/api/poster/generate] HuggingFace FLUX.1-schnell → POST`)
-    const response = await fetch('https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell', {
-      method: 'POST',
-      signal: controller.signal,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        inputs: superPrompt.slice(0, 1000),
-        parameters: { width, height },
-      }),
-    })
-    clearTimeout(timeout)
-
-    if (!response.ok) {
-      const errorBody = await response.text().catch(() => '<no body>')
-      console.warn(`[/api/poster/generate] HuggingFace failed: HTTP ${response.status} — ${errorBody.slice(0, 150)}`)
-      return null
-    }
-
-    const contentType = response.headers.get('content-type') || 'image/png'
-    if (!contentType.startsWith('image/')) return null
-
-    const arrayBuffer = await response.arrayBuffer()
-    if (arrayBuffer.byteLength < 1000) return null
-
-    const base64 = Buffer.from(arrayBuffer).toString('base64')
-    return {
-      base64,
-      contentType,
-      actualWidth: width,
-      actualHeight: height,
-      provider: 'huggingface.co',
-      model: 'FLUX.1-schnell',
-    }
-  } catch (e: any) {
-    clearTimeout(timeout)
-    console.warn(`[/api/poster/generate] HuggingFace error: ${e?.name} — ${e?.message}`)
-    return null
-  }
-}
-
 async function generateImage(opts: {
   superPrompt: string
   width: number
   height: number
+  mode?: 'poster' | 'product-image'
 }): Promise<ImageGenResult> {
-  const { superPrompt, width, height } = opts
-
-  // Try each provider in order. Each returns null on failure (no throw),
-  // so we can fall through to the next one.
-  const providers: Array<() => Promise<ImageGenResult | null>> = [
-    // 1. Pollinations with FLUX (best quality if available)
-    () => tryPollinations({ superPrompt, width, height, model: 'flux', providerLabel: 'Pollinations/flux' }),
-    // 2. Pollinations with OpenAI alias (DALL-E 3 equivalent)
-    () => tryPollinations({ superPrompt, width, height, model: 'openai', providerLabel: 'Pollinations/openai' }),
-    // 3. Pollinations with Turbo (faster)
-    () => tryPollinations({ superPrompt, width, height, model: 'turbo', providerLabel: 'Pollinations/turbo' }),
-    // 4. Pollinations with default SANA model (always works)
-    () => tryPollinations({ superPrompt, width, height, model: 'sana', providerLabel: 'Pollinations/sana' }),
-    // 5. Hugging Face FLUX schnell (if HF_TOKEN env var is set)
-    () => tryHuggingFace({ superPrompt, width, height }),
-  ]
-
-  for (let i = 0; i < providers.length; i++) {
-    const result = await providers[i]()
-    if (result) {
-      console.log(`[/api/poster/generate] ✓ Success with provider ${i + 1}: ${result.provider}/${result.model}`)
-      return result
-    }
+  const { superPrompt, width, height, mode } = opts
+  const startMs = Date.now()
+  const result = await generateImageShared(
+    {
+      prompt: superPrompt,
+      width,
+      height,
+      seed: Math.floor(Math.random() * 1000000),
+      noLogo: true,
+    },
+    {
+      perAttemptTimeoutMs: 90_000,
+      fallbackKind: mode === 'product-image' ? 'product-art' : 'placeholder',
+      // Full-poster mode: a 256px square AI image would look worse than the
+      // full-size SVG placeholder — skip the tiny fallback there.
+      noSmallFallback: mode !== 'product-image',
+    },
+  )
+  console.log(`[/api/poster/generate] ✓ provider=${result.provider} ${result.width}x${result.height} in ${Date.now() - startMs}ms`)
+  return {
+    base64: result.base64,
+    contentType: result.mime,
+    actualWidth: result.width,
+    actualHeight: result.height,
+    provider: result.provider,
+    model: result.provider,
   }
-
-  throw new Error('All image generation providers failed. This is usually a transient network issue — wait 1 minute and try again.')
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -415,8 +342,9 @@ export async function POST(req: NextRequest) {
       itemDetails,
       itemPrice,
       style = 'premium',
-      size = 'whatsapp-status',
+      size,
       includeShopBranding = true,
+      mode = 'poster',
     } = body
 
     if (!prompt?.trim() && !itemName?.trim()) {
@@ -426,8 +354,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Load shop branding (best-effort)
-    const shop = includeShopBranding ? await loadShopBranding() : null
+    // product-image mode defaults to a square hero crop (best for templates)
+    const effectiveSize: PosterSize = size ?? (mode === 'product-image' ? 'square' : 'whatsapp-status')
+
+    // Load shop branding (best-effort) — not needed for product-image mode
+    const shop = includeShopBranding && mode !== 'product-image' ? await loadShopBranding() : null
 
     // Build the super-prompt
     const superPrompt = buildSuperPrompt({
@@ -436,35 +367,44 @@ export async function POST(req: NextRequest) {
       itemDetails,
       itemPrice,
       style,
-      size,
+      size: effectiveSize,
       shop,
       includeBranding: includeShopBranding,
+      mode,
     })
 
-    const sizePreset = SIZE_PRESETS[size]
+    const sizePreset = SIZE_PRESETS[effectiveSize]
 
     // Generate the image via multi-provider fallback chain
     const result = await generateImage({
       superPrompt,
       width: sizePreset.w,
       height: sizePreset.h,
+      mode,
     })
 
     const elapsedMs = Date.now() - startTime
-    const mimePrefix = result.contentType.includes('png') ? 'data:image/png;base64,' : 'data:image/jpeg;base64,'
+    const ct = result.contentType || 'image/jpeg'
+    const mimePrefix = ct.includes('svg')
+      ? 'data:image/svg+xml;base64,'
+      : ct.includes('png')
+        ? 'data:image/png;base64,'
+        : 'data:image/jpeg;base64,'
 
     return NextResponse.json({
       success: true,
       image: `${mimePrefix}${result.base64}`,
       prompt: superPrompt,
       style,
-      size,
+      size: effectiveSize,
+      mode,
       width: result.actualWidth,
       height: result.actualHeight,
       elapsedMs,
       shopBrandingUsed: !!shop && includeShopBranding,
       model: result.model,
       provider: result.provider,
+      mime: result.contentType,
     })
   } catch (e: any) {
     console.error('[/api/poster/generate] final error:', e?.message)
@@ -494,12 +434,11 @@ export async function GET() {
       ...SIZE_PRESETS[k as PosterSize],
     })),
     providers: [
-      { id: 'pollinations-flux', label: 'Pollinations / FLUX (free, no-auth)', default: true },
-      { id: 'pollinations-openai', label: 'Pollinations / OpenAI alias (free, no-auth)' },
-      { id: 'pollinations-turbo', label: 'Pollinations / Turbo (free, no-auth)' },
-      { id: 'pollinations-sana', label: 'Pollinations / SANA (free, no-auth)' },
-      { id: 'huggingface-flux', label: 'Hugging Face / FLUX.1-schnell (requires HF_TOKEN env var)' },
+      { id: 'huggingface-flux', label: 'Hugging Face / FLUX.1-schnell (free with free HF_TOKEN — best 1024px quality)' },
+      { id: 'pollinations-requested', label: 'Pollinations.ai / full size (free, no-auth)' },
+      { id: 'pollinations-256', label: 'Pollinations.ai / 256px (free tier — currently the reliable anonymous size)' },
+      { id: 'svg-product-art', label: 'Local vector product art (always works, zero cost)' },
     ],
-    note: 'Gemini / ChatGPT (DALL-E 3 / GPT-Image-1) are NOT free — they require paid API keys. This endpoint uses Pollinations.ai (free) + optional Hugging Face (free with token) for fallback.',
+    note: 'Gemini / ChatGPT (DALL-E 3 / GPT-Image-1) are NOT free — they require paid API keys. This endpoint chains Hugging Face FLUX (free token) → Pollinations.ai (free) → local vector art (always works).',
   })
 }
