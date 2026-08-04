@@ -130,19 +130,178 @@ function invalidateCache(sheet?: string) {
   const prefix = `list:${sheet}:`
   const getPrefix = `get:${sheet}:`
   for (const key of Array.from(cache.keys())) {
-    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('shop:') || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
+    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
       cache.delete(key)
     }
   }
   for (const key of Array.from(quantumMemCache.keys())) {
-    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('shop:') || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
+    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
       quantumMemCache.delete(key)
     }
   }
   for (const key of Array.from(lastPullTime.keys())) {
-    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('shop:') || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
+    if (key.startsWith(prefix) || key.startsWith(getPrefix) || key.startsWith('dashboard:') || key.startsWith('quantum:')) {
       lastPullTime.delete(key)
     }
+  }
+}
+
+// ===== WRITE-THROUGH CACHE v11 — ULTRA FAST CRUD =====
+// Instead of wiping the whole sheet cache after every create/update/delete
+// (which forces the next GET back to the network), we patch the cached rows
+// IN PLACE. The next listRows()/getRow() for that sheet is served from memory
+// in <1ms with zero Apps Script round-trip. Only aggregate caches
+// (dashboard, quantum getAllData) are dropped — they rebuild in one call.
+//
+// Cache key format: list:<sheet>:<filter>:<search>:<includeDeleted>
+//                    get:<sheet>:<id>
+// Filter format: "field=value" (exact match). Search: substring across fields.
+
+function parseListCacheKey(key: string): { sheet: string; filter?: string; search?: string; includeDeleted: boolean } | null {
+  if (!key.startsWith('list:')) return null
+  const rest = key.slice('list:'.length)
+  const firstColon = rest.indexOf(':')
+  if (firstColon === -1) return null
+  const sheet = rest.slice(0, firstColon)
+  // Format: <sheet>:<filter>:<search>:<incDel>. Search may itself contain
+  // colons ("RAM: 8GB"), so parse from the END: strip the trailing ':0'/'1'
+  // marker, then split filter (never contains ':') from search at the first
+  // remaining colon.
+  const remainder = rest.slice(firstColon + 1)
+  const includeDeleted = remainder.endsWith(':1')
+  const body = remainder.slice(0, remainder.length - 2) // strip ':0' or ':1'
+  const fColon = body.indexOf(':')
+  const filter = fColon === -1 ? body : body.slice(0, fColon)
+  const search = fColon === -1 ? undefined : body.slice(fColon + 1)
+  return {
+    sheet,
+    filter: filter || undefined,
+    search: search || undefined,
+    includeDeleted,
+  }
+}
+
+function rowMatchesFilter(row: any, filter?: string): boolean {
+  if (!filter) return true
+  const eq = filter.indexOf('=')
+  if (eq === -1) return true
+  const field = filter.slice(0, eq)
+  const value = filter.slice(eq + 1)
+  if (!field || value === undefined) return true
+  return String((row || {})[field] ?? '') === String(value)
+}
+
+function rowMatchesSearch(row: any, search?: string): boolean {
+  if (!search) return true
+  const q = search.toLowerCase()
+  const rowObj = row || {}
+  for (const v of Object.values(rowObj)) {
+    if (String(v ?? '').toLowerCase().includes(q)) return true
+  }
+  return false
+}
+
+function isDeletedRow(row: any): boolean {
+  if (!row) return false
+  return row.deleted === true || row.deleted === 'true' || String(row.deleted).toLowerCase() === 'true'
+}
+
+function patchListCache(sheet: string, row: any, kind: 'create' | 'update' | 'delete' | 'restore') {
+  const id = row?.id
+  for (const key of Array.from(cache.keys())) {
+    if (!key.startsWith(`list:${sheet}:`)) continue
+    const meta = parseListCacheKey(key)
+    if (!meta) continue
+    // NOTE: use getCached(), NOT cache.get() — the raw map holds entry
+    // wrappers ({data, expires, hits}), only getCached() unwraps .data.
+    const list = getCached<any[]>(key)
+    if (!Array.isArray(list)) continue
+    const idx = list.findIndex((x: any) => String(x?.id) === String(id))
+    const matches = rowMatchesFilter(row, meta.filter) && rowMatchesSearch(row, meta.search)
+
+    if (kind === 'create') {
+      if (idx === -1 && matches) list.unshift(row) // new row goes to the top
+    } else if (kind === 'update') {
+      if (idx !== -1) {
+        if (matches && !isDeletedRow(row)) list[idx] = row
+        else list.splice(idx, 1) // no longer matches filter/search, or soft-deleted
+      } else if (matches && !isDeletedRow(row)) {
+        list.unshift(row)
+      }
+    } else if (kind === 'delete') {
+      if (idx !== -1) {
+        if (meta.includeDeleted) list[idx] = { ...(list[idx] || {}), deleted: true }
+        else list.splice(idx, 1)
+      }
+    } else if (kind === 'restore') {
+      if (idx !== -1) {
+        if (matches) list[idx] = row
+        else list.splice(idx, 1)
+      } else if (matches) {
+        list.unshift(row)
+      }
+    }
+    setCached(key, list)
+  }
+  // Patch detail cache
+  const getKey = `get:${sheet}:${id}`
+  if (kind === 'delete') cache.delete(getKey)
+  else if (row) setCached(getKey, row)
+}
+
+// Defensive merge: if a server response only contains CHANGED fields (older
+// Apps Script deployments), merge it over the previously cached full row so
+// the write-through cache never stores a partial entity.
+function mergeWithCached(sheet: string, id: string, row: any): any {
+  if (!row || typeof row !== 'object') return row
+  const getKey = `get:${sheet}:${id}`
+  const direct = getCached<any>(getKey)
+  if (direct && typeof direct === 'object' && !Array.isArray(direct)) {
+    return { ...direct, ...row }
+  }
+  for (const key of Array.from(cache.keys())) {
+    if (!key.startsWith(`list:${sheet}:`)) continue
+    const list = getCached<any[]>(key)
+    if (!Array.isArray(list)) continue
+    const found = list.find((x: any) => String(x?.id) === String(id))
+    if (found && typeof found === 'object') {
+      return { ...found, ...row }
+    }
+  }
+  return row
+}
+
+// Debounced background reconcile: after a burst of writes, refresh the sheet's
+// base list once in the background so the cache also picks up changes made by
+// OTHER devices/clients (PWA, WhatsApp sync). Fire-and-forget — never blocks.
+const reconcileTimers = new Map<string, ReturnType<typeof setTimeout>>()
+// Delay is configurable via env (tests use a long value so the background
+// refresh never fires mid-assertion).
+function reconcileDelayMs(): number {
+  const v = Number(process.env.SMARTCOMP_RECONCILE_DELAY_MS)
+  return Number.isFinite(v) && v > 0 ? v : 1200
+}
+function scheduleReconcile(sheet: string) {
+  const existing = reconcileTimers.get(sheet)
+  if (existing) clearTimeout(existing)
+  reconcileTimers.set(
+    sheet,
+    setTimeout(() => {
+      reconcileTimers.delete(sheet)
+      listRows(sheet, { useCache: false }).catch(() => {})
+    }, reconcileDelayMs())
+  )
+}
+
+function invalidateAggregates() {
+  for (const key of Array.from(cache.keys())) {
+    if (key.startsWith('dashboard:') || key.startsWith('quantum:')) cache.delete(key)
+  }
+  for (const key of Array.from(quantumMemCache.keys())) {
+    if (key.startsWith('dashboard:') || key.startsWith('quantum:')) quantumMemCache.delete(key)
+  }
+  for (const key of Array.from(lastPullTime.keys())) {
+    if (key.startsWith('dashboard:') || key.startsWith('quantum:')) lastPullTime.delete(key)
   }
 }
 
@@ -334,6 +493,29 @@ let consecutiveFailures = 0
 const CIRCUIT_BREAKER_THRESHOLD = 5
 const CIRCUIT_BREAKER_COOLDOWN = 30 * 1000
 
+// v11: in-flight GET dedupe map (see getFromAppsScript)
+const inflightGets = new Map<string, Promise<any>>()
+
+// v11: actions that CREATE rows server-side. These must never be retried on
+// timeout/abort — a retry could duplicate the row if the first attempt
+// actually landed. They are protected by a clientRef idempotency key instead
+// (see _clientRef below + code.gs _withDedupe).
+const CREATE_ACTIONS = new Set([
+  'create', 'createFast', 'bulkCreate',
+  'createInvoiceFull', 'createInvoiceUltra',
+  'createQuotationFull', 'createQuotationUltra',
+  'completeJobFull', 'saveShop', 'savePin', 'seed',
+])
+
+function nextClientRef(): string | undefined {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID()
+    }
+  } catch {}
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 async function callAppsScript(payload: any): Promise<any> {
   const APPS_SCRIPT_URL = getAppsScriptUrl()
   if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL not configured. Open the desktop app settings and paste your Google Apps Script /exec URL.')
@@ -349,7 +531,12 @@ async function callAppsScript(payload: any): Promise<any> {
   // to the browser. Apps Script hashes it with the same salt we use here
   // and compares to the stored hash (see apps-script/code.gs).
   const pin = getAppPin()
-  const bodyWithPin = pin ? { ...payload, pin } : payload
+  const bodyWithPin: any = pin ? { ...payload, pin } : { ...payload }
+  // Idempotency key: lets Apps Script return the ORIGINAL result if a retry
+  // (or double-click) fires the same create twice — no duplicate rows.
+  if (CREATE_ACTIONS.has(payload.action)) {
+    bodyWithPin._clientRef = nextClientRef()
+  }
 
   let lastErr: any
   for (let attempt = 1; attempt <= 2; attempt++) { // Reduced from 3 to 2 for ultra speed
@@ -365,7 +552,7 @@ async function callAppsScript(payload: any): Promise<any> {
         throw new Error(`Apps Script 404 (attempt ${attempt}/2). Redeploy needed.`)
       }
       if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
-      
+
       const text = await res.text()
       try {
         const parsed = JSON.parse(text)
@@ -384,7 +571,15 @@ async function callAppsScript(payload: any): Promise<any> {
       }
     } catch (e: any) {
       lastErr = e
-      const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML') && !e?.message?.includes('Apps Script has its OWN auth')
+      const isCreate = CREATE_ACTIONS.has(payload.action)
+      // v11 safety: NEVER retry create-type actions on timeout/abort — a
+      // duplicate row would be created if the first attempt landed. Creates
+      // are made idempotent with _clientRef instead. Reads and idempotent
+      // writes (update/delete/restore/bulkUpdate) still retry once.
+      const isRetryable =
+        !isCreate &&
+        (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') &&
+        !e?.message?.includes('HTML') && !e?.message?.includes('Apps Script has its OWN auth')
       if (!isRetryable || attempt === 2) {
         consecutiveFailures++
         if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
@@ -414,45 +609,58 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
   const pin = getAppPin()
   if (pin) url.searchParams.set('pin', pin)
 
-  let lastErr: any
-  for (let attempt = 1; attempt <= 2; attempt++) { // Ultra fast: 2 attempts max
-    try {
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        redirect: 'follow',
-        signal: AbortSignal.timeout(8000) // 8s — was 4s. Apps Script cold start can take 6-8s.
-      })
-      if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/2)`)
-      if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
-      
-      const text = await res.text()
+  // v11: request deduplication — if 3 panels ask for the same list at the
+  // same instant, they share ONE Apps Script call instead of 3.
+  const urlStr = url.toString()
+  const inflight = inflightGets.get(urlStr)
+  if (inflight) return inflight
+
+  const promise = (async () => {
+    let lastErr: any
+    for (let attempt = 1; attempt <= 2; attempt++) { // Ultra fast: 2 attempts max
       try {
-        const parsed = JSON.parse(text)
-        // Detect Apps Script auth errors and throw with a helpful message
-        const authHint = diagnoseJsonAuthError(text)
-        if (authHint) throw new Error(authHint)
-        consecutiveFailures = 0
-        return parsed
-      } catch (parseErr: any) {
-        if (parseErr?.message && parseErr.message.includes('Apps Script')) throw parseErr
-        const hint = diagnoseHtmlResponse(text)
-        if (hint) throw new Error(hint)
-        throw new Error('Invalid JSON from Apps Script: ' + text.slice(0, 200))
-      }
-    } catch (e: any) {
-      lastErr = e
-      const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML') && !e?.message?.includes('Apps Script has its OWN auth')
-      if (!isRetryable || attempt === 2) {
-        consecutiveFailures++
-        if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
-          circuitBrokenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN
+        const res = await fetch(urlStr, {
+          method: 'GET',
+          redirect: 'follow',
+          signal: AbortSignal.timeout(8000) // 8s — was 4s. Apps Script cold start can take 6-8s.
+        })
+        if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/2)`)
+        if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
+
+        const text = await res.text()
+        try {
+          const parsed = JSON.parse(text)
+          // Detect Apps Script auth errors and throw with a helpful message
+          const authHint = diagnoseJsonAuthError(text)
+          if (authHint) throw new Error(authHint)
+          consecutiveFailures = 0
+          return parsed
+        } catch (parseErr: any) {
+          if (parseErr?.message && parseErr.message.includes('Apps Script')) throw parseErr
+          const hint = diagnoseHtmlResponse(text)
+          if (hint) throw new Error(hint)
+          throw new Error('Invalid JSON from Apps Script: ' + text.slice(0, 200))
         }
-        throw e
+      } catch (e: any) {
+        lastErr = e
+        const isRetryable = (e?.message?.includes('404') || e?.message?.includes('timeout') || e?.message?.includes('aborted') || e?.name === 'TimeoutError' || e?.name === 'AbortError') && !e?.message?.includes('HTML') && !e?.message?.includes('Apps Script has its OWN auth')
+        if (!isRetryable || attempt === 2) {
+          consecutiveFailures++
+          if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+            circuitBrokenUntil = Date.now() + CIRCUIT_BREAKER_COOLDOWN
+          }
+          throw e
+        }
+        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
       }
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
     }
-  }
-  throw lastErr || new Error('Apps Script GET failed')
+    throw lastErr || new Error('Apps Script GET failed')
+  })().finally(() => {
+    inflightGets.delete(urlStr)
+  })
+
+  inflightGets.set(urlStr, promise)
+  return promise
 }
 
 // ===== CRUD OPERATIONS =====
@@ -510,7 +718,12 @@ export async function createRow<T = any>(sheet: string, data: any): Promise<T> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'create', sheet, data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to create')
-  invalidateCache(sheet)
+  // v11 write-through: patch caches in place — next GET is instant, no refetch.
+  if (res.data) {
+    patchListCache(sheet, res.data, 'create')
+    invalidateAggregates()
+    scheduleReconcile(sheet)
+  }
   return res.data as T
 }
 
@@ -518,7 +731,11 @@ export async function updateRow<T = any>(sheet: string, id: string, data: any): 
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'update', sheet, id, data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to update')
-  invalidateCache(sheet)
+  if (res.data) {
+    patchListCache(sheet, mergeWithCached(sheet, id, res.data), 'update')
+    invalidateAggregates()
+    scheduleReconcile(sheet)
+  }
   return res.data as T
 }
 
@@ -527,14 +744,21 @@ export async function deleteRow(sheet: string, id: string): Promise<boolean> {
   trackDeleted(sheet, id)
   const res = await callAppsScript({ action: 'delete', sheet, id })
   if (!res.success) throw new Error(res.error || 'Failed to delete')
-  invalidateCache(sheet)
+  // v11 write-through: mark the row deleted in every cached list instantly.
+  patchListCache(sheet, { id, deleted: true }, 'delete')
+  invalidateAggregates()
+  scheduleReconcile(sheet)
   return true
 }
 
 export async function restoreRow(sheet: string, id: string): Promise<boolean> {
   const res = await callAppsScript({ action: 'restore', sheet, id })
   if (!res.success) throw new Error(res.error || 'Failed to restore')
-  invalidateCache(sheet)
+  if (res.data) {
+    patchListCache(sheet, mergeWithCached(sheet, id, res.data), 'restore')
+    invalidateAggregates()
+    scheduleReconcile(sheet)
+  }
   return true
 }
 
@@ -542,7 +766,11 @@ export async function bulkCreate(sheet: string, data: any[]): Promise<number> {
   const sanitized = data.map(sanitizeRowData)
   const res = await callAppsScript({ action: 'bulkCreate', sheet, data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to bulk create')
-  invalidateCache(sheet)
+  if (Array.isArray(res.rows)) {
+    for (const row of res.rows) patchListCache(sheet, row, 'create')
+  }
+  invalidateAggregates()
+  scheduleReconcile(sheet)
   return res.count
 }
 
@@ -557,7 +785,13 @@ export async function bulkUpdate(sheet: string, updates: { id: string; data: any
   const sanitized = updates.map(u => ({ id: u.id, data: sanitizeRowData(u.data) }))
   const res = await callAppsScript({ action: 'bulkUpdate', sheet, updates: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to bulk update')
-  invalidateCache(sheet)
+  if (Array.isArray(res.rows)) {
+    for (const row of res.rows) {
+      patchListCache(sheet, mergeWithCached(sheet, String(row.id), row), 'update')
+    }
+  }
+  invalidateAggregates()
+  scheduleReconcile(sheet)
   return res.count
 }
 
@@ -680,7 +914,16 @@ export async function createInvoiceFull(data: {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'createInvoiceFull', data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to create invoice (ultra fast)')
-  invalidateCache()
+  // v11: patch instead of full wipe — invoice + payment appear instantly.
+  if (res.data) patchListCache('Invoices', res.data, 'create')
+  if (res.payment) patchListCache('Payments', res.payment, 'create')
+  // Stock + customer credit changed server-side — drop just those sheet caches.
+  invalidateCache('Items')
+  invalidateCache('Customers')
+  invalidateCache('ItemSerials')
+  invalidateAggregates()
+  scheduleReconcile('Invoices')
+  scheduleReconcile('Payments')
   return res
 }
 
@@ -688,7 +931,9 @@ export async function createQuotationFull(data: any): Promise<any> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'createQuotationFull', data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to create quotation')
-  invalidateCache()
+  if (res.data) patchListCache('Quotations', res.data, 'create')
+  invalidateAggregates()
+  scheduleReconcile('Quotations')
   return res
 }
 
@@ -713,7 +958,15 @@ export async function completeJobFull(data: {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'completeJobFull', data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to complete job')
-  invalidateCache()
+  if (res.data) {
+    patchListCache('Jobs', mergeWithCached('Jobs', String(res.data.id), { ...res.data, status: res.data.status || 'Completed' }), 'update')
+  }
+  if (res.payment) patchListCache('ServicePayments', res.payment, 'create')
+  // Stock deduction happened server-side — sheet-scoped invalidation only.
+  invalidateCache('Items')
+  invalidateCache('ItemSerials')
+  invalidateAggregates()
+  scheduleReconcile('Jobs')
   return res
 }
 
@@ -757,7 +1010,15 @@ export async function createInvoiceUltra(data: any): Promise<any> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'createInvoiceUltra', data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to create invoice ultra')
-  invalidateCache()
+  // v11: patch instead of full wipe.
+  if (res.data) patchListCache('Invoices', res.data, 'create')
+  if (res.payment) patchListCache('Payments', res.payment, 'create')
+  invalidateCache('Items')
+  invalidateCache('Customers')
+  invalidateCache('ItemSerials')
+  invalidateAggregates()
+  scheduleReconcile('Invoices')
+  scheduleReconcile('Payments')
   return res
 }
 
@@ -765,6 +1026,8 @@ export async function createQuotationUltra(data: any): Promise<any> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'createQuotationUltra', data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to create quotation ultra')
-  invalidateCache()
+  if (res.data) patchListCache('Quotations', res.data, 'create')
+  invalidateAggregates()
+  scheduleReconcile('Quotations')
   return res
 }

@@ -309,6 +309,78 @@ var WRITE_ACTIONS = {
   'seed': true, 'liveSync': true
 };
 
+// ===== v11 ULTRA-FAST CRUD: ID-INDEX + CREATE DEDUPE =====
+// updateRow/softDeleteRow/getRow previously read the ENTIRE sheet (every row,
+// every column) just to locate one row by id — seconds on large sheets.
+// Now we build a lightweight id -> rowNumber index from a SINGLE column read
+// (column A) and reuse it within the same execution. Only the target row is
+// ever read/written. v11.0
+
+var DEDUPE_TTL = 300; // seconds — 5 min idempotency window for creates
+
+// Actions that create rows server-side; they get _clientRef idempotency
+// protection so a retried/timeout request can never duplicate a row.
+var CREATE_ACTIONS = {
+  'create': true, 'createFast': true, 'bulkCreate': true,
+  'createInvoiceFull': true, 'createInvoiceUltra': true,
+  'createQuotationFull': true, 'createQuotationUltra': true,
+  'newJob': true, 'createJob': true, 'addSparePart': true,
+  'payment': true, 'addPayment': true
+};
+
+function _dedupeCheck(clientRef) {
+  if (!clientRef) return null;
+  try {
+    var hit = CacheService.getScriptCache().get('ref:' + clientRef);
+    if (hit) {
+      try { return JSON.parse(hit); } catch (e) { return null; }
+    }
+  } catch (ignore) {}
+  return null;
+}
+
+function _dedupeStore(clientRef, result) {
+  if (!clientRef || !result) return;
+  try {
+    CacheService.getScriptCache().put('ref:' + clientRef, JSON.stringify(result), DEDUPE_TTL);
+  } catch (ignore) {}
+}
+
+// Wrap a create action: if the same _clientRef arrives again (retry after
+// timeout, double-click, duplicate tab), return the ORIGINAL result instead
+// of creating a duplicate row.
+function _withDedupe(clientRef, fn) {
+  if (clientRef) {
+    var hit = _dedupeCheck(clientRef);
+    if (hit) return hit;
+  }
+  var result = fn();
+  if (clientRef && result && result.success) _dedupeStore(clientRef, result);
+  return result;
+}
+
+function _buildIdIndex(sheetName) {
+  var cached = _idIndexCache[sheetName];
+  var sheet = getSheetFast(sheetName);
+  var lastRow = sheet.getLastRow();
+  // Reuse within 30s of the same execution if row count hasn't changed.
+  if (cached && cached.lastRow === lastRow && (Date.now() - cached.builtAt) < 30000) {
+    return cached.map;
+  }
+  var map = {};
+  var count = Math.max(0, lastRow - 1);
+  if (count > 0) {
+    var ids = sheet.getRange(2, 1, count, 1).getValues();
+    for (var i = 0; i < ids.length; i++) map[String(ids[i][0])] = i + 2;
+  }
+  _idIndexCache[sheetName] = { map: map, lastRow: lastRow, builtAt: Date.now() };
+  return map;
+}
+
+function _invalidateIdIndex(sheetName) {
+  delete _idIndexCache[sheetName];
+}
+
 function _extractPin(e) {
   if (!e) return '';
   if (e.parameter && e.parameter.pin) return String(e.parameter.pin);
@@ -491,17 +563,17 @@ function doPost(e) {
     }
 
     switch (action) {
-      case 'create': return json(createRow(body.sheet, body.data));
-      case 'createFast': return json(createRow(body.sheet, body.data, true));
+      case 'create': return json(_withDedupe(body._clientRef, function(){ return createRow(body.sheet, body.data); }));
+      case 'createFast': return json(_withDedupe(body._clientRef, function(){ return createRow(body.sheet, body.data, true); }));
       case 'update': return json(updateRow(body.sheet, body.id, body.data));
       case 'delete': return json(softDeleteRow(body.sheet, body.id));
       case 'restore': return json(restoreRow(body.sheet, body.id));
-      case 'bulkCreate': return json(bulkCreate(body.sheet, body.data));
+      case 'bulkCreate': return json(_withDedupe(body._clientRef, function(){ return bulkCreate(body.sheet, body.data); }));
       case 'bulkUpdate': return json(bulkUpdate(body.sheet, body.updates));
-      case 'createInvoiceFull': return json(createInvoiceFull(body.data));
-      case 'createInvoiceUltra': return json(createInvoiceUltra(body.data));
-      case 'createQuotationFull': return json(createQuotationFull(body.data));
-      case 'createQuotationUltra': return json(createQuotationUltra(body.data));
+      case 'createInvoiceFull': return json(_withDedupe(body._clientRef, function(){ return createInvoiceFull(body.data); }));
+      case 'createInvoiceUltra': return json(_withDedupe(body._clientRef, function(){ return createInvoiceUltra(body.data); }));
+      case 'createQuotationFull': return json(_withDedupe(body._clientRef, function(){ return createQuotationFull(body.data); }));
+      case 'createQuotationUltra': return json(_withDedupe(body._clientRef, function(){ return createQuotationUltra(body.data); }));
       case 'completeJobFull': return json(completeJobFull(body.data));
       case 'replace': return json({ success: false, error: 'replace disabled for data protection' });
       case 'saveShop': return json(saveShop(body.data));
@@ -686,7 +758,7 @@ function doPost(e) {
         var jobData = body.data;
         if (jobData && !jobData.jobId && jobData.id) jobData.jobId = jobData.id;
         if (jobData && !jobData.id) jobData.id = jobData.jobId || Utilities.getUuid();
-        return json(createRow('Jobs', jobData));
+        return json(_withDedupe(body._clientRef, function(){ return createRow('Jobs', jobData); }));
       }
 
       case 'updateJob': {
@@ -703,7 +775,7 @@ function doPost(e) {
 
       case 'addSparePart': {
         var part = body.data;
-        return json(createRow('Items', part));
+        return json(_withDedupe(body._clientRef, function(){ return createRow('Items', part); }));
       }
 
       case 'updateSparePart': {
@@ -721,7 +793,7 @@ function doPost(e) {
       case 'payment':
       case 'addPayment': {
         var payData = body.data;
-        return json(createRow('ServicePayments', payData));
+        return json(_withDedupe(body._clientRef, function(){ return createRow('ServicePayments', payData); }));
       }
 
       case 'updatePayment': {
@@ -1218,15 +1290,15 @@ function getRow(sheetName, id) {
     }
     return null;
   }
+  // v11: id-index — read ONE column instead of the whole sheet.
   var sheet = getSheetFast(sheetName);
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
-  var allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  var rowIndex = -1;
-  for (var i = 0; i < allData.length; i++) if (String(allData[i][0]) === String(id)) { rowIndex = i; break; }
-  if (rowIndex === -1) return null;
-  var rowData = allData[rowIndex];
+  var idMap = _buildIdIndex(sheetName);
+  var rowNumber = idMap[String(id)];
+  if (!rowNumber) return null;
+  var rowData = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
   var obj = {};
   for (var h = 0; h < headers.length; h++) obj[headers[h]] = (rowData[h] instanceof Date) ? rowData[h].toISOString() : rowData[h];
   if (obj.deleted === true || String(obj.deleted).toLowerCase() === 'true') return null;
@@ -1254,6 +1326,11 @@ function createRow(sheetName, data, isFast) {
   }
   sheet.getRange(sheet.getLastRow() + 1, 1, 1, headers.length).setValues([row]);
   if (!isFast) { SpreadsheetApp.flush(); _invalidateListCache(sheetName); }
+  // v11: keep the id-index in sync so following updates are instant.
+  if (_idIndexCache[sheetName]) {
+    _idIndexCache[sheetName].map[String(id)] = sheet.getLastRow();
+    _idIndexCache[sheetName].lastRow = sheet.getLastRow();
+  }
   var result = { id: id };
   for (var k in data) result[k] = data[k];
   result.createdAt = data.createdAt || now; result.updatedAt = now; result.deleted = false;
@@ -1265,11 +1342,11 @@ function updateRow(sheetName, id, data) {
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, error: 'No rows' };
-  var allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
-  var rowIndex = -1;
-  for (var i = 0; i < allData.length; i++) if (String(allData[i][0]) === String(id)) { rowIndex = i; break; }
-  if (rowIndex === -1) return { success: false, error: 'Not found' };
-  var existingRow = allData[rowIndex];
+  // v11: id-index lookup — ONE column read + ONE row read (was: whole sheet).
+  var idMap = _buildIdIndex(sheetName);
+  var rowNumber = idMap[String(id)];
+  if (!rowNumber) return { success: false, error: 'Not found' };
+  var existingRow = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
   var now = new Date().toISOString();
   var updatedRow = [];
   for (var h = 0; h < headers.length; h++) {
@@ -1283,10 +1360,22 @@ function updateRow(sheetName, id, data) {
       updatedRow.push(typeof v === 'object' ? JSON.stringify(v) : v);
     } else updatedRow.push(existingRow[h]);
   }
-  sheet.getRange(rowIndex + 2, 1, 1, headers.length).setValues([updatedRow]);
+  sheet.getRange(rowNumber, 1, 1, headers.length).setValues([updatedRow]);
   SpreadsheetApp.flush();
   _invalidateListCache(sheetName);
-  return { success: true, data: Object.assign({ id: id }, data, { updatedAt: now }), quantum: true, ultraFast: true };
+  // v11: return the FULL merged row (not just the changed fields) so the
+  // Next.js write-through cache never replaces a full row with a partial one.
+  var mergedRow = {};
+  for (var h2 = 0; h2 < headers.length; h2++) {
+    var header2 = headers[h2];
+    if (header2 === 'updatedAt') mergedRow[header2] = now;
+    else if (data[header2] !== undefined) {
+      var v2 = data[header2];
+      mergedRow[header2] = (typeof v2 === 'object') ? JSON.stringify(v2) : v2;
+    } else if (updatedRow[h2] instanceof Date) mergedRow[header2] = updatedRow[h2].toISOString();
+    else mergedRow[header2] = updatedRow[h2];
+  }
+  return { success: true, data: mergedRow, quantum: true, ultraFast: true };
 }
 
 function softDeleteRow(sheetName, id) { return updateRow(sheetName, id, { deleted: true, updatedAt: new Date().toISOString() }); }
@@ -1298,6 +1387,7 @@ function bulkCreate(sheetName, dataArray) {
   var headers = SCHEMAS[sheetName];
   var now = new Date().toISOString();
   var rows = [];
+  var createdRows = [];
   for (var d = 0; d < dataArray.length; d++) {
     var data = dataArray[d];
     var id = data.id || Utilities.getUuid();
@@ -1316,26 +1406,39 @@ function bulkCreate(sheetName, dataArray) {
       }
     }
     rows.push(row);
+    // v11: return the full entity so the Next.js layer can write-through cache.
+    var entity = { id: id };
+    for (var k in data) entity[k] = data[k];
+    entity.createdAt = data.createdAt || now; entity.updatedAt = now; entity.deleted = false;
+    createdRows.push(entity);
   }
   if (rows.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
+    var startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rows.length, headers.length).setValues(rows);
     SpreadsheetApp.flush();
+    // v11: keep id-index in sync.
+    if (_idIndexCache[sheetName]) {
+      for (var r = 0; r < createdRows.length; r++) {
+        _idIndexCache[sheetName].map[String(createdRows[r].id)] = startRow + r;
+      }
+      _idIndexCache[sheetName].lastRow = startRow + rows.length - 1;
+    }
   }
   _invalidateListCache(sheetName);
-  return { success: true, count: rows.length, quantum: true, ultraFast: true };
+  return { success: true, count: rows.length, rows: createdRows, quantum: true, ultraFast: true };
 }
 
 function bulkUpdate(sheetName, updates) {
-  if (!Array.isArray(updates) || updates.length === 0) return { success: true, count: 0 };
+  if (!Array.isArray(updates) || updates.length === 0) return { success: true, count: 0, rows: [] };
   var sheet = getSheetFast(sheetName);
   var headers = SCHEMAS[sheetName];
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { success: false, error: 'No rows' };
-  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  var idToRow = {};
-  for (var i = 0; i < ids.length; i++) idToRow[String(ids[i][0])] = i + 2;
+  // v11: reuse the id-index (single-column read) instead of a fresh scan.
+  var idToRow = _buildIdIndex(sheetName);
   var now = new Date().toISOString();
   var count = 0;
+  var updatedRows = [];
   for (var u = 0; u < updates.length; u++) {
     var upd = updates[u];
     var rowIndex = idToRow[String(upd.id)];
@@ -1355,11 +1458,23 @@ function bulkUpdate(sheetName, updates) {
       } else updatedRow.push(existingRow[h]);
     }
     sheet.getRange(rowIndex, 1, 1, headers.length).setValues([updatedRow]);
+    // v11: return the FULL merged row (write-through cache safety).
+    var entity = {};
+    for (var h2 = 0; h2 < headers.length; h2++) {
+      var header2 = headers[h2];
+      if (header2 === 'updatedAt') entity[header2] = now;
+      else if (data[header2] !== undefined) {
+        var v2 = data[header2];
+        entity[header2] = (typeof v2 === 'object') ? JSON.stringify(v2) : v2;
+      } else if (updatedRow[h2] instanceof Date) entity[header2] = updatedRow[h2].toISOString();
+      else entity[header2] = updatedRow[h2];
+    }
+    updatedRows.push(entity);
     count++;
   }
   SpreadsheetApp.flush();
   _invalidateListCache(sheetName);
-  return { success: true, count: count, quantum: true, ultraFast: true };
+  return { success: true, count: count, rows: updatedRows, quantum: true, ultraFast: true };
 }
 
 function replaceAll(sheetName, dataArray) { return { success: false, error: 'replaceAll disabled' }; }

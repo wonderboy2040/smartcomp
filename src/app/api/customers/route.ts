@@ -26,14 +26,25 @@ export async function GET(req: NextRequest) {
       listRows<any>('Invoices', { useCache: true }),
       listRows<any>('Quotations', { useCache: true }),
     ])
-    
+
+    // v11: single-pass Map counting — O(N+M) instead of O(N×M) filters.
+    // With 2k invoices + 300 customers this is ~100x fewer comparisons.
+    const invoiceCount = new Map<string, number>()
+    for (const i of invoices) {
+      if (i.customerId) invoiceCount.set(String(i.customerId), (invoiceCount.get(String(i.customerId)) || 0) + 1)
+    }
+    const quotationCount = new Map<string, number>()
+    for (const q of quotations) {
+      if (q.customerId) quotationCount.set(String(q.customerId), (quotationCount.get(String(q.customerId)) || 0) + 1)
+    }
+
     let result = customers.map((c) => ({
       ...c,
       creditBalance: Number(c.creditBalance) || 0,
       creditLimit: Number(c.creditLimit) || 0,
       _count: {
-        invoices: invoices.filter((i) => i.customerId === c.id).length,
-        quotations: quotations.filter((q) => q.customerId === c.id).length,
+        invoices: invoiceCount.get(String(c.id)) || 0,
+        quotations: quotationCount.get(String(c.id)) || 0,
       },
     }))
 
