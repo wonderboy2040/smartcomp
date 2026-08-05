@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useFetch, apiPost, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -14,7 +16,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, sumBy } from '@/lib/calc'
 import { usePdfPreview } from '@/lib/preview-context'
 import { DocForm } from './DocForm'
-import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2, Edit3, Download, IndianRupee, CheckCircle2, Percent } from 'lucide-react'
+import { Plus, Search, FileText, Eye, Trash2, Share2, FileCheck2, Edit3, Download, IndianRupee, CheckCircle2, Percent, Loader2, Wallet, Boxes } from 'lucide-react'
 import { shareWhatsAppPdf } from '@/lib/whatsapp'
 import { toCSV, downloadCSV } from '@/lib/utils'
 
@@ -100,15 +102,41 @@ export function QuotationsPanel() {
     })
   }
 
-  const handleConvert = async (q: any) => {
-    if (!confirm(`Convert quotation ${q.number} to invoice? Stock will be deducted.`)) return
+  // v11.3: advanced convert — optional payment at conversion + stock toggle
+  const [convertTarget, setConvertTarget] = useState<any | null>(null)
+  const [convertPaid, setConvertPaid] = useState<number>(0)
+  const [convertType, setConvertType] = useState('Cash')
+  const [convertDeductStock, setConvertDeductStock] = useState(true)
+  const [convertSaving, setConvertSaving] = useState(false)
+
+  const openConvert = useCallback((q: any) => {
+    setConvertTarget(q)
+    setConvertPaid(0)
+    setConvertType('Cash')
+    setConvertDeductStock(true)
+  }, [])
+
+  const submitConvert = useCallback(async () => {
+    if (!convertTarget) return
+    const paid = Math.max(0, Number(convertPaid) || 0)
+    if (paid > (Number(convertTarget.grandTotal) || 0)) {
+      toast({ title: 'Amount exceeds quotation total', variant: 'destructive' })
+      return
+    }
+    setConvertSaving(true)
     try {
-      const res = await apiPost(`/api/quotations/${q.id}`, { action: 'convert' })
+      const res = await apiPost(`/api/quotations/${convertTarget.id}`, {
+        action: 'convert',
+        amountPaid: paid,
+        paymentType: convertType,
+        deductStock: convertDeductStock,
+      })
       toast({
         title: 'Converted to invoice ✓',
-        description: `Invoice: ${res.invoiceNumber}`,
+        description: `Invoice: ${res.invoiceNumber}${paid > 0 ? ` • Paid: Rs.${paid.toLocaleString('en-IN')}` : ''}`,
         duration: 4500,
       })
+      setConvertTarget(null)
       refetch()
     } catch (e: any) {
       toast({
@@ -117,8 +145,10 @@ export function QuotationsPanel() {
         variant: 'destructive',
         duration: 6000,
       })
+    } finally {
+      setConvertSaving(false)
     }
-  }
+  }, [convertTarget, convertPaid, convertType, convertDeductStock, refetch, toast])
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this quotation?')) return
@@ -276,7 +306,7 @@ export function QuotationsPanel() {
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                       {q.status !== 'converted' && (
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleConvert(q)}>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openConvert(q)}>
                           <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
                         </Button>
                       )}
@@ -371,7 +401,7 @@ export function QuotationsPanel() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleConvert(q)}
+                                onClick={() => openConvert(q)}
                                 title="Convert to Invoice"
                               >
                                 <FileCheck2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -432,6 +462,69 @@ export function QuotationsPanel() {
           refetch()
         }}
       />
+
+      {/* Advanced Convert dialog — payment + stock options */}
+      <Dialog open={!!convertTarget} onOpenChange={(o) => { if (!o) setConvertTarget(null) }}>
+        <DialogContent className="sm:max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <FileCheck2 className="w-4 h-4 text-emerald-600" /> Convert to Invoice
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {convertTarget ? (
+                <>{convertTarget.number} • {convertTarget?.customer?.name || convertTarget?.customerName || ''} • Total: <strong>{formatCurrency(convertTarget.grandTotal)}</strong></>
+              ) : 'Select a quotation'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs font-semibold">Payment Received Now (Rs.) — optional</Label>
+              <Input
+                type="number"
+                value={convertPaid || ''}
+                onChange={(e) => setConvertPaid(Number(e.target.value))}
+                placeholder="0"
+                className="mt-1 h-11 bg-white font-bold text-base"
+              />
+              {convertPaid > 0 && convertTarget && convertPaid < Number(convertTarget.grandTotal) && (
+                <p className="text-[10px] text-amber-600 mt-1 font-medium">
+                  Due Rs.{(Number(convertTarget.grandTotal) - convertPaid).toFixed(2)} customer credit me jayega
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">Payment Type</Label>
+              <Select value={convertType} onValueChange={setConvertType}>
+                <SelectTrigger className="mt-1 bg-white h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['Cash', 'UPI', 'Card', 'Bank Transfer', 'Cheque', 'Wallet'].map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <Boxes className="w-4 h-4 text-slate-500" />
+              <div className="flex-1">
+                <Label className="text-xs font-semibold text-slate-700">Auto-deduct stock</Label>
+                <p className="text-[10px] text-slate-500">Items stock se deduct honge (recommended)</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={convertDeductStock}
+                onChange={(e) => setConvertDeductStock(e.target.checked)}
+                className="rounded w-4 h-4"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button onClick={submitConvert} disabled={convertSaving} className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-11 font-bold">
+                {convertSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Converting…</> : <><Wallet className="w-4 h-4 mr-2" /> Convert to Invoice</>}
+              </Button>
+              <Button variant="outline" onClick={() => setConvertTarget(null)} className="h-11">Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

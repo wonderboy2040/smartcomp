@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow, updateRow } from '@/lib/sheets-client'
 import { isConfigured } from '@/lib/sheets-client'
 import { sendCustomerNotification } from '@/lib/notifications'
+import { writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 /**
  * GET /api/campaigns — list all campaigns
@@ -38,6 +39,10 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const check = writeLimiter(ip)
+    if (!check.allowed) return NextResponse.json({ error: 'Rate limited — too many writes, wait a moment' }, { status: 429 })
+
     const body = await req.json()
     const action = body.action || 'create'
 

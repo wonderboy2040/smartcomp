@@ -3,6 +3,7 @@ import { listRows, createRow, updateRow } from '@/lib/sheets-client'
 import { isConfigured } from '@/lib/sheets-client'
 import { buildEnquiryMessage, generateWhatsAppLink } from '@/lib/whatsapp'
 import { isCloudApiConfigured, sendTemplateMessage, sendTextMessage, normalizePhone } from '@/lib/whatsapp-cloud'
+import { writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   try {
@@ -52,6 +53,10 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const check = writeLimiter(ip)
+    if (!check.allowed) return NextResponse.json({ error: 'Rate limited — too many writes, wait a moment' }, { status: 429 })
+
     const body = await req.json()
     const { supplierIds, itemIds, allItems = false, isAuto = false } = body
 

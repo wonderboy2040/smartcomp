@@ -116,6 +116,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         date: body.date || new Date().toISOString(),
         notes: 'Payment recorded while editing invoice',
       }).catch(() => {})
+    } else if (paidDelta < 0) {
+      // v11.3: user REDUCED the paid amount while editing. Soft-delete the
+      // most recent payment rows until |paidDelta| is recovered, so the
+      // Payments ledger always matches the invoice's amountPaid.
+      try {
+        const allPayments = await listRows<any>('Payments')
+        const invoicePays = allPayments
+          .filter((p) => String(p.invoiceId) === String(id))
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        let toReverse = Math.abs(paidDelta)
+        for (const p of invoicePays) {
+          if (toReverse <= 0) break
+          await deleteRow('Payments', String(p.id)).catch(() => {})
+          toReverse -= Number(p.amount) || 0
+        }
+      } catch {}
     }
 
     // Adjust customer credit balance

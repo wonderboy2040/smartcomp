@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow } from '@/lib/sheets-client'
 import { isConfigured } from '@/lib/sheets-client'
 import { safeJsonParse } from '@/lib/utils'
+import { writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 /**
  * GET /api/amc — list all AMC contracts
@@ -67,6 +68,10 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req)
+    const check = writeLimiter(ip)
+    if (!check.allowed) return NextResponse.json({ error: 'Rate limited — too many writes, wait a moment' }, { status: 429 })
+
     const body = await req.json()
 
     // Generate contract number
