@@ -24,10 +24,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url)
     const customerId = url.searchParams.get('customerId')
 
-    const [customers, invoices] = await Promise.all([
-      listRows<any>('Customers').catch(() => []),
-      listRows<any>('Invoices').catch(() => []),
-    ])
+    const invoices = await listRows<any>('Invoices').catch(() => [])
 
     const now = Date.now()
 

@@ -1,20 +1,14 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useFetch } from '@/lib/api'
-import { formatCurrency } from '@/lib/calc'
+
 import { generateSuperIntelligence, processNaturalLanguageQuery, type IntelligenceInput } from '@/lib/super-intelligence'
-import {
-  Brain, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck,
-  Lightbulb, Search, MessageCircle, Zap, Target, Users, Package,
-  IndianRupee, BarChart3, Crown, Heart, ArrowUpRight, Loader2,
-  Bot, Cpu, LineChart, PieChart, Activity, Rocket, Eye, ThumbsUp, ThumbsDown,
-  DollarSign, Clock, Percent, Archive
-} from 'lucide-react'
+import { Brain, Sparkles, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Lightbulb, Search, MessageCircle, Zap, Target, Users, Package, Crown, ArrowUpRight, Loader2, Bot, Cpu, LineChart, Activity, Rocket, Eye, ThumbsUp, DollarSign } from 'lucide-react'
 
 export function AIIntelligencePanel() {
   const { data: invoicesData } = useFetch<any[]>('/api/invoices?limit=500', undefined)

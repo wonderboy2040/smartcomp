@@ -318,6 +318,9 @@ function invalidateAggregates() {
 }
 
 // ===== CONFIG =====
+/** A single Google Sheets row as a plain JSON object. */
+export type SheetRow = Record<string, unknown>
+
 export function isConfigured(): boolean {
   const url = getAppsScriptUrl()
   return !!url && url.includes('/exec')
@@ -419,7 +422,7 @@ function sanitizeString(str: string): string {
     .slice(0, 10000) // max length guard
 }
 
-export function sanitizeRowData(data: any): any {
+export function sanitizeRowData(data: SheetRow): SheetRow {
   if (!data || typeof data !== 'object') return data
   const sanitized: any = {}
   for (const [key, value] of Object.entries(data)) {
@@ -428,7 +431,7 @@ export function sanitizeRowData(data: any): any {
     } else if (Array.isArray(value)) {
       sanitized[key] = value.map((v) => (typeof v === 'string' ? sanitizeString(v) : v))
     } else if (value && typeof value === 'object') {
-      sanitized[key] = sanitizeRowData(value)
+      sanitized[key] = sanitizeRowData(value as SheetRow)
     } else {
       sanitized[key] = value
     }
@@ -737,7 +740,7 @@ export async function getRow<T = any>(sheet: string, id: string): Promise<T | nu
   return res.data as T
 }
 
-export async function createRow<T = any>(sheet: string, data: any): Promise<T> {
+export async function createRow<T = any>(sheet: string, data: SheetRow): Promise<T> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'create', sheet, data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to create')
@@ -750,7 +753,7 @@ export async function createRow<T = any>(sheet: string, data: any): Promise<T> {
   return res.data as T
 }
 
-export async function updateRow<T = any>(sheet: string, id: string, data: any): Promise<T> {
+export async function updateRow<T = any>(sheet: string, id: string, data: SheetRow): Promise<T> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'update', sheet, id, data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to update')
@@ -785,7 +788,7 @@ export async function restoreRow(sheet: string, id: string): Promise<boolean> {
   return true
 }
 
-export async function bulkCreate(sheet: string, data: any[]): Promise<number> {
+export async function bulkCreate(sheet: string, data: SheetRow[]): Promise<number> {
   const sanitized = data.map(sanitizeRowData)
   const res = await callAppsScript({ action: 'bulkCreate', sheet, data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to bulk create')
@@ -797,13 +800,13 @@ export async function bulkCreate(sheet: string, data: any[]): Promise<number> {
   return res.count
 }
 
-export async function replaceAll(_sheet: string, _data: any[]): Promise<number> {
+export async function replaceAll(_sheet: string, _data: SheetRow[]): Promise<number> {
   throw new Error(
     'replaceAll() is permanently disabled for data protection. Use createRow() or updateRow() instead.'
   )
 }
 
-export async function bulkUpdate(sheet: string, updates: { id: string; data: any }[]): Promise<number> {
+export async function bulkUpdate(sheet: string, updates: { id: string; data: SheetRow }[]): Promise<number> {
   if (updates.length === 0) return 0
   const sanitized = updates.map(u => ({ id: u.id, data: sanitizeRowData(u.data) }))
   const res = await callAppsScript({ action: 'bulkUpdate', sheet, updates: sanitized })
@@ -832,7 +835,7 @@ export async function getShop(): Promise<any | null> {
   return shop
 }
 
-export async function saveShop(data: any): Promise<any> {
+export async function saveShop(data: SheetRow): Promise<any> {
   const sanitized = sanitizeRowData(data)
   const res = await callAppsScript({ action: 'saveShop', data: sanitized })
   if (!res.success) throw new Error(res.error || 'Failed to save shop')

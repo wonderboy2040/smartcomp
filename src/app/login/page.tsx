@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Store, Loader2, Lock, ShieldCheck, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { Store, Loader2, Lock, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 
 function LoginInner() {
-  const router = useRouter()
   const params = useSearchParams()
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -55,7 +54,7 @@ function LoginInner() {
         window.location.href = nextUrl
       }, 600)
       
-    } catch (err: any) {
+    } catch {
       setError('Network error. Please check connection and try again.')
     } finally {
       setLoading(false)

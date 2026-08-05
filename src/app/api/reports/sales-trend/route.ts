@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows } from '@/lib/sheets-client'
-import { safeJsonParse } from '@/lib/utils'
+
 
 /**
  * GET /api/reports/sales-trend?range=monthly|weekly|daily&months=6

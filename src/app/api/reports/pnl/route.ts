@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows } from '@/lib/sheets-client'
-import { safeJsonParse } from '@/lib/utils'
+
 
 /**
  * GET /api/reports/pnl?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -28,19 +28,17 @@ export async function GET(req: NextRequest) {
       return date >= fromD && date <= toD
     }
 
-    const [invoices, servicePayments, expenses, personalExpenditure, items] = await Promise.all([
+    const [invoices, servicePayments, expenses, personalExpenditure] = await Promise.all([
       listRows<any>('Invoices'),
       listRows<any>('ServicePayments'),
       listRows<any>('Expenses'),
       listRows<any>('PersonalExpenditure'),
-      listRows<any>('Items'),
     ])
 
     // Revenue: Sales (invoices)
     const periodInvoices = invoices.filter((inv) => inPeriod(String(inv.date || '')))
     const salesRevenue = periodInvoices.reduce((s, inv) => s + (Number(inv.grandTotal) || 0), 0)
     const salesCost = periodInvoices.reduce((s, inv) => s + (Number(inv.totalCost) || 0), 0)
-    const salesProfit = periodInvoices.reduce((s, inv) => s + (Number(inv.profit) || 0), 0)
 
     // Service Income
     const periodServicePayments = servicePayments.filter((p) => inPeriod(String(p.date || '')))

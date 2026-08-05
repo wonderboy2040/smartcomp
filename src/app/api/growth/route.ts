@@ -14,7 +14,7 @@ import { BUSINESS_GROWTH } from '@/lib/business-growth'
  *   - Review request targets (delivered customers who haven't been asked)
  *   - Suggested actions (actionable insights)
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     if (!isConfigured()) {
       return NextResponse.json({ error: 'APPS_SCRIPT_URL not configured' }, { status: 503 })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createRow } from '@/lib/sheets-client'
-import { isConfigured } from '@/lib/sheets-client'
+
 import { writeLimiter, getClientIp } from '@/lib/rate-limit'
 
 /**

@@ -14,7 +14,7 @@ import { isCloudApiConfigured, deregisterPhone } from '@/lib/whatsapp-cloud'
  * WARNING: After deregister, you won't be able to send/receive messages via
  * Cloud API until you re-register (which requires the migration code flow again).
  */
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   if (!isCloudApiConfigured()) {
     return NextResponse.json(
       { success: false, error: 'Configure WA_TOKEN and WA_PHONE_NUMBER_ID first' },

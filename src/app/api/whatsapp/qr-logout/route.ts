@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { disconnectWhatsApp } from '@/lib/whatsapp-baileys'
 
 export const runtime = 'nodejs'

@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { sheets, format = 'json' } = body
+    const { sheets } = body
 
     if (!Array.isArray(sheets) || sheets.length === 0) {
       return NextResponse.json({ error: 'sheets array required' }, { status: 400 })

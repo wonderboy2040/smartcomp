@@ -12,7 +12,7 @@
  * All functions are fire-and-forget — they never throw or block the caller.
  */
 
-import { sendTextMessage, sendTemplateMessage, isCloudApiConfigured, normalizePhone } from './whatsapp-cloud'
+import { sendTextMessage, isCloudApiConfigured, normalizePhone } from './whatsapp-cloud'
 import { generateWhatsAppLink } from './whatsapp'
 
 export interface NotificationResult {

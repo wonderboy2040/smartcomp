@@ -3,22 +3,15 @@
 import { useState } from 'react'
 import { useFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/calc'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend, PieChart, Pie, Cell,
-} from 'recharts'
-import {
-  TrendingUp, Package, AlertTriangle, Wallet, BarChart3, IndianRupee,
-  TrendingDown, Clock, ArrowUpRight, ArrowDownRight,
-} from 'lucide-react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts'
+import { TrendingUp, Package, AlertTriangle, Wallet, BarChart3, Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 
-const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 export function ReportsPanel() {
   const [range, setRange] = useState('monthly')

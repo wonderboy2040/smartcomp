@@ -10,7 +10,6 @@ import type {
 
 const TOAST_LIMIT = 5             // Show up to 5 toasts at once (was 1 — caused toast to vanish instantly when another fired)
 const TOAST_REMOVE_DELAY = 4000    // Auto-dismiss after 4s (was 1000000ms = ~17 min, way too long)
-const TOAST_REMOVE_DELAY_LONG = 7000 // Longer duration for important toasts (errors, success with details)
 const TOAST_DISMISS_ANIM_MS = 350   // Time for fade-out animation before removal
 
 // Track the duration per toast so we can give important messages more time
@@ -23,7 +22,7 @@ type ToasterToast = ToastProps & {
   action?: ToastActionElement
 }
 
-const actionTypes = {
+const ACTION_TYPES = {
   ADD_TOAST: "ADD_TOAST",
   UPDATE_TOAST: "UPDATE_TOAST",
   DISMISS_TOAST: "DISMISS_TOAST",
@@ -37,7 +36,7 @@ function genId() {
   return count.toString()
 }
 
-type ActionType = typeof actionTypes
+type ActionType = typeof ACTION_TYPES
 
 type Action =
   | {

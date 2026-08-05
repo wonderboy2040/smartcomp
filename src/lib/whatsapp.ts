@@ -23,7 +23,7 @@ export function generateWhatsAppLink(phone: string, message: string): string {
 export function buildEnquiryMessage(
   shopName: string,
   items: { name: string; sku?: string }[],
-  enquiryNumber?: string
+  _enquiryNumber?: string
 ): string {
   const sn = String(shopName || 'Smart Computers')
   let msg = `*${sn}*\n\n`

@@ -13,10 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import {
-  Wallet, Plus, Trash2, Edit3, TrendingUp, TrendingDown, IndianRupee,
-  Calendar, User, ArrowUpRight, ArrowDownRight, Filter,
-} from 'lucide-react'
+import { Wallet, Plus, Trash2, Edit3, TrendingUp, TrendingDown, IndianRupee, ArrowUpRight, ArrowDownRight, Filter } from 'lucide-react'
 
 const INCOME_CATEGORIES = ['Salary', 'Business Profit', 'Commission', 'Rent Income', 'Interest', 'Gift', 'Other Income']
 const EXPENSE_CATEGORIES = ['Food', 'Rent', 'Transport', 'Bills', 'Shopping', 'Health', 'Education', 'Entertainment', 'Fuel', 'Mobile', 'Other']

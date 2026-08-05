@@ -6,9 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/calc'
-import {
-  AlertTriangle, ShieldAlert, ShieldCheck, Clock, IndianRupee, Users, Ban, TrendingUp,
-} from 'lucide-react'
+import { ShieldAlert, ShieldCheck, Clock, IndianRupee, Users, Ban } from 'lucide-react'
 
 const SCORE_COLORS: Record<string, string> = {
   'A+': 'bg-emerald-100 text-emerald-700',

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
+import { useFetch, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, sumBy } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Upload, Tag, Folder, Layers, IndianRupee, TrendingUp, Boxes, Percent } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Tag, Folder, IndianRupee, TrendingUp, Boxes, Percent } from 'lucide-react'
 import { toCSV, downloadCSV } from '@/lib/utils'
 
 export const PRESET_CATEGORIES = [

@@ -22,9 +22,8 @@ import QRCode from 'qrcode'
 import {
   formatCurrency,
   numberToWords,
-  type InvoiceCalc,
 } from './calc'
-import type { PdfDocData, ShopInfo, CustomerInfo } from './pdf'
+import type { PdfDocData, ShopInfo } from './pdf'
 import { BUSINESS_GROWTH } from './business-growth'
 
 // ──────────────────────────────────────────────────────────────────────

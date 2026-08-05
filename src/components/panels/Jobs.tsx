@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete, invalidate } from '@/lib/api'
-import { safeJsonParse, str } from '@/lib/utils'
+import { safeJsonParse } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,12 +20,7 @@ import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
 import { usePdfPreview } from '@/lib/preview-context'
 import { ServiceWhatsAppModal } from '@/components/ServiceWhatsAppModal'
-import {
-  Wrench, Plus, Search, Laptop, Printer, Monitor, Battery, ScanLine,
-  Smartphone, ClipboardList, CheckCircle2, Clock, Package, IndianRupee,
-  Trash2, Edit3, RefreshCw, Send, Eye, ExternalLink, Copy, FileText, MessageSquare,
-  ShoppingCart, AlertTriangle, Boxes
-} from 'lucide-react'
+import { Wrench, Plus, Search, Laptop, Printer, Monitor, Battery, ScanLine, Smartphone, ClipboardList, CheckCircle2, Clock, Package, IndianRupee, Trash2, RefreshCw, Send, Eye, ExternalLink, Copy, FileText, MessageSquare, ShoppingCart, AlertTriangle, Boxes } from 'lucide-react'
 
 const DEVICE_ICONS: Record<string, any> = {
   Laptop: Laptop,
@@ -294,7 +289,7 @@ function NewJobDialog({ open, onOpenChange, editing, onSaved }: { open: boolean,
   )
 }
 
-function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsApp, onEditInfo }: { job: any, onClose: () => void, onUpdated: () => void, onOpenInvoice: (id: string) => void, onOpenWhatsApp: (id: string) => void, onEditInfo: (j: any) => void }) {
+function JobDetailDialog({ job, onClose, onUpdated, onOpenInvoice, onOpenWhatsApp }: { job: any, onClose: () => void, onUpdated: () => void, onOpenInvoice: (id: string) => void, onOpenWhatsApp: (id: string) => void, onEditInfo: (j: any) => void }) {
   const { toast } = useToast()
   const [status, setStatus] = useState(job?.status || 'Pending')
   const [partsUsed, setPartsUsed] = useState<any[]>(safeJsonParse<any[]>(job?.partsUsedJson || job?.partsUsed, []))

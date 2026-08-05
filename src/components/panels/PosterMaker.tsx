@@ -5,11 +5,10 @@ import { useFetch } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
-import { toPng } from 'html-to-image'
 import {
   Image as ImageIcon, Download, Plus, Trash2, Palette, Phone, MapPin,
   Shield, Zap, Star, CheckCircle, Cpu, HardDrive, Monitor, Keyboard, Mouse, Printer,
@@ -39,7 +38,6 @@ const TEMPLATES = [
 export function PosterMakerPanel() {
   const { toast } = useToast()
   const posterRef = useRef<HTMLDivElement>(null)
-  const exportRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: shop } = useFetch<any>('/api/shop', undefined)
   const { data: stockItems } = useFetch<any[]>('/api/items', undefined)
@@ -224,6 +222,9 @@ export function PosterMakerPanel() {
       // Small delay to ensure rendering
       await new Promise(r => setTimeout(r, 300))
 
+      // html-to-image is ~40KB and only needed on export, so it is pulled in
+      // here rather than at module scope — opening the panel no longer loads it.
+      const { toPng } = await import('html-to-image')
       const dataUrl = await toPng(clone, {
         quality: 1,
         pixelRatio: 2, // HD export

@@ -7,11 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useFetch } from '@/lib/api'
 import { universalSearch, generateContextActions, processVoiceCommand, KEYBOARD_SHORTCUTS } from '@/lib/pro-command-engine'
-import {
-  Search, Command, Sparkles, Mic, MicOff, Keyboard, Zap, TrendingUp,
-  Package, FileText, Users, Wrench, Clock, ArrowRight, Brain, Lightbulb,
-  Crown, Target, Bot, MessageSquare, History, Star
-} from 'lucide-react'
+import { Search, Command, Mic, MicOff, Keyboard, Zap, Package, FileText, Users, Wrench, Clock, ArrowRight, Brain, Crown, Bot, History } from 'lucide-react'
 
 export function CommandCenterPanel({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: invoices } = useFetch<any[]>('/api/invoices?limit=200', undefined)

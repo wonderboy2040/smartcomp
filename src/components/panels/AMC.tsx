@@ -13,10 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { safeJsonParse } from '@/lib/utils'
-import {
-  FileText, Plus, Trash2, Edit3, Clock, RefreshCw, Wrench, Calendar, AlertTriangle, CheckCircle2,
-} from 'lucide-react'
+
+import { FileText, Plus, Trash2, Edit3, RefreshCw, Wrench } from 'lucide-react'
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700 border-emerald-200',

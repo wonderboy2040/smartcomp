@@ -5,16 +5,10 @@ import { useFetch } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+
 import { formatCurrency } from '@/lib/calc'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-} from 'recharts'
-import {
-  FileText, TrendingUp, TrendingDown, IndianRupee, Wallet, Package,
-  ArrowUpRight, ArrowDownRight, Scale, PieChart as PieIcon,
-} from 'lucide-react'
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { FileText, TrendingUp, IndianRupee, Package, ArrowUpRight, ArrowDownRight, Scale } from 'lucide-react'
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 

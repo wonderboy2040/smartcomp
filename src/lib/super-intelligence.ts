@@ -536,7 +536,7 @@ export function analyzeStock(input: IntelligenceInput): StockIntelligence[] {
 
   return items.map(item => {
     const sales = itemSales.get(item.id) || { qty: 0, dates: [], revenue: 0 }
-    const sales30d = sales.dates.filter(d => d >= thirtyDaysAgo).length > 0 
+    const _sales30d = sales.dates.filter(d => d >= thirtyDaysAgo).length > 0 
       ? sales.qty * 0.4 // heuristic - recent sales approx
       : sales.qty > 0 ? sales.qty * 0.2 : 0 // if no recent, lower
     

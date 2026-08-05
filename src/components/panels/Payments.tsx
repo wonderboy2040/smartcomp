@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { useFetch, apiPost, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,10 +16,7 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import {
-  Plus, Wallet, IndianRupee, TrendingUp, TrendingDown, Trash2,
-  Search, Bell, AlertCircle, MessageCircle, CreditCard, Loader2
-} from 'lucide-react'
+import { Plus, Wallet, TrendingUp, Trash2, Search, AlertCircle, MessageCircle, CreditCard, Loader2 } from 'lucide-react'
 
 export function PaymentsPanel() {
   const { toast } = useToast()

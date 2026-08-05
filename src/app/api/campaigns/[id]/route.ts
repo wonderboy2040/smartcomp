@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { deleteRow, getRow } from '@/lib/sheets-client'
+import { deleteRow } from '@/lib/sheets-client'
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

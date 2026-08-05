@@ -148,7 +148,6 @@ function calculateHSNSummary(items: any[]) {
 export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true })
   const pageWidth = 210
-  const pageHeight = 297
   const margin = 10
   const usableWidth = pageWidth - margin * 2
 
@@ -277,7 +276,7 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
       // Default to JPEG (sharp compresses all images to JPEG in productImages.ts)
 
       doc.addImage(logoStr, fmt, logoX, logoY, logoW, logoH, undefined, 'FAST')
-    } catch (e) {
+    } catch {
       // Last-resort fallback: try without compression / format spec
       try {
         doc.addImage(String(logoImg), 'JPEG', logoX, logoY, logoW, logoH)

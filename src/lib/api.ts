@@ -17,6 +17,9 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 
 type Updater<T> = (prev: T | undefined) => T
 
+/** Any JSON-serialisable request payload sent to an /api route. */
+export type ApiBody = Record<string, unknown>
+
 const cache = new Map<string, any>()
 const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
@@ -38,7 +41,6 @@ function loadCacheFromStorage(): void {
     if (!raw) return
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return
-    const now = Date.now()
     for (const [key, entry] of Object.entries(parsed)) {
       const e = entry as { data: any; ts: number }
       if (!e || typeof e.ts !== 'number') continue
@@ -148,7 +150,7 @@ function cyrb53(str: string): string {
   return `${(h2 >>> 0).toString(36)}_${(h1 >>> 0).toString(36)}_${len}`
 }
 
-function computeHash(data: any): string {
+function computeHash(data: unknown): string {
   if (!data) return 'null'
   try {
     if (Array.isArray(data)) {
@@ -240,7 +242,7 @@ if (typeof window !== 'undefined') {
   loadDeletedExpiryFromStorage()
 }
 
-function isRecentlyDeleted(type: 'jobs' | 'payments', id: string): boolean {
+function _isRecentlyDeleted(type: 'jobs' | 'payments', id: string): boolean {
   const key = `${type}:${id}`
   const exp = deletedExpiry.get(key)
   if (!exp) return false
@@ -281,14 +283,16 @@ if (typeof window !== 'undefined') {
 }
 
 // Normalize abort/timeout errors into user-friendly messages
-function normalizeError(e: any): Error {
-  if (e?.name === 'AbortError' || e?.name === 'TimeoutError' || e?.message?.includes('aborted') || e?.message?.includes('signal')) {
+function normalizeError(e: unknown): Error {
+  const name = e instanceof Error ? e.name : ''
+  const message = e instanceof Error ? e.message : String(e ?? '')
+  if (name === 'AbortError' || name === 'TimeoutError' || message.includes('aborted') || message.includes('signal')) {
     return new Error('Request timed out — server is slow, please try again')
   }
-  if (e?.message?.includes('Failed to fetch') || e?.message?.includes('NetworkError') || e?.message?.includes('fetch')) {
+  if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('fetch')) {
     return new Error('Network error — check your internet connection')
   }
-  return e
+  return e instanceof Error ? e : new Error(message || 'Unknown error')
 }
 
 function notify(key: string) {
@@ -544,7 +548,7 @@ function doFetch(url: string, options?: RequestInit) {
 // Returns a temp item INSTANTLY (UI shows it immediately with _pending flag),
 // syncs to server in background, then replaces temp with real data.
 // On failure, removes temp item and throws.
-export async function apiPost(url: string, body: any) {
+export async function apiPost(url: string, body: ApiBody) {
   const base = url.split('?')[0].split('#')[0]
   const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   const tempItem = { ...body, id: tempId, _pending: true, createdAt: new Date().toISOString() }
@@ -608,7 +612,7 @@ export async function apiPost(url: string, body: any) {
 // ===== ULTRA-ULTRA FAST v6.0 - INSTANT RETURN + BACKGROUND SYNC =====
 // Returns temp item INSTANTLY (<50ms), syncs to Google Sheets in background
 // If offline, queues to IndexedDB and syncs when online
-export async function apiPostUltraFast(url: string, body: any, options: { instantClose?: boolean } = {}): Promise<any> {
+export async function apiPostUltraFast(url: string, body: ApiBody, options: { instantClose?: boolean } = {}): Promise<any> {
   const base = url.split('?')[0].split('#')[0]
   const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   
@@ -712,7 +716,7 @@ export async function apiPostUltraFast(url: string, body: any, options: { instan
 // If server fails, snapshot is restored and an error is thrown.
 // v7.1 FIX: Strip request-control fields (action, deductStock, etc.) from
 // optimistic entity to prevent polluting cached list items with API metadata.
-export async function apiPut(url: string, body: any) {
+export async function apiPut(url: string, body: ApiBody) {
   // Compute the list URL + entity ID from the URL
   const listUrl = listUrlOf(url)
   const targetId = idOf(url)

@@ -5,10 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
-import {
-  Store, FileSpreadsheet, Code, ExternalLink, Copy, CheckCircle2,
-  Loader2, AlertCircle, Sparkles, ArrowRight, ShieldCheck, Cloud
-} from 'lucide-react'
+import { Store, ExternalLink, Copy, CheckCircle2, Loader2, AlertCircle, Sparkles, ShieldCheck, Cloud } from 'lucide-react'
 
 export function SetupWizard() {
   const { toast } = useToast()

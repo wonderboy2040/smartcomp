@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
+
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -20,16 +20,12 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import {
-  MessageSquare, Send, Search, Users, Package, RefreshCw,
-  MessageCircle, Check, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight,
-  Brain, Zap, AlertTriangle
-} from 'lucide-react'
+import { MessageSquare, Send, Users, Package, RefreshCw, MessageCircle, Check, Calendar, Bot, Upload, TrendingUp, Award, ArrowDownRight, Brain, AlertTriangle } from 'lucide-react'
 
 export function WhatsAppPanel() {
   const { toast } = useToast()
   const [tab, setTab] = useState<'enquiries' | 'comparison' | 'recommend' | 'intelligence' | 'send'>('enquiries')
-  const [search, setSearch] = useState('')
+  const [search] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [responseDialog, setResponseDialog] = useState<any | null>(null)
   const [responseText, setResponseText] = useState('')
@@ -1249,7 +1245,6 @@ function BestSuppliersView({ data, loading }: { data: any; loading: boolean }) {
 // finds cheapest supplier per item, flags low-confidence entries + OOS.
 function IntelligenceView() {
   const { data, loading, refetch } = useFetch<any>('/api/whatsapp/intelligence?days=90', undefined)
-  const { toast } = useToast()
 
   if (loading && !data) {
     return <Card><CardContent className="text-center py-8 text-slate-500">Running AI analysis on supplier replies…</CardContent></Card>

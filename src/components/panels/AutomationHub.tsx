@@ -7,12 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { AUTOMATION_TEMPLATES, getAutomationEngine, type AutomationRule, type AutomationLog } from '@/lib/automation-engine'
-import {
-  Bot, Zap, Play, Pause, Plus, Settings, Clock, CheckCircle, AlertCircle,
-  BarChart3, Sparkles, Brain, Workflow, Timer, Target, Activity,
-  Package, Wallet, Users, Wrench, Megaphone, FileText, Heart, Cake, ShieldCheck,
-  TrendingUp, Bell, Mail, MessageSquare, Webhook, Database, Crown
-} from 'lucide-react'
+import { Bot, Zap, Play, Plus, Settings, Clock, CheckCircle, AlertCircle, BarChart3, Sparkles, Brain, Workflow, Timer, Target, Activity, Package, Wallet, Users, Wrench, Megaphone, FileText, Heart, Cake, ShieldCheck, TrendingUp, Bell, Crown } from 'lucide-react'
 
 const iconMap: Record<string, any> = {
   HandHeart: Heart,

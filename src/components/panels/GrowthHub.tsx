@@ -21,7 +21,6 @@ import {
 type Tab = 'overview' | 'reminders' | 'reorder' | 'loyalty' | 'snapshot' | 'sla'
 
 export function GrowthHubPanel() {
-  const { toast } = useToast()
   const [tab, setTab] = useState<Tab>('overview')
 
   return (
@@ -294,7 +293,6 @@ function RemindersTab() {
   const { toast } = useToast()
 
   const reminders = data?.reminders || []
-  const total = data?.total || 0
   const totalDue = data?.totalDue || 0
 
   const sendAll = async () => {

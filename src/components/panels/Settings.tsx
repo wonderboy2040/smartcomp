@@ -14,13 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/use-toast'
-import {
-  Store, Settings as SettingsIcon, FileSpreadsheet, RefreshCw,
-  CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy,
-  ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X, Bug,
-  Download, Upload, HardDrive, Activity, Cpu, BarChart3, FileJson,
-  FileText, Star, Megaphone
-} from 'lucide-react'
+import { Store, Settings as SettingsIcon, FileSpreadsheet, RefreshCw, CheckCircle2, AlertCircle, Database, Sparkles, Code, Copy, ExternalLink, Loader2, ShieldCheck, Zap, Cloud, Send, X, Bug, Download, HardDrive, Activity, Cpu, BarChart3, FileJson, FileText, Star, Megaphone } from 'lucide-react'
 import { BUSINESS_GROWTH } from '@/lib/business-growth'
 
 export function SettingsPanel() {
@@ -902,7 +896,7 @@ function DataSettings() {
 
 function WhatsAppSettings() {
   const { toast } = useToast()
-  const { data: status, refetch } = useFetch<any>('/api/whatsapp/status', undefined)
+  const { data: status } = useFetch<any>('/api/whatsapp/status', undefined)
   const [testPhone, setTestPhone] = useState('')
   const [testMsg, setTestMsg] = useState('Hello from Smart Computers Panel — this is a test message.')
   const [sending, setSending] = useState(false)

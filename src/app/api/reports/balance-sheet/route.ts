@@ -29,14 +29,13 @@ export async function GET(req: NextRequest) {
       return new Date(d) <= asOnD
     }
 
-    const [items, invoices, payments, expenses, servicePayments, personalExp, customers] = await Promise.all([
+    const [items, invoices, payments, expenses, servicePayments, personalExp] = await Promise.all([
       listRows<any>('Items'),
       listRows<any>('Invoices'),
       listRows<any>('Payments'),
       listRows<any>('Expenses'),
       listRows<any>('ServicePayments'),
       listRows<any>('PersonalExpenditure'),
-      listRows<any>('Customers'),
     ])
 
     // ASSETS

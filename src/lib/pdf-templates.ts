@@ -1,9 +1,9 @@
 /**
  * Pure PDF presentation constants — template palettes and ad-banner variants.
  *
- * These live in their own module (separate from ./pdf) because two CLIENT
- * components need them: src/components/panels/Settings.tsx and
- * src/components/ServiceInvoiceModal.tsx. ./pdf imports jspdf +
+ * These live in their own module (separate from ./pdf) because a CLIENT
+ * component needs them: src/components/panels/Settings.tsx.
+ * ./pdf imports jspdf +
  * jspdf-autotable + qrcode at module scope, and jspdf-autotable patches the
  * jsPDF prototype on import — a side effect webpack cannot tree-shake. So
  * importing these two arrays from ./pdf dragged all three libraries into the

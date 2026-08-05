@@ -9,12 +9,7 @@ import { useTheme } from '@/lib/theme-context'
 import { PdfPreviewProvider } from '@/lib/preview-context'
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary'
 import { DashboardView } from '@/components/panels/Dashboard'
-import {
-  LayoutDashboard, Package, FileText, FileCheck2, Users,
-  Building2, Wallet, MessageSquare, Settings, Store,
-  Menu, X, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Zap, Wifi, ShieldCheck, Sparkles, Brain,
-  Command, BrainCircuit, Workflow,
-} from 'lucide-react'
+import { LayoutDashboard, Package, FileText, FileCheck2, Users, Building2, Wallet, MessageSquare, Settings, Store, Menu, X, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Sun, Moon, Zap, Wifi, ShieldCheck, Sparkles, Brain, Command, BrainCircuit, Workflow } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
 const StockPanel = lazy(() => import('@/components/panels/Stock').then(m => ({ default: m.StockPanel })))
@@ -68,19 +63,56 @@ const NAV_ITEMS = [
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ] as const
 
-const PREFETCH_URLS = [
+// Prefetch in two waves. Wave 1 is what the Dashboard itself renders from —
+// firing it together with the low-priority tail made all 9 Apps Script reads
+// compete for the same connection pool, so the numbers the user actually looks
+// at arrived later than they had to.
+const PREFETCH_URLS_CRITICAL = [
+  '/api/shop',
   '/api/items',
   '/api/customers',
   '/api/invoices?limit=200',
+]
+
+const PREFETCH_URLS_DEFERRED = [
   '/api/quotations?limit=200',
   '/api/jobs',
   '/api/suppliers',
   '/api/expenses',
   '/api/payments?limit=200',
-  '/api/shop',
 ]
 
-const CORE_PRIORITY_PANELS = ['dashboard', 'invoices', 'quotations', 'jobs', 'stock', 'customers', 'payments', 'settings']
+// Chunk warmers, keyed by nav id. Used both for the small eager preload set
+// below and for hover/focus-intent preloading in the sidebar — touching the
+// same dynamic import that lazy() uses warms the exact chunk React will need.
+const PANEL_PRELOADERS: Record<string, () => Promise<unknown>> = {
+  invoices: () => import('@/components/panels/Invoices'),
+  quotations: () => import('@/components/panels/Quotations'),
+  jobs: () => import('@/components/panels/Jobs'),
+  stock: () => import('@/components/panels/Stock'),
+  customers: () => import('@/components/panels/Customers'),
+  payments: () => import('@/components/panels/Payments'),
+  suppliers: () => import('@/components/panels/Suppliers'),
+  whatsapp: () => import('@/components/panels/WhatsApp'),
+  settings: () => import('@/components/panels/Settings'),
+  reports: () => import('@/components/panels/Reports'),
+}
+
+// Only the panels a user almost always opens first are preloaded eagerly.
+// Preloading seven panels on idle parsed ~7 chunks of JS before the user had
+// clicked anything; the rest are warmed on hover instead.
+const EAGER_PRELOAD_PANELS = ['invoices', 'jobs', 'stock']
+
+const preloadedPanels = new Set<string>()
+
+/** Warm a panel's chunk on nav hover/focus so the click renders instantly. */
+function preloadPanel(id: string) {
+  if (preloadedPanels.has(id)) return
+  const loader = PANEL_PRELOADERS[id]
+  if (!loader) return
+  preloadedPanels.add(id)
+  loader().catch(() => preloadedPanels.delete(id))
+}
 
 export default function Home() {
   return (
@@ -112,15 +144,7 @@ function HomeInner() {
   // Eager Background Bundle Preloader (staggered to avoid network contention)
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const panels = [
-      () => import('@/components/panels/Invoices'),
-      () => import('@/components/panels/Quotations'),
-      () => import('@/components/panels/Jobs'),
-      () => import('@/components/panels/Stock'),
-      () => import('@/components/panels/Customers'),
-      () => import('@/components/panels/Payments'),
-      () => import('@/components/panels/Settings'),
-    ]
+    const panels = EAGER_PRELOAD_PANELS.map((id) => PANEL_PRELOADERS[id]).filter(Boolean)
     let i = 0
     const preload = () => {
       if (i >= panels.length) return
@@ -145,13 +169,16 @@ function HomeInner() {
 
     const startPrefetch = () => {
       if (cancelled) return
-      // Fire ALL prefetches immediately (parallel) — no stagger.
-      // Browsers handle 6+ concurrent requests fine, and Google Sheets
-      // Apps Script can handle parallel reads. This cuts initial load
-      // from 5s (sequential) to ~1.5s (parallel).
-      PREFETCH_URLS.forEach((url) => {
+      // Wave 1: everything the Dashboard renders from, all in parallel.
+      PREFETCH_URLS_CRITICAL.forEach((url) => {
         if (!cancelled) prefetch(url)
       })
+      // Wave 2: the rest, once wave 1 has had the connection pool to itself.
+      setTimeout(() => {
+        PREFETCH_URLS_DEFERRED.forEach((url) => {
+          if (!cancelled) prefetch(url)
+        })
+      }, 400)
     }
 
     // Start prefetching almost immediately — don't wait 1.5s.
@@ -350,6 +377,9 @@ function HomeInner() {
               <button
                 key={item.id}
                 onClick={() => handleNavigate(item.id)}
+                onMouseEnter={() => preloadPanel(item.id)}
+                onFocus={() => preloadPanel(item.id)}
+                onTouchStart={() => preloadPanel(item.id)}
                 className={`w-full flex items-center gap-3 px-3.5 py-3 lg:py-3 rounded-2xl text-sm font-medium transition-all min-h-[48px] lg:min-h-[44px] ${isActive ? 'clay-nav-active' : 'clay-nav-item text-slate-300'
                   }`}
               >

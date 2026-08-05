@@ -46,6 +46,20 @@ const nextConfig: NextConfig = {
       'lucide-react',
       'recharts',
       'zod',
+      // Radix packages still in use after the v11.4 cleanup. Each one is a
+      // barrel export, so without this every panel that imports one pulls the
+      // whole package into its chunk.
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-label',
+      '@radix-ui/react-scroll-area',
+      '@radix-ui/react-select',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-switch',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-toast',
+      '@radix-ui/react-toggle',
+      '@radix-ui/react-tooltip',
     ],
   },
 
@@ -94,8 +108,14 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // Build assets carry a content hash in their filename, so they can be
+        // cached forever. Without this they inherited no Cache-Control at all
+        // and the browser re-validated every chunk on each repeat visit.
         source: '/_next/static/:path*',
-        headers: securityHeaders,
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+          ...securityHeaders,
+        ],
       },
       {
         source: '/sw.js',

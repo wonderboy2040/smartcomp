@@ -14,8 +14,7 @@ export async function GET(req: NextRequest) {
     const targetDayStr = targetDate.toISOString().slice(0, 10)
 
     // Get all data once
-    const [invoices, payments, expenses, servicePayments] = await Promise.all([
-      listRows<any>('Invoices'),
+    const [payments, expenses, servicePayments] = await Promise.all([
       listRows<any>('Payments'),
       listRows<any>('Expenses'),
       listRows<any>('ServicePayments'),

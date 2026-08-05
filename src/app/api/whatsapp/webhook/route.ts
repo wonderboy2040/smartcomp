@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyWebhook, parseIncomingWebhook, markMessageAsRead, isCloudApiConfigured } from '@/lib/whatsapp-cloud'
+import { verifyWebhook, parseIncomingWebhook, markMessageAsRead } from '@/lib/whatsapp-cloud'
 import { listRows, updateRow, createRow } from '@/lib/sheets-client'
 import { parseRateResponseAdvanced } from '@/lib/whatsapp'
 

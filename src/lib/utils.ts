@@ -16,11 +16,11 @@ export function str(v: unknown, fallback = ""): string {
   }
 }
 
-export function strPath(obj: any, ...keys: string[]): string {
-  let cur = obj
+export function strPath(obj: unknown, ...keys: string[]): string {
+  let cur: unknown = obj
   for (const k of keys) {
     if (cur === null || cur === undefined) return ""
-    cur = cur[k]
+    cur = (cur as Record<string, unknown>)[k]
   }
   return str(cur)
 }
@@ -48,7 +48,7 @@ export function safeJsonParse<T>(str: unknown, fallback: T): T {
 export function formatDate(v: unknown, locale = "en-IN"): string {
   if (!v) return ""
   try {
-    const d = new Date(v as any)
+    const d = new Date(v as string | number | Date)
     if (isNaN(d.getTime())) return ""
     return d.toLocaleDateString(locale)
   } catch {
@@ -59,7 +59,7 @@ export function formatDate(v: unknown, locale = "en-IN"): string {
 export function formatDateTime(v: unknown, locale = "en-IN"): string {
   if (!v) return ""
   try {
-    const d = new Date(v as any)
+    const d = new Date(v as string | number | Date)
     if (isNaN(d.getTime())) return ""
     return d.toLocaleString(locale)
   } catch {
@@ -100,7 +100,8 @@ export function generateId(prefix = ''): string {
   return `${prefix}${time}${random}`.toUpperCase()
 }
 
-export function debounce<T extends (...args: any[]) => any>(fn: T, wait: number): (...args: Parameters<T>) => void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- `any[]` is required here: `unknown[]` would reject every concrete callback passed in.
+export function debounce<T extends (...args: any[]) => unknown>(fn: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout)
@@ -108,7 +109,8 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, wait: number)
   }
 }
 
-export function throttle<T extends (...args: any[]) => any>(fn: T, limit: number): (...args: Parameters<T>) => void {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same constraint reason as debounce above.
+export function throttle<T extends (...args: any[]) => unknown>(fn: T, limit: number): (...args: Parameters<T>) => void {
   let inThrottle = false
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
@@ -119,7 +121,7 @@ export function throttle<T extends (...args: any[]) => any>(fn: T, limit: number
   }
 }
 
-export function toCSV(data: any[], headers?: string[]): string {
+export function toCSV(data: Array<Record<string, unknown>>, headers?: string[]): string {
   if (!data.length) return ''
   const keys = headers || Object.keys(data[0])
   const csvHeaders = keys.join(',')
@@ -143,7 +145,7 @@ export function downloadCSV(csv: string, filename: string) {
   URL.revokeObjectURL(link.href)
 }
 
-export function downloadJSON(data: any, filename: string) {
+export function downloadJSON(data: unknown, filename: string) {
   const json = JSON.stringify(data, null, 2)
   const blob = new Blob([json], { type: 'application/json' })
   const link = document.createElement('a')
@@ -189,7 +191,7 @@ export function formatPhone(phone: string): string {
 // Group array by key
 export function groupBy<T>(arr: T[], key: keyof T | ((item: T) => string)): Record<string, T[]> {
   return arr.reduce((acc, item) => {
-    const groupKey = typeof key === 'function' ? key(item) : String((item as any)[key] || 'Unknown')
+    const groupKey = typeof key === 'function' ? key(item) : String((item as Record<string, unknown>)[key as string] || 'Unknown')
     if (!acc[groupKey]) acc[groupKey] = []
     acc[groupKey].push(item)
     return acc
@@ -199,7 +201,7 @@ export function groupBy<T>(arr: T[], key: keyof T | ((item: T) => string)): Reco
 // Sum by key
 export function sumBy<T>(arr: T[], key: keyof T | ((item: T) => number)): number {
   return arr.reduce((sum, item) => {
-    const val = typeof key === 'function' ? key(item) : Number((item as any)[key] || 0)
+    const val = typeof key === 'function' ? key(item) : Number((item as Record<string, unknown>)[key as string] || 0)
     return sum + (isNaN(val) ? 0 : val)
   }, 0)
 }

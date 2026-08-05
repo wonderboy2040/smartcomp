@@ -95,7 +95,7 @@ async function useFileAuthState(): Promise<{ state: AuthenticationState; saveCre
     if (!fs.existsSync(authDir)) {
       fs.mkdirSync(authDir, { recursive: true })
     }
-  } catch (e) {
+  } catch {
     // Directory creation failed — try /tmp as fallback
     const tmpDir = '/tmp/wa-auth-smartcomp'
     try {
@@ -174,7 +174,7 @@ export async function startWhatsAppConnection(): Promise<{ qrCode: string | null
           session.qrRetry += 1
           session.state = 'waiting_qr'
           notifyListeners()
-        } catch (qrErr) {
+        } catch {
           if (sock !== session.socket) return
           session.lastEvent = 'qr_error'
           session.error = 'Failed to generate QR image'

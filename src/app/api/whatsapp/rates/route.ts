@@ -87,8 +87,6 @@ export async function GET(req: NextRequest) {
         )
 
         const itemId = String(matched?.id || `name:${r.itemName}`)
-        const itemName = String(matched?.name || r.itemName || 'Unknown')
-        const sku = String(matched?.sku || '')
 
         if (filterItemId && itemId !== filterItemId) continue
 

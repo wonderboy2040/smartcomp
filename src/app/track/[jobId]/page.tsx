@@ -2,12 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useParams } from 'next/navigation'
-import {
-  Wrench, Clock, CheckCircle2, Package, Phone, MapPin, Mail,
-  Laptop, Printer, Monitor, Battery, ScanLine, Smartphone,
-  Calendar, Shield, AlertCircle, Loader2, MessageSquare, ArrowRight,
-  Star, Send, ThumbsUp,
-} from 'lucide-react'
+import { Wrench, Clock, CheckCircle2, Package, Phone, MapPin, Mail, Laptop, Printer, Monitor, Battery, ScanLine, Smartphone, Shield, AlertCircle, Loader2, MessageSquare, Star, Send, ThumbsUp } from 'lucide-react'
 
 const DEVICE_ICONS: Record<string, any> = {
   Laptop: Laptop,

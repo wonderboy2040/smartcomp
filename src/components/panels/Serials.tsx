@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useFetch, apiPost, apiPut, apiDelete } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,11 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
-import { formatCurrency } from '@/lib/calc'
-import {
-  Package, Plus, Trash2, Edit3, Search, Shield, ShieldCheck, ShieldAlert,
-  Smartphone, Laptop, Cpu, HardDrive, MemoryStick, Printer as PrinterIcon,
-} from 'lucide-react'
+
+import { Package, Plus, Trash2, Edit3, Search, Shield, ShieldCheck, ShieldAlert } from 'lucide-react'
 
 const STATUS_COLORS: Record<string, string> = {
   in_stock: 'bg-emerald-50 text-emerald-700 border-emerald-200',

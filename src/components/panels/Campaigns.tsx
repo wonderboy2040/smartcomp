@@ -12,9 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
-import {
-  Megaphone, Plus, Trash2, Send, Users, CheckCircle2, Clock, ExternalLink, Copy, Loader2,
-} from 'lucide-react'
+import { Megaphone, Plus, Trash2, Send, Copy, Loader2 } from 'lucide-react'
 
 const SEGMENTS = [
   { value: 'all', label: 'All Customers (with phone)' },

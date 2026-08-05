@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Users, Phone, Mail, Eye } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Users, Eye } from 'lucide-react'
 
 export function CustomersPanel() {
   const { toast } = useToast()
