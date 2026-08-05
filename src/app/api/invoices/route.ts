@@ -3,6 +3,19 @@ import { listRows, createInvoiceUltra } from '@/lib/sheets-client'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { apiLimiter, writeLimiter, getClientIp } from '@/lib/rate-limit'
 
+// Normalize invoice paymentType → Payments sheet `type` label
+function normalizePaymentType(raw: string): string {
+  const t = String(raw || 'cash').toLowerCase()
+  if (t.includes('upi')) return 'UPI'
+  if (t.includes('card')) return 'Card'
+  if (t.includes('cheque') || t.includes('check')) return 'Cheque'
+  if (t.includes('neft') || t.includes('imps') || t.includes('transfer') || t.includes('bank')) return 'Bank Transfer'
+  if (t.includes('credit')) return 'Credit'
+  if (t.includes('cash')) return 'Cash'
+  if (t.includes('wallet')) return 'Wallet'
+  return 'Cash'
+}
+
 export async function GET(req: NextRequest) {
   try {
     const ip = getClientIp(req)
@@ -83,6 +96,21 @@ export async function POST(req: NextRequest) {
     const paid = Number(amountPaid) || 0
     const due = Math.max(0, calc.grandTotal - paid)
 
+    // v11.2 FIX: when the user pays AT invoice creation, createInvoiceUltra
+    // ONLY writes a Payments row when it receives a `payment` object — plain
+    // amountPaid just set the invoice field and the money vanished from the
+    // payments ledger. Build the payment object here so Cash/UPI/Card paid at
+    // creation is recorded instantly in the same single call.
+    const payType = normalizePaymentType(String(paymentType || (paid >= calc.grandTotal ? 'cash' : 'credit')))
+    const payment = paid > 0
+      ? {
+          amount: paid,
+          type: payType,
+          date: date || new Date().toISOString(),
+          notes: paid >= calc.grandTotal ? 'Full payment at invoice creation' : 'Partial payment at invoice creation',
+        }
+      : undefined
+
     // Prepare stock updates for ultra fast transaction
     const stockUpdates: { id: string; deductQty: number }[] = []
     if (deductStock) {
@@ -119,6 +147,7 @@ export async function POST(req: NextRequest) {
       notes: notes || '',
       date: date || new Date().toISOString(),
       stockUpdates: stockUpdates.length > 0 ? stockUpdates : undefined,
+      payment,
       template: template || 'tally-classic',
       gstMode: gstMode === 'non-gst' ? 'non-gst' : 'gst',
       // Server will fetch customer and generate number

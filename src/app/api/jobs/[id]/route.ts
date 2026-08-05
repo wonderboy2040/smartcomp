@@ -221,6 +221,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         serviceCharge: svcCharge,
         paidAmount: newPaidAmount,
         paymentMode,
+        // v11.2: record the payment type on the job for reporting/ledger view
+        paymentType: paymentReceivedNow > 0 ? (balanceDueAfter <= 0 ? 'Final' : 'Partial') : 'Unpaid',
         partsProfit: totals.profit,
         serviceProfit: actualServiceProfit,
         grossProfit,
@@ -400,9 +402,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
 
       const newPaid = money((Number(existing.paidAmount) || 0) + amount)
+      const balanceAfter = money(Math.max(0, ledger.total - ledger.advance - newPaid))
       const updated = await updateRow('Jobs', id, {
         paidAmount: newPaid,
         paymentMode: mode,
+        // v11.2: reflect whether the job is now fully settled
+        paymentType: balanceAfter <= 0 ? 'Final' : 'Partial',
         updatedAt: new Date().toISOString(),
       })
 
@@ -411,12 +416,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         customerName: String(existing.customerName || ''),
         amount,
         mode,
-        type: 'Partial',
-        date: new Date().toISOString(),
-        notes: 'Partial service payment recorded',
+        type: balanceAfter <= 0 ? 'Final' : 'Partial',
+        date: String(body?.date || new Date().toISOString()),
+        notes: String(body?.notes || (balanceAfter <= 0 ? 'Final service payment recorded' : 'Partial service payment recorded')),
       }).catch(() => {})
 
-      return NextResponse.json({ success: true, job: updated, paidAmount: newPaid, balanceDue: money(Math.max(0, ledger.total - ledger.advance - newPaid)) })
+      return NextResponse.json({ success: true, job: updated, paidAmount: newPaid, balanceDue: balanceAfter })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
@@ -467,6 +472,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         console.error('[Jobs DELETE] Stock restore failed:', stockErr?.message)
       }
     }
+    // v11.2: soft-delete the job's service payments too (keeps ledger clean)
+    try {
+      const allPays = await listRows<any>('ServicePayments')
+      const jobPays = allPays.filter((p) => String(p.jobId) === String(job?.jobId || job?.id))
+      await Promise.all(jobPays.map((p) => deleteRow('ServicePayments', String(p.id)).catch(() => {})))
+    } catch {}
     await deleteRow('Jobs', id)
     return NextResponse.json({ success: true })
   } catch (e: any) {

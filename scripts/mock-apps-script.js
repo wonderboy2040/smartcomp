@@ -17,14 +17,15 @@ const store = {
 let seq = 0
 
 function fullRow(headers, data, id, now) {
-  const row = {}
+  const row = { id, deleted: false, createdAt: data.createdAt || now, updatedAt: now }
   headers.forEach((h) => {
-    if (h === 'id') row[h] = id
-    else if (h === 'deleted') row[h] = false
-    else if (h === 'createdAt') row[h] = data.createdAt || now
-    else if (h === 'updatedAt') row[h] = now
-    else row[h] = data[h] !== undefined && data[h] !== null ? data[h] : ''
+    if (h === 'id' || h === 'deleted' || h === 'createdAt' || h === 'updatedAt') return
+    if (!(h in row)) row[h] = data[h] !== undefined && data[h] !== null ? data[h] : ''
   })
+  // keep any extra fields the caller passed (mock mirrors code.gs full-schema rows)
+  for (const k of Object.keys(data || {})) {
+    if (!(k in row)) row[k] = data[k]
+  }
   return row
 }
 
@@ -89,6 +90,84 @@ const server = http.createServer((req, res) => {
         if (!existing) { result = { success: false, error: 'Not found' }; break }
         existing.deleted = true
         result = { success: true, data: existing }
+        break
+      }
+      case 'createInvoiceUltra': {
+        // Mirrors code.gs createInvoiceUltra: creates invoice + payment row if payment provided
+        const data = body.data || {}
+        const nid = data.id || 'inv_' + (++seq)
+        const now2 = new Date().toISOString()
+        const invoiceRow = {
+          id: nid,
+          number: data.number || `SCSS/26-27/${String(seq).padStart(3, '0')}`,
+          customerId: data.customerId || '',
+          customerName: data.customerName || 'Test Customer',
+          customerPhone: data.customerPhone || '',
+          customerGstin: data.customerGstin || '',
+          date: data.date || now2,
+          itemsJson: data.itemsJson || '[]',
+          subtotal: Number(data.subtotal) || 0,
+          gstAmount: Number(data.gstAmount) || 0,
+          courierCharges: Number(data.courierCharges) || 0,
+          otherCharges: Number(data.otherCharges) || 0,
+          discount: Number(data.discount) || 0,
+          grandTotal: Number(data.grandTotal) || 0,
+          totalCost: Number(data.totalCost) || 0,
+          profit: Number(data.profit) || 0,
+          paymentType: data.paymentType || 'cash',
+          paymentStatus: data.paymentStatus || 'unpaid',
+          amountPaid: Number(data.amountPaid) || 0,
+          amountDue: Number(data.amountDue) || 0,
+          notes: data.notes || '',
+          createdAt: now2,
+          deleted: false,
+        }
+        store.Invoices.set(nid, invoiceRow)
+        let paymentResult = null
+        if (data.payment && Number(data.payment.amount) > 0) {
+          const payId = 'pay_' + (++seq)
+          const payRow = {
+            id: payId,
+            invoiceId: nid,
+            invoiceNumber: invoiceRow.number,
+            customerName: invoiceRow.customerName,
+            amount: Number(data.payment.amount),
+            type: data.payment.type || 'Cash',
+            date: data.payment.date || now2,
+            notes: data.payment.notes || '',
+            createdAt: now2,
+            deleted: false,
+          }
+          store.Payments.set(payId, payRow)
+          paymentResult = { id: payId, ...data.payment }
+        }
+        result = { success: true, data: invoiceRow, payment: paymentResult }
+        break
+      }
+      case 'createQuotationUltra': {
+        const data = body.data || {}
+        const nid = data.id || 'qtn_' + (++seq)
+        const now2 = new Date().toISOString()
+        const qRow = {
+          id: nid,
+          number: data.number || `SCSS/QT/${String(seq).padStart(3, '0')}`,
+          customerId: data.customerId || '',
+          customerName: data.customerName || 'Test Customer',
+          date: data.date || now2,
+          itemsJson: data.itemsJson || '[]',
+          subtotal: Number(data.subtotal) || 0,
+          gstAmount: Number(data.gstAmount) || 0,
+          courierCharges: Number(data.courierCharges) || 0,
+          otherCharges: Number(data.otherCharges) || 0,
+          discount: Number(data.discount) || 0,
+          grandTotal: Number(data.grandTotal) || 0,
+          notes: data.notes || '',
+          status: data.status || 'draft',
+          createdAt: now2,
+          deleted: false,
+        }
+        store.Quotations.set(nid, qRow)
+        result = { success: true, data: qRow }
         break
       }
       case 'dashboard':

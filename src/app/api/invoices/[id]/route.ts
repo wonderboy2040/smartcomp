@@ -38,8 +38,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     // Parse old items to compute stock delta
     const oldItems = safeJsonParse<any[]>(existing.itemsJson, [])
 
-    // Build new items from body
-    const newItems = (body.items || []).map((i: any) => ({
+    // Build new items from body — if items not provided, keep the existing
+    // ones (allows partial edits like recording a payment without wiping totals)
+    const rawItems = Array.isArray(body.items)
+      ? body.items
+      : safeJsonParse<any[]>(existing.itemsJson, [])
+    const newItems = rawItems.map((i: any) => ({
       itemId: i.itemId,
       name: i.name,
       sku: i.sku || '',
@@ -86,9 +90,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (stockUpdates.length > 0) await bulkUpdate('Items', stockUpdates)
     }
 
+    // v11.2: allow the paid amount to be changed while editing the invoice.
+    // If the user increases the paid amount, a Payments entry is recorded for
+    // the delta (keeps the ledger consistent). Decreasing paid amount is not
+    // allowed here — delete the payment row instead (it reverses balances).
+    const oldPaid = Number(existing.amountPaid) || 0
+    const newPaid = body.amountPaid !== undefined
+      ? Math.max(0, Number(body.amountPaid) || 0)
+      : oldPaid
+    const paidDelta = newPaid - oldPaid
+
+    if (paidDelta > 0) {
+      const payType = String(body.paymentType || existing.paymentType || 'cash').toLowerCase()
+      const type = payType.includes('upi') ? 'UPI'
+        : payType.includes('card') ? 'Card'
+        : payType.includes('cheque') ? 'Cheque'
+        : payType.includes('bank') || payType.includes('transfer') || payType.includes('neft') ? 'Bank Transfer'
+        : 'Cash'
+      await createRow('Payments', {
+        invoiceId: id,
+        invoiceNumber: String(existing.number || ''),
+        customerName: String(existing.customerName || ''),
+        amount: paidDelta,
+        type,
+        date: body.date || new Date().toISOString(),
+        notes: 'Payment recorded while editing invoice',
+      }).catch(() => {})
+    }
+
     // Adjust customer credit balance
     const oldDue = Number(existing.amountDue) || 0
-    const newDue = computed.grandTotal - (Number(existing.amountPaid) || 0)
+    const newDue = computed.grandTotal - newPaid
     const dueDiff = newDue - oldDue
     if (dueDiff !== 0 && existing.customerId) {
       const customer = await getRow<any>('Customers', String(existing.customerId))
@@ -101,7 +133,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Recompute paymentStatus
-    const newPaid = Number(existing.amountPaid) || 0
     const newStatus = newDue <= 0 ? 'paid' : newPaid > 0 ? 'partial' : 'unpaid'
 
     // Update invoice
@@ -122,6 +153,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       profit: computed.profit,
       paymentType: body.paymentType || existing.paymentType,
       paymentStatus: newStatus,
+      amountPaid: newPaid,
       amountDue: Math.max(0, newDue),
       notes: String(body.notes || existing.notes || ''),
       template: body.template || existing.template || 'tally-classic',

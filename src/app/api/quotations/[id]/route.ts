@@ -32,7 +32,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const existing = await getRow<any>('Quotations', id)
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const newItems = (body.items || []).map((i: any) => ({
+    const rawItems = Array.isArray(body.items)
+      ? body.items
+      : safeJsonParse<any[]>(existing.itemsJson, [])
+    const newItems = rawItems.map((i: any) => ({
       itemId: i.itemId,
       name: i.name,
       sku: i.sku || '',
@@ -86,12 +89,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const q = await getRow<any>('Quotations', id)
       if (!q) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+      if (String(q.status) === 'converted') {
+        return NextResponse.json({ error: 'Quotation already converted' }, { status: 400 })
+      }
+
       const items = safeJsonParse<any[]>(q.itemsJson, []) as LineItem[]
       const calc = computeInvoice(items, {
         courierCharges: Number(q.courierCharges) || 0,
         otherCharges: Number(q.otherCharges) || 0,
         discount: Number(q.discount) || 0,
       })
+
+      // v11.2 ADVANCED CONVERT: optional payment at conversion + stock toggle
+      const deductStock = body?.deductStock !== false
+      const paid = Math.max(0, Number(body?.amountPaid) || 0)
+      const clampedPaid = Math.min(paid, calc.grandTotal)
+      const due = Math.max(0, calc.grandTotal - clampedPaid)
+      const paymentType = String(body?.paymentType || (clampedPaid >= calc.grandTotal ? 'cash' : 'credit'))
+      const payTypeLower = paymentType.toLowerCase()
+      const payTypeLabel = payTypeLower.includes('upi') ? 'UPI'
+        : payTypeLower.includes('card') ? 'Card'
+        : payTypeLower.includes('cheque') ? 'Cheque'
+        : payTypeLower.includes('bank') || payTypeLower.includes('transfer') || payTypeLower.includes('neft') ? 'Bank Transfer'
+        : 'Cash'
 
       // Generate invoice number: SCSS/26-27/001
       const existingInvoices = await listRows<any>('Invoices')
@@ -114,48 +134,65 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         grandTotal: calc.grandTotal,
         totalCost: calc.totalCost,
         profit: calc.profit,
-        paymentType: 'credit',
-        paymentStatus: 'unpaid',
-        amountPaid: 0,
-        amountDue: calc.grandTotal,
+        paymentType,
+        paymentStatus: due <= 0 ? 'paid' : clampedPaid > 0 ? 'partial' : 'unpaid',
+        amountPaid: clampedPaid,
+        amountDue: due,
         notes: String(q.notes || ''),
+        template: String(body?.template || q.template || 'tally-classic'),
+        gstMode: body?.gstMode === 'non-gst' ? 'non-gst' : (String(q.gstMode || 'gst')),
       })
+
+      // v11.2: record the payment in the Payments ledger (was silently missing)
+      if (clampedPaid > 0) {
+        await createRow('Payments', {
+          invoiceId: String(invoice.id || ''),
+          invoiceNumber: number,
+          customerName: String(q.customerName || ''),
+          amount: clampedPaid,
+          type: payTypeLabel,
+          date: new Date().toISOString(),
+          notes: clampedPaid >= calc.grandTotal ? 'Full payment at quotation conversion' : 'Partial payment at quotation conversion',
+        }).catch(() => {})
+      }
 
       // Update quotation
       await updateRow('Quotations', id, { status: 'converted', convertedToInvoiceId: String(invoice.id || '') })
 
-      // PERFORMANCE: Batch stock deduction via bulkUpdate
-      const uniqueItems = new Map<string, number>()
-      for (const item of calc.items) {
-        if (item.itemId) {
-          uniqueItems.set(String(item.itemId), (uniqueItems.get(String(item.itemId)) || 0) + item.quantity)
-        }
-      }
-      if (uniqueItems.size > 0) {
-        const itemIds = Array.from(uniqueItems.keys())
-        const dbItems = await Promise.all(itemIds.map((id) => getRow<any>('Items', id)))
-        const stockUpdates: { id: string; data: any }[] = []
-        for (let i = 0; i < itemIds.length; i++) {
-          if (dbItems[i]) {
-            stockUpdates.push({
-              id: itemIds[i],
-              data: { quantity: Math.max(0, (Number(dbItems[i].quantity) || 0) - (uniqueItems.get(itemIds[i]) || 0)) },
-            })
+      // PERFORMANCE: Batch stock deduction via bulkUpdate (only if requested)
+      if (deductStock) {
+        const uniqueItems = new Map<string, number>()
+        for (const item of calc.items) {
+          if (item.itemId) {
+            uniqueItems.set(String(item.itemId), (uniqueItems.get(String(item.itemId)) || 0) + item.quantity)
           }
         }
-        if (stockUpdates.length > 0) await bulkUpdate('Items', stockUpdates)
+        if (uniqueItems.size > 0) {
+          const itemIds = Array.from(uniqueItems.keys())
+          const dbItems = await Promise.all(itemIds.map((id) => getRow<any>('Items', id).catch(() => null)))
+          const stockUpdates: { id: string; data: any }[] = []
+          for (let i = 0; i < itemIds.length; i++) {
+            if (dbItems[i]) {
+              stockUpdates.push({
+                id: itemIds[i],
+                data: { quantity: Math.max(0, (Number(dbItems[i].quantity) || 0) - (uniqueItems.get(itemIds[i]) || 0)) },
+              })
+            }
+          }
+          if (stockUpdates.length > 0) await bulkUpdate('Items', stockUpdates)
+        }
       }
 
-      // Update customer credit
-      if (q.customerId) {
+      // Update customer credit (only the unpaid portion)
+      if (due > 0 && q.customerId) {
         const customer = await getRow<any>('Customers', String(q.customerId))
         if (customer) {
           const currentCredit = Number(customer.creditBalance) || 0
-          await updateRow('Customers', String(q.customerId), { creditBalance: currentCredit + calc.grandTotal })
+          await updateRow('Customers', String(q.customerId), { creditBalance: currentCredit + due })
         }
       }
 
-      return NextResponse.json({ success: true, invoiceId: invoice.id, invoiceNumber: number })
+      return NextResponse.json({ success: true, invoiceId: invoice.id, invoiceNumber: number, amountPaid: clampedPaid, amountDue: due })
     }
 
     if (action === 'updateStatus') {
