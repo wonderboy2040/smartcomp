@@ -37,26 +37,38 @@ const lastDataHash = new Map<string, string>() // like lastCloudDataHash in inde
 const lastPullTime = new Map<string, number>() // debounce pulls like index.html lastPullTime
 const deletedTracking = new Map<string, { id: string; expires: number }>() // like recentlyDeletedJobs
 
+/**
+ * cyrb53 over the full string — see the matching helper in src/lib/api.ts.
+ * Must stay content-complete: getAllDataQuantum() returns the CACHED payload
+ * when the hash is unchanged, so any blind spot here silently serves stale data.
+ */
+function cyrb53(str: string): string {
+  const len = str.length
+  let h1 = 0xdeadbeef ^ len
+  let h2 = 0x41c6ce57 ^ len
+  for (let i = 0; i < len; i++) {
+    const ch = str.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return `${(h2 >>> 0).toString(36)}_${(h1 >>> 0).toString(36)}_${len}`
+}
+
 function computeHash(data: any): string {
   if (!data) return 'null'
   try {
     if (Array.isArray(data)) {
       if (data.length === 0) return 'empty_0'
-      const first = data[0]?.id || data[0]?.updatedAt || data[0]?.number || ''
-      const last = data[data.length - 1]?.id || data[data.length - 1]?.updatedAt || data[data.length - 1]?.number || ''
-      const mid = data[Math.floor(data.length / 2)]?.id || ''
-      return `arr_${data.length}_${first}_${mid}_${last}`
+      // Previously sampled only the first/mid/last row IDs, so an edit to any
+      // other row — or to a non-id field of those three — hashed identically
+      // and the stale cached payload was returned instead of the fresh one.
+      return `arr_${data.length}_${cyrb53(JSON.stringify(data))}`
     }
     const str = typeof data === 'string' ? data : JSON.stringify(data)
-    const len = str.length
-    if (len === 0) return 'str_0'
-    let h = 0
-    const step = len > 250 ? Math.floor(len / 250) : 1
-    for (let i = 0; i < len; i += step) {
-      h = ((h << 5) - h) + str.charCodeAt(i)
-      h = h & h
-    }
-    return `h_${h.toString(36)}_${len}`
+    if (str.length === 0) return 'str_0'
+    return `h_${cyrb53(str)}`
   } catch {
     return Date.now().toString(36)
   }
@@ -685,8 +697,19 @@ export async function listRows<T = any>(
 
   const res = await getFromAppsScript(params)
   if (!res.success) throw new Error(res.error || 'Failed to list')
-  if (useCache) setCached(cacheKey, res.data)
-  return res.data as T[]
+  // Guard against resurrection: a list request that was already in flight when
+  // a delete landed can come back still containing the deleted row. deleteRow()
+  // records the id in deletedTracking for 5 min, so drop it here. Mirrors
+  // applyDeletedFilter() on the client (src/lib/api.ts).
+  let data = res.data as T[]
+  if (!options.includeDeleted && Array.isArray(data) && deletedTracking.size > 0) {
+    data = data.filter((row: any) => {
+      const id = row?.id
+      return !id || !isRecentlyDeleted(sheet, String(id))
+    })
+  }
+  if (useCache) setCached(cacheKey, data)
+  return data
 }
 
 // Batch fetch multiple sheets in parallel - v3.0 optimization

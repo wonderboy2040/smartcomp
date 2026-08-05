@@ -21,7 +21,8 @@ import { formatCurrency, numberToWords } from '@/lib/calc'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 import { Printer, FileText, Share2, X, Download, Eye } from 'lucide-react'
-import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf'
+// Import from pdf-templates, NOT @/lib/pdf — see the note in Settings.tsx.
+import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf-templates'
 import { shareWhatsAppPdf } from '@/lib/whatsapp'
 
 interface Props {

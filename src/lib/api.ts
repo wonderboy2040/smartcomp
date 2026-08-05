@@ -124,42 +124,45 @@ const recentlyDeletedJobs = new Set<string>()
 const recentlyDeletedPayments = new Set<string>()
 const deletedExpiry = new Map<string, number>()
 
+/**
+ * cyrb53 over the full string. Every character is folded in — no sampling.
+ *
+ * A previous version sampled every Nth character to save time on large
+ * payloads. That made the hash blind to edits between sample points, and
+ * because doFetchWithRetry() DISCARDS a fresh response whose hash matches
+ * the cached one, those edits never reached the UI. Correctness beats the
+ * few microseconds sampling saved: cyrb53 runs at ~1 GB/s, so even a 2 MB
+ * list hashes in ~2ms.
+ */
+function cyrb53(str: string): string {
+  const len = str.length
+  let h1 = 0xdeadbeef ^ len
+  let h2 = 0x41c6ce57 ^ len
+  for (let i = 0; i < len; i++) {
+    const ch = str.charCodeAt(i)
+    h1 = Math.imul(h1 ^ ch, 2654435761)
+    h2 = Math.imul(h2 ^ ch, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return `${(h2 >>> 0).toString(36)}_${(h1 >>> 0).toString(36)}_${len}`
+}
+
 function computeHash(data: any): string {
   if (!data) return 'null'
   try {
     if (Array.isArray(data)) {
       if (data.length === 0) return 'empty_0'
-      // Stronger hash: combine length + first/mid/last IDs + a sampled
-      // checksum over the JSON of every element. Catches edits to middle
-      // rows that the old hash silently missed.
-      let h = data.length
-      const len = data.length
-      const step = Math.max(1, Math.floor(len / 12))
-      for (let i = 0; i < len; i += step) {
-        const row = data[i]
-        const id = row?.id || row?.jobId || row?.number || row?.updatedAt || ''
-        const updatedAt = row?.updatedAt || ''
-        h = ((h << 5) - h) + String(id).length
-        h = ((h << 5) - h) + String(updatedAt).length
-        h = h & h
-      }
-      return `arr_${data.length}_${h.toString(36)}`
+      // Hash the ACTUAL row content, not just row count / id lengths.
+      // The old version folded in String(id).length and String(updatedAt).length
+      // only, so editing an invoice amount, a job status, or a customer name
+      // produced an IDENTICAL hash — and the fresh server data was thrown away,
+      // leaving the panel stale until a create/delete changed the array length.
+      return `arr_${data.length}_${cyrb53(JSON.stringify(data))}`
     }
     const str = typeof data === 'string' ? data : JSON.stringify(data)
-    const len = str.length
-    if (len === 0) return 'str_0'
-    // cyrb53-style hash — much better distribution than the old sampler
-    let h1 = 0xdeadbeef ^ len
-    let h2 = 0x41c6ce57 ^ len
-    const step = len > 500 ? Math.floor(len / 500) : 1
-    for (let i = 0; i < len; i += step) {
-      const ch = str.charCodeAt(i)
-      h1 = Math.imul(h1 ^ ch, 2654435761)
-      h2 = Math.imul(h2 ^ ch, 1597334677)
-    }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
-    return `h_${(h2 >>> 0).toString(36)}_${(h1 >>> 0).toString(36)}_${len}`
+    if (str.length === 0) return 'str_0'
+    return `h_${cyrb53(str)}`
   } catch {
     return Date.now().toString(36)
   }

@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useFetch, apiPost, apiPut } from '@/lib/api'
-import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf'
+// Import from pdf-templates, NOT @/lib/pdf — the latter pulls jspdf +
+// jspdf-autotable + qrcode into the client bundle (autotable is side-effectful
+// and cannot be tree-shaken).
+import { PDF_TEMPLATES, AD_BANNER_VARIANTS } from '@/lib/pdf-templates'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

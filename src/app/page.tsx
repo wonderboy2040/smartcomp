@@ -13,6 +13,7 @@ import {
   LayoutDashboard, Package, FileText, FileCheck2, Users,
   Building2, Wallet, MessageSquare, Settings, Store,
   Menu, X, Loader2, Wrench, LogOut, Receipt, BarChart3, Boxes, PiggyBank, FileSpreadsheet, Megaphone, ShieldAlert, FileSignature, Palette, Sun, Moon, Zap, Wifi, ShieldCheck, Sparkles, Brain,
+  Command, BrainCircuit, Workflow,
 } from 'lucide-react'
 
 // ===== DYNAMIC IMPORTS FOR HEAVY PANELS =====
@@ -36,9 +37,13 @@ const CreditControlPanel = lazy(() => import('@/components/panels/CreditControl'
 const AMCPanel = lazy(() => import('@/components/panels/AMC').then(m => ({ default: m.AMCPanel })))
 const GrowthHubPanel = lazy(() => import('@/components/panels/GrowthHub').then(m => ({ default: m.GrowthHubPanel })))
 const PosterHubPanel = lazy(() => import('@/components/panels/PosterHub').then(m => ({ default: m.PosterHubPanel })))
+const AIIntelligencePanel = lazy(() => import('@/components/panels/AIIntelligence').then(m => ({ default: m.AIIntelligencePanel })))
+const AutomationHubPanel = lazy(() => import('@/components/panels/AutomationHub').then(m => ({ default: m.AutomationHubPanel })))
+const CommandCenterPanel = lazy(() => import('@/components/panels/CommandCenter').then(m => ({ default: m.CommandCenterPanel })))
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'text-slate-600' },
+  { id: 'command', label: 'Command Center', icon: Command, color: 'text-amber-600' },
   { id: 'stock', label: 'Stock', icon: Package, color: 'text-blue-600' },
   { id: 'invoices', label: 'Invoices', icon: FileText, color: 'text-emerald-600' },
   { id: 'quotations', label: 'Quotations', icon: FileCheck2, color: 'text-cyan-600' },
@@ -57,6 +62,8 @@ const NAV_ITEMS = [
   { id: 'financials', label: 'Financials (P&L)', icon: FileSpreadsheet, color: 'text-indigo-600' },
   { id: 'reports', label: 'Reports', icon: BarChart3, color: 'text-indigo-600' },
   { id: 'growth', label: 'Growth Hub', icon: Brain, color: 'text-violet-600' },
+  { id: 'ai', label: 'AI Intelligence', icon: BrainCircuit, color: 'text-fuchsia-600' },
+  { id: 'automation', label: 'Automation Hub', icon: Workflow, color: 'text-teal-600' },
   { id: 'poster', label: 'AI Poster Generator', icon: Sparkles, color: 'text-violet-600' },
   { id: 'settings', label: 'Settings', icon: Settings, color: 'text-slate-600' },
 ] as const
@@ -554,6 +561,15 @@ function HomeInner() {
             </PanelBoundary>
             <PanelBoundary active={active} id="poster" mounted={mountedPanels.has('poster')}>
               <PosterHubPanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="command" mounted={mountedPanels.has('command')}>
+              <CommandCenterPanel onNavigate={handleNavigate} />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="ai" mounted={mountedPanels.has('ai')}>
+              <AIIntelligencePanel />
+            </PanelBoundary>
+            <PanelBoundary active={active} id="automation" mounted={mountedPanels.has('automation')}>
+              <AutomationHubPanel />
             </PanelBoundary>
           </div>
         </main>
