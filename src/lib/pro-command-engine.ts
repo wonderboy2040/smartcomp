@@ -23,6 +23,8 @@ export interface SearchResult {
   subtitle: string
   meta: string
   score: number
+  /** Nav id of the panel this result lives in — used to jump there on click. */
+  tab: string
   url?: string
   data: any
 }
@@ -32,6 +34,12 @@ export interface QuickStat {
   value: string
   change: number
   trend: 'up' | 'down' | 'stable'
+}
+
+/** Sheets columns arrive as strings, numbers, or undefined — normalise before display. */
+function str(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  return String(value)
 }
 
 /**
@@ -49,12 +57,28 @@ export function universalSearch(
   }
 ): SearchResult[] {
   if (!query || query.trim().length < 2) return []
-  
+
   const q = query.toLowerCase().trim()
   const results: SearchResult[] = []
 
-  const scoreMatch = (text: string, query: string): number => {
-    const lower = text.toLowerCase()
+  // Every collection is coerced: a list route can answer with a
+  // `{ data, pagination }` envelope instead of a bare array, and `.forEach`
+  // on that object throws and takes the whole panel down.
+  const rows = (value: unknown): any[] => {
+    if (Array.isArray(value)) return value
+    if (value && typeof value === 'object') {
+      const inner = (value as { data?: unknown }).data
+      if (Array.isArray(inner)) return inner
+    }
+    return []
+  }
+
+  // Sheets hands back numbers for numeric-looking columns (phone, HSN code,
+  // invoice numbers), so `text.toLowerCase` is not always a function.
+  const scoreMatch = (value: unknown, query: string): number => {
+    if (value === null || value === undefined) return 0
+    const lower = String(value).toLowerCase()
+    if (!lower) return 0
     if (lower === query) return 100
     if (lower.startsWith(query)) return 90
     if (lower.includes(query)) return 70
@@ -67,114 +91,105 @@ export function universalSearch(
     return 0
   }
 
+  const best = (texts: unknown[]) => texts.reduce<number>((m, t) => Math.max(m, scoreMatch(t, q)), 0)
+
   // Search invoices
-  ;(data.invoices || []).forEach(inv => {
-    const texts = [
-      inv.number || '',
-      inv.customerName || '',
-      inv.customerPhone || '',
-      String(inv.grandTotal || ''),
-    ]
-    const maxScore = Math.max(...texts.map(t => scoreMatch(t, q)))
+  ;rows(data.invoices).forEach(inv => {
+    const maxScore = best([inv.number, inv.customerName, inv.customerPhone, inv.grandTotal])
     if (maxScore > 0) {
       results.push({
         id: `inv_${inv.id}`,
         type: 'invoice',
-        title: inv.number || `INV ${inv.id?.slice(0, 8)}`,
-        subtitle: inv.customerName || 'Customer',
-        meta: `Rs.${Number(inv.grandTotal || 0).toLocaleString()} • ${inv.paymentStatus || 'unpaid'}`,
-        score: maxScore + (inv.number?.toLowerCase().includes(q) ? 10 : 0),
+        title: str(inv.number) || `INV ${str(inv.id).slice(0, 8)}`,
+        subtitle: str(inv.customerName) || 'Customer',
+        meta: `Rs.${Number(inv.grandTotal || 0).toLocaleString()} • ${str(inv.paymentStatus) || 'unpaid'}`,
+        score: maxScore + (str(inv.number).toLowerCase().includes(q) ? 10 : 0),
+        tab: 'invoices',
         data: inv,
       })
     }
   })
 
   // Search customers
-  ;(data.customers || []).forEach(cust => {
-    const texts = [cust.name || '', cust.phone || '', cust.email || '']
-    const maxScore = Math.max(...texts.map(t => scoreMatch(t, q)))
+  ;rows(data.customers).forEach(cust => {
+    const maxScore = best([cust.name, cust.phone, cust.email])
     if (maxScore > 0) {
       results.push({
         id: `cust_${cust.id}`,
         type: 'customer',
-        title: cust.name,
-        subtitle: cust.phone || cust.email || '',
-        meta: `${cust.totalInvoices || 0} invoices • Rs.${Number(cust.totalSpent || 0).toLocaleString()} spent`,
+        title: str(cust.name) || str(cust.phone) || 'Customer',
+        subtitle: str(cust.phone) || str(cust.email),
+        meta: `${cust._count?.invoices ?? cust.totalInvoices ?? 0} invoices • Rs.${Number(cust.totalSpent || 0).toLocaleString()} spent`,
         score: maxScore + 5,
+        tab: 'customers',
         data: cust,
       })
     }
   })
 
   // Search items
-  ;(data.items || []).forEach(item => {
-    const texts = [item.name || '', item.sku || '', item.category || '', item.hsnCode || '']
-    const maxScore = Math.max(...texts.map(t => scoreMatch(t, q)))
+  ;rows(data.items).forEach(item => {
+    const maxScore = best([item.name, item.sku, item.category, item.hsnCode])
     if (maxScore > 0) {
       results.push({
         id: `item_${item.id}`,
         type: 'item',
-        title: item.name,
-        subtitle: `${item.sku} • ${item.category}`,
-        meta: `${item.quantity} ${item.unit || 'pcs'} • Rs.${Number(item.sellingPrice || 0).toLocaleString()}`,
+        title: str(item.name) || str(item.sku) || 'Item',
+        subtitle: [str(item.sku), str(item.category)].filter(Boolean).join(' • '),
+        meta: `${Number(item.quantity) || 0} ${str(item.unit) || 'pcs'} • Rs.${Number(item.sellingPrice || 0).toLocaleString()}`,
         score: maxScore,
+        tab: 'stock',
         data: item,
       })
     }
   })
 
   // Search jobs
-  ;(data.jobs || []).forEach(job => {
-    const texts = [
-      job.jobId || '',
-      job.customerName || '',
-      job.device || '',
-      job.problem || '',
-      job.customerPhone || '',
-    ]
-    const maxScore = Math.max(...texts.map(t => scoreMatch(t, q)))
+  ;rows(data.jobs).forEach(job => {
+    const maxScore = best([job.jobId, job.customerName, job.device, job.problem, job.customerPhone])
     if (maxScore > 0) {
       results.push({
         id: `job_${job.id}`,
         type: 'job',
-        title: job.jobId || `${job.device} - ${job.customerName}`,
-        subtitle: `${job.customerName} • ${job.device}`,
-        meta: `${job.status} • ${job.priority || 'Normal'} priority`,
+        title: str(job.jobId) || `${str(job.device)} - ${str(job.customerName)}`,
+        subtitle: [str(job.customerName), str(job.device)].filter(Boolean).join(' • '),
+        meta: `${str(job.status) || 'Pending'} • ${str(job.priority) || 'Normal'} priority`,
         score: maxScore,
+        tab: 'jobs',
         data: job,
       })
     }
   })
 
   // Search quotations
-  ;(data.quotations || []).forEach(qt => {
-    const texts = [qt.number || '', qt.customerName || '']
-    const maxScore = Math.max(...texts.map(t => scoreMatch(t, q)))
+  ;rows(data.quotations).forEach(qt => {
+    const maxScore = best([qt.number, qt.customerName])
     if (maxScore > 0) {
       results.push({
         id: `qt_${qt.id}`,
         type: 'quotation',
-        title: qt.number || `QT ${qt.id?.slice(0, 8)}`,
-        subtitle: qt.customerName || 'Customer',
-        meta: `Rs.${Number(qt.grandTotal || 0).toLocaleString()} • ${qt.status || 'sent'}`,
+        title: str(qt.number) || `QT ${str(qt.id).slice(0, 8)}`,
+        subtitle: str(qt.customerName) || 'Customer',
+        meta: `Rs.${Number(qt.grandTotal || 0).toLocaleString()} • ${str(qt.status) || 'sent'}`,
         score: maxScore,
+        tab: 'quotations',
         data: qt,
       })
     }
   })
 
   // Search suppliers
-  ;(data.suppliers || []).forEach(sup => {
-    const texts = [sup.name || '', sup.company || '', sup.phone || '']
-    const maxScore = Math.max(...texts.map(t => scoreMatch(t, q)))
+  ;rows(data.suppliers).forEach(sup => {
+    const maxScore = best([sup.name, sup.company, sup.phone])
     if (maxScore > 0) {
       results.push({
         id: `sup_${sup.id}`,
         type: 'supplier',
-        title: sup.name || sup.company,
-        subtitle: sup.company || sup.phone,
-        meta: sup.suppliedItems || '',
+        title: str(sup.name) || str(sup.company) || 'Supplier',
+        subtitle: str(sup.company) || str(sup.phone),
+        meta: str(sup.suppliedItems),
         score: maxScore,
+        tab: 'suppliers',
         data: sup,
       })
     }
@@ -188,28 +203,47 @@ export function universalSearch(
 /**
  * Generate smart quick actions based on context
  */
+export interface ContextAction {
+  title: string
+  description: string
+  icon: string
+  priority: number
+  actionId: string
+  /** Nav id the action opens when clicked. */
+  tab: string
+}
+
 export function generateContextActions(data: {
   invoices?: any[]
   items?: any[]
   jobs?: any[]
   dashboard?: any
-}): { title: string; description: string; icon: string; priority: number; actionId: string }[] {
-  const actions: { title: string; description: string; icon: string; priority: number; actionId: string }[] = []
+}): ContextAction[] {
+  const actions: ContextAction[] = []
+  const list = (value: unknown): any[] => {
+    if (Array.isArray(value)) return value
+    if (value && typeof value === 'object') {
+      const inner = (value as { data?: unknown }).data
+      if (Array.isArray(inner)) return inner
+    }
+    return []
+  }
 
   // Low stock
-  const lowStock = (data.items || []).filter((it: any) => Number(it.quantity) <= Number(it.minQuantity))
+  const lowStock = list(data.items).filter((it: any) => Number(it.quantity) <= Number(it.minQuantity))
   if (lowStock.length > 0) {
     actions.push({
       title: `Reorder ${lowStock.length} Low Stock Items`,
-      description: `${lowStock.slice(0, 2).map((i: any) => i.name).join(', ')}${lowStock.length > 2 ? ` +${lowStock.length - 2} more` : ''}`,
+      description: `${lowStock.slice(0, 2).map((i: any) => str(i.name)).join(', ')}${lowStock.length > 2 ? ` +${lowStock.length - 2} more` : ''}`,
       icon: 'Package',
       priority: lowStock.length > 5 ? 100 : 70,
       actionId: 'reorder_low_stock',
+      tab: 'stock',
     })
   }
 
   // Overdue invoices
-  const overdue = (data.invoices || []).filter((inv: any) => Number(inv.amountDue) > 0)
+  const overdue = list(data.invoices).filter((inv: any) => Number(inv.amountDue) > 0)
   if (overdue.length > 0) {
     const totalDue = overdue.reduce((s: number, inv: any) => s + Number(inv.amountDue), 0)
     actions.push({
@@ -218,11 +252,12 @@ export function generateContextActions(data: {
       icon: 'Wallet',
       priority: totalDue > 50000 ? 95 : 60,
       actionId: 'collect_payments',
+      tab: 'payments',
     })
   }
 
   // Pending jobs
-  const pendingJobs = (data.jobs || []).filter((j: any) => j.status === 'Pending' || j.status === 'In Progress')
+  const pendingJobs = list(data.jobs).filter((j: any) => j.status === 'Pending' || j.status === 'In Progress')
   if (pendingJobs.length > 3) {
     actions.push({
       title: `${pendingJobs.length} Service Jobs Need Attention`,
@@ -230,6 +265,7 @@ export function generateContextActions(data: {
       icon: 'Wrench',
       priority: 80,
       actionId: 'view_pending_jobs',
+      tab: 'jobs',
     })
   }
 
@@ -242,6 +278,7 @@ export function generateContextActions(data: {
       icon: 'BarChart3',
       priority: 40,
       actionId: 'view_dashboard',
+      tab: 'dashboard',
     })
   }
 
@@ -252,6 +289,7 @@ export function generateContextActions(data: {
     icon: 'Brain',
     priority: 50,
     actionId: 'ai_insights',
+    tab: 'ai',
   })
 
   return actions.sort((a, b) => b.priority - a.priority).slice(0, 6)
@@ -319,17 +357,11 @@ export function processVoiceCommand(transcript: string): { intent: string; param
 
 // ===== KEYBOARD SHORTCUTS =====
 
+// Only shortcuts the Command Center actually binds are listed. The panel
+// renders this verbatim, so anything added here must have a real handler.
 export const KEYBOARD_SHORTCUTS = [
-  { key: 'Ctrl+K / Cmd+K', description: 'Open Command Palette', category: 'Navigation' },
-  { key: 'Ctrl+N / Cmd+N', description: 'New Invoice', category: 'Actions' },
-  { key: 'Ctrl+J / Cmd+J', description: 'New Service Job', category: 'Actions' },
-  { key: 'Ctrl+F / Cmd+F', description: 'Universal Search', category: 'Search' },
-  { key: 'G then D', description: 'Go to Dashboard', category: 'Navigation' },
-  { key: 'G then S', description: 'Go to Stock', category: 'Navigation' },
-  { key: 'G then I', description: 'Go to Invoices', category: 'Navigation' },
-  { key: 'G then C', description: 'Go to Customers', category: 'Navigation' },
-  { key: 'G then J', description: 'Go to Jobs', category: 'Navigation' },
-  { key: 'G then A', description: 'Go to AI Intelligence', category: 'Navigation' },
-  { key: 'Ctrl+Shift+A', description: 'AI Insights', category: 'AI' },
-  { key: '?', description: 'Show Shortcuts Help', category: 'Help' },
+  { key: 'Ctrl+K / ⌘K', description: 'Focus universal search', category: 'Search' },
+  { key: '↑ / ↓', description: 'Move through results', category: 'Search' },
+  { key: 'Enter', description: 'Open the selected result', category: 'Search' },
+  { key: 'Esc', description: 'Clear the search box', category: 'Search' },
 ]

@@ -2,9 +2,14 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+// forwardRef is required on React 18 — a plain function component silently
+// drops `ref`, so callers that need to focus or select the field (the Command
+// Center's ⌘K handler, for one) would be holding a null ref.
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+function Input({ className, type, ...props }, ref) {
   return (
     <input
+      ref={ref}
       type={type}
       data-slot="input"
       className={cn(
@@ -17,5 +22,6 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
     />
   )
 }
+)
 
 export { Input }

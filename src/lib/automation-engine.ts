@@ -276,13 +276,75 @@ export const AUTOMATION_TEMPLATES: AutomationRule[] = [
 
 // ===== AUTOMATION ENGINE CLASS =====
 
+/**
+ * Repair a rule that came back from localStorage.
+ *
+ * Persisted rules are whatever the template shape was on the day they were
+ * saved. When a template later gains or renames a field, the restored object
+ * is missing it, and the Hub renders `rule.stats.totalRuns` /
+ * `rule.trigger.type.replace(...)` straight into JSX — an undefined there
+ * throws during render and the panel's error boundary swallows the whole tab.
+ * Merging over the matching template (or over safe defaults for user-created
+ * rules) keeps old saved state usable instead of fatal.
+ */
+function reviveRule(saved: any): AutomationRule | null {
+  if (!saved || typeof saved !== 'object' || typeof saved.id !== 'string') return null
+  const template = AUTOMATION_TEMPLATES.find(t => t.id === saved.id)
+  const base = template ?? ({} as Partial<AutomationRule>)
+
+  const trigger = saved.trigger ?? base.trigger
+  const actions = Array.isArray(saved.actions) ? saved.actions : base.actions
+
+  return {
+    ...base,
+    ...saved,
+    name: String(saved.name ?? base.name ?? 'Untitled workflow'),
+    description: String(saved.description ?? base.description ?? ''),
+    enabled: saved.enabled === true,
+    category: saved.category ?? base.category ?? 'sales',
+    icon: String(saved.icon ?? base.icon ?? 'Bot'),
+    color: String(saved.color ?? base.color ?? 'slate'),
+    createdAt: String(saved.createdAt ?? base.createdAt ?? new Date().toISOString()),
+    trigger: {
+      type: trigger?.type ?? 'custom_schedule',
+      config: trigger?.config ?? {},
+    },
+    actions: Array.isArray(actions) ? actions.filter((a: any) => a && typeof a.type === 'string') : [],
+    stats: {
+      totalRuns: Number(saved.stats?.totalRuns) || 0,
+      lastRun: saved.stats?.lastRun,
+      successRate: Number.isFinite(Number(saved.stats?.successRate)) ? Number(saved.stats.successRate) : 100,
+      avgExecutionMs: Number(saved.stats?.avgExecutionMs) || 0,
+    },
+  } as AutomationRule
+}
+
+/** Same idea for logs — a malformed entry must not break the activity list. */
+function reviveLog(saved: any): AutomationLog | null {
+  if (!saved || typeof saved !== 'object') return null
+  const status = ['success', 'failed', 'skipped', 'pending'].includes(saved.status) ? saved.status : 'pending'
+  return {
+    id: String(saved.id ?? `log_${Math.random().toString(36).slice(2)}`),
+    ruleId: String(saved.ruleId ?? ''),
+    ruleName: String(saved.ruleName ?? 'Workflow'),
+    trigger: saved.trigger ?? 'custom_schedule',
+    status,
+    message: String(saved.message ?? ''),
+    executionTimeMs: Number(saved.executionTimeMs) || 0,
+    timestamp: String(saved.timestamp ?? new Date().toISOString()),
+    data: saved.data,
+  }
+}
+
 export class AutomationEngine {
   private rules: AutomationRule[]
   private logs: AutomationLog[] = []
   private maxLogs = 100
 
   constructor(rules: AutomationRule[] = AUTOMATION_TEMPLATES) {
-    this.rules = rules
+    // Deep-copy so enabling a rule doesn't mutate the exported template array
+    // that every other consumer (and getTemplates()) reads from.
+    this.rules = rules.map(r => ({ ...r, stats: { ...r.stats } }))
   }
 
   getRules() {
@@ -496,12 +558,22 @@ export class AutomationEngine {
       if (saved) {
         const parsed = JSON.parse(saved)
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.rules = parsed
+          const revived = parsed.map(reviveRule).filter((r): r is AutomationRule => r !== null)
+          // Templates shipped since the save was written are appended, so a new
+          // release's workflows show up instead of staying invisible forever.
+          const known = new Set(revived.map(r => r.id))
+          const added = AUTOMATION_TEMPLATES
+            .filter(t => !known.has(t.id))
+            .map(t => ({ ...t, stats: { ...t.stats } }))
+          if (revived.length > 0) this.rules = [...revived, ...added]
         }
       }
       const savedLogs = localStorage.getItem('smartcomp_automation_logs')
       if (savedLogs) {
-        this.logs = JSON.parse(savedLogs)
+        const parsedLogs = JSON.parse(savedLogs)
+        if (Array.isArray(parsedLogs)) {
+          this.logs = parsedLogs.map(reviveLog).filter((l): l is AutomationLog => l !== null)
+        }
       }
     } catch {}
     return this.rules

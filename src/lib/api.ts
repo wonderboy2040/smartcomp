@@ -20,6 +20,25 @@ type Updater<T> = (prev: T | undefined) => T
 /** Any JSON-serialisable request payload sent to an /api route. */
 export type ApiBody = Record<string, unknown>
 
+/**
+ * Normalise a list endpoint's response to a plain array.
+ *
+ * Several routes switch shape depending on the request: `/api/customers`
+ * returns a bare array under the default limit but `{ data, pagination }`
+ * once the row count exceeds it, and `/api/items` does the same when `?page=`
+ * is present. Consumers that assumed "always an array" crashed with
+ * `x.forEach is not a function` on exactly the shops that had grown past the
+ * threshold. Route every list read through this instead.
+ */
+export function asArray<T = any>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[]
+  if (value && typeof value === 'object') {
+    const inner = (value as { data?: unknown }).data
+    if (Array.isArray(inner)) return inner as T[]
+  }
+  return []
+}
+
 const cache = new Map<string, any>()
 const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
@@ -437,14 +456,19 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
     const ts = timestamps.get(url) || 0
     const isStale = Date.now() - ts > STALE_MS
     if (!cached || isStale) {
-      doFetch(url, optsRef.current)
+      // Swallow here: doFetchWithRetry already records the message under
+      // `__error:<url>` and notifies subscribers, so the hook's `error` field
+      // surfaces it. Without this catch a single failing endpoint produced an
+      // *unhandled* promise rejection, which Next's dev overlay reports as a
+      // full-screen runtime error even though the panel itself is fine.
+      doFetch(url, optsRef.current).catch(() => {})
     }
   }, [url, method, bodyKey])
 
   const refetch = useCallback(() => {
     if (!url) return
     timestamps.set(url, 0)
-    doFetch(url, optsRef.current)
+    doFetch(url, optsRef.current).catch(() => {})
   }, [url, method, bodyKey])
 
   const data: T | null = url ? (cache.get(url) ?? null) : null
