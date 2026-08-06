@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -17,7 +18,7 @@ import {
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, sumBy } from '@/lib/calc'
-import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Tag, Folder, IndianRupee, TrendingUp, Boxes, Percent } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Package, AlertTriangle, Download, Tag, Folder, IndianRupee, TrendingUp, Boxes, Percent, FileText, Hash, KeyRound } from 'lucide-react'
 import { toCSV, downloadCSV } from '@/lib/utils'
 
 export const PRESET_CATEGORIES = [
@@ -473,6 +474,8 @@ function ItemDialog({
           ? { ...editing }
           : {
               name: '', sku: '', category: 'General', hsnCode: '',
+              description: '', serialNumbers: '',
+              isDigitalProduct: false, digitalKeys: '',
               gstApplicable: true, gstRate: 18,
               costPrice: 0, sellingPrice: 0, quantity: 0, minQuantity: 0,
               unit: 'pcs', supplierId: '',
@@ -681,6 +684,67 @@ function ItemDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* ── Product Description / Specification ── */}
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <FileText className="w-3.5 h-3.5 text-violet-500" />
+              <Label>Product Description / Specification</Label>
+            </div>
+            <Textarea
+              value={form.description || ''}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Enter product details, specs, features, warranty info etc..."
+              rows={3}
+              className="resize-y"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">Add detailed specs like RAM, Storage, Processor, Warranty etc.</p>
+          </div>
+
+          {/* ── Serial Numbers ── */}
+          <div className="sm:col-span-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Hash className="w-3.5 h-3.5 text-blue-500" />
+              <Label>Serial Numbers</Label>
+            </div>
+            <Textarea
+              value={form.serialNumbers || ''}
+              onChange={(e) => setForm({ ...form, serialNumbers: e.target.value })}
+              placeholder="Enter serial numbers (one per line)&#10;e.g.&#10;SN-001-ABC-2024&#10;SN-002-DEF-2024"
+              rows={3}
+              className="resize-y font-mono text-xs"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">One serial number per line. Track individual units for warranty & service.</p>
+          </div>
+
+          {/* ── Digital Product Keys ── */}
+          <div className="sm:col-span-2 space-y-2">
+            <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+              <Checkbox
+                id="digitalProduct"
+                checked={form.isDigitalProduct === true}
+                onCheckedChange={(v) => setForm({ ...form, isDigitalProduct: v === true })}
+              />
+              <div className="flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                <Label htmlFor="digitalProduct" className="cursor-pointer text-amber-800 dark:text-amber-300">
+                  This is a Digital Product (Software Key / License)
+                </Label>
+              </div>
+            </div>
+            {form.isDigitalProduct && (
+              <div>
+                <Textarea
+                  value={form.digitalKeys || ''}
+                  onChange={(e) => setForm({ ...form, digitalKeys: e.target.value })}
+                  placeholder="Enter license keys / activation codes (one per line)&#10;e.g.&#10;XXXXX-XXXXX-XXXXX-XXXXX-XXXXX&#10;YYYYY-YYYYY-YYYYY-YYYYY-YYYYY"
+                  rows={4}
+                  className="resize-y font-mono text-xs"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">One key per line. Keys will be tracked and can be assigned to customers on sale.</p>
+              </div>
+            )}
           </div>
         </div>
 
