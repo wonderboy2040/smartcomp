@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useFetch, apiPost, apiPut } from '@/lib/api'
+import { useFetch, apiPost, apiPut, asArray } from '@/lib/api'
 import { safeJsonParse } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -255,27 +255,35 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
   const [roundOff, setRoundOff] = useState(false)
   const [gstMode, setGstMode] = useState<'gst' | 'non-gst'>('gst')
 
-  const { data: customers } = useFetch<any[]>('/api/customers', undefined)
+  // /api/customers paginates at 100 by default AND switches to a
+  // { data, pagination } wrapper past that. Unpaginated, a shop with 120
+  // customers could only pick from the first 100 — and the wrapper made
+  // `fetched.map` throw outright. Ask for the whole list and unwrap defensively.
+  const { data: customersRaw } = useFetch<any>('/api/customers?limit=100000', undefined)
 
   // Merge fetched customers with any newly created ones
   const allCustomers = useMemo(() => {
-    const fetched = customers || []
+    const fetched = asArray<any>(customersRaw)
     const ids = new Set(fetched.map((c: any) => c.id))
     const extras = localCustomers.filter((c) => !ids.has(c.id))
     return [...extras, ...fetched]
-  }, [customers, localCustomers])
+  }, [customersRaw, localCustomers])
 
-  // Debounced item search
+  // Item search. The whole catalogue is fetched ONCE from the same URL the
+  // Stock panel uses, so the picker opens from cache with zero wait and every
+  // item is present. Searching then filters locally — instant, and no
+  // per-keystroke round-trip to Google Sheets.
+  //
+  // The search term is debounced only to throttle RE-RENDERS of a potentially
+  // long table, not to delay a network call.
   const [itemSearch, setItemSearch] = useState('')
   const [debouncedItemSearch, setDebouncedItemSearch] = useState('')
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedItemSearch(itemSearch), 250)
+    const t = setTimeout(() => setDebouncedItemSearch(itemSearch), 150)
     return () => clearTimeout(t)
   }, [itemSearch])
-  const itemsUrl = debouncedItemSearch
-    ? `/api/items?search=${encodeURIComponent(debouncedItemSearch)}&limit=30`
-    : '/api/items?limit=30'
-  const { data: stockItems } = useFetch<any[]>(itemsUrl, undefined)
+  const { data: stockItemsRaw } = useFetch<any[]>('/api/items', undefined)
+  const stockItems = useMemo(() => asArray<any>(stockItemsRaw), [stockItemsRaw])
   const [showItemPicker, setShowItemPicker] = useState(false)
 
   // Custom item state — now includes description & specification
@@ -337,16 +345,24 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
     return allCustomers.find((c: any) => c.id === customerId)
   }, [allCustomers, customerId])
 
+  // NO row cap. This used to slice to the first 20 items (30 when searching),
+  // so on any shop with more than 20 products "Add from Stock" silently showed
+  // a fraction of the catalogue and the rest looked missing. The picker is
+  // scrollable and searchable — showing everything is the whole point of it.
   const filteredStock = useMemo(() => {
-    const all = stockItems || []
-    if (!itemSearch) return all.slice(0, 20)
-    const q = itemSearch.toLowerCase()
-    return all.filter((i: any) =>
+    const q = debouncedItemSearch.trim().toLowerCase()
+    if (!q) return stockItems
+    // Same fields the Stock panel searches on, so a term that finds an item
+    // there also finds it here.
+    return stockItems.filter((i: any) =>
       String(i?.name || '').toLowerCase().includes(q) ||
       String(i?.sku || '').toLowerCase().includes(q) ||
-      String(i?.category || '').toLowerCase().includes(q)
-    ).slice(0, 30)
-  }, [stockItems, itemSearch])
+      String(i?.category || '').toLowerCase().includes(q) ||
+      String(i?.brand || '').toLowerCase().includes(q) ||
+      String(i?.hsnCode || '').toLowerCase().includes(q) ||
+      String(i?.description || '').toLowerCase().includes(q)
+    )
+  }, [stockItems, debouncedItemSearch])
 
   useEffect(() => {
     if (discountPercent > 0) {
@@ -1007,14 +1023,22 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
       <Dialog open={showItemPicker} onOpenChange={setShowItemPicker}>
         <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto bg-white p-0">
           <DialogHeader className="p-4 pb-2 border-b bg-slate-50 sticky top-0 z-10">
-            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2"><Package className="w-5 h-5" />Select Item from Stock - Profit Visible</DialogTitle>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Package className="w-5 h-5" />Select Item from Stock - Profit Visible
+              {/* Explicit count so it is obvious the FULL catalogue is loaded. */}
+              <Badge variant="outline" className="ml-auto bg-white text-slate-700 border-slate-200 font-bold text-[10px]">
+                {debouncedItemSearch
+                  ? `${filteredStock.length} of ${stockItems.length} items`
+                  : `${stockItems.length} items`}
+              </Badge>
+            </DialogTitle>
             <div className="relative mt-3">
               <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              <Input placeholder="Search by name, SKU, category..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} className="pl-10 h-11 bg-white border-slate-200 font-medium" autoFocus />
+              <Input placeholder="Search by name, SKU, category, HSN..." value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} className="pl-10 h-11 bg-white border-slate-200 font-medium" autoFocus />
             </div>
           </DialogHeader>
           <div className="p-0">
-            <div className="max-h-[50vh] overflow-y-auto">
+            <div className="max-h-[55vh] overflow-y-auto">
               <Table>
                 <TableHeader className="sticky top-0 bg-slate-50 z-10">
                   <TableRow>
@@ -1028,7 +1052,9 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                   {filteredStock.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8 text-slate-500">
-                        No items found for &quot;{itemSearch}&quot; - Try different keyword or add custom item
+                        {itemSearch
+                          ? `No items match "${itemSearch}" — try a different keyword, or use Quick Add Custom Item below.`
+                          : 'No stock items yet. Add items in the Stock panel, or use Quick Add Custom Item below.'}
                       </TableCell>
                     </TableRow>
                   ) : filteredStock.map((item: any) => {
