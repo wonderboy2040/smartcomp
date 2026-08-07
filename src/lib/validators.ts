@@ -19,6 +19,7 @@ export const itemSchema = z.object({
   hsnCode: z.string().max(20).optional(),
   supplierId: z.string().max(100).optional(),
   warrantyDays: z.number().min(0).optional(),
+  isDigitalProduct: z.boolean().optional(),
 })
 
 export const customerSchema = z.object({

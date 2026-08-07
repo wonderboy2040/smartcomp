@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listRows, createInvoiceUltra } from '@/lib/sheets-client'
 import { computeInvoice, type LineItem } from '@/lib/calc'
 import { apiLimiter, writeLimiter, getClientIp } from '@/lib/rate-limit'
+import { markUnitsSold, parseUnitList } from '@/lib/item-units'
 
 // Normalize invoice paymentType → Payments sheet `type` label
 function normalizePaymentType(raw: string): string {
@@ -153,10 +154,37 @@ export async function POST(req: NextRequest) {
       // Server will fetch customer and generate number
     })
 
+    // Retire the serial numbers / digital keys handed over on this invoice so
+    // the same licence key is never sold twice. Deliberately after the invoice
+    // write and non-fatal: a failure here must not roll back a completed sale,
+    // it only leaves the unit marked in-stock for manual correction.
+    const invoiceId = String(result?.data?.id || '')
+    const invoiceNumber = String(result?.data?.number || '')
+    let unitsMarked = 0
+    if (invoiceId) {
+      const assignments = calc.items.flatMap((line: any) => [
+        { itemId: line.itemId, type: 'key' as const, values: parseUnitList(line.productKeys) },
+        { itemId: line.itemId, type: 'serial' as const, values: parseUnitList(line.serialNumbers) },
+      ]).filter((a) => a.itemId && a.values.length > 0)
+
+      if (assignments.length > 0) {
+        unitsMarked = await markUnitsSold(assignments, {
+          id: invoiceId,
+          number: invoiceNumber,
+          customerName: String(result?.data?.customerName || ''),
+          date: date || new Date().toISOString(),
+        }).catch((err) => {
+          console.error('Failed to mark item units sold for invoice', invoiceNumber, err)
+          return 0
+        })
+      }
+    }
+
     const elapsed = Date.now() - startTime
 
     return NextResponse.json({
       ...result.data,
+      unitsMarkedSold: unitsMarked,
       ultraFast: true,
       ultraUltraFast: true,
       version: '6.0',

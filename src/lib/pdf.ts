@@ -429,17 +429,30 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
     ? ['#', 'Item name', 'Qty', 'Rate (Rs.)', 'Amount (Rs.)']
     : ['#', 'Item name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable', 'GST (Rs.)', 'Amount (Rs.)']
 
+  // Serial numbers / digital product keys print under the item name — the
+  // customer's only record of which licence key they actually received.
+  const itemLabel = (item: any) => {
+    let label = item.name + (item.sku ? `\nSKU: ${item.sku}` : '')
+    if (item.description) label += `\n${item.description}`
+    if (item.specification) label += `\nSpec: ${item.specification}`
+    const keys: string[] = Array.isArray(item.productKeys) ? item.productKeys.filter(Boolean) : []
+    const serials: string[] = Array.isArray(item.serialNumbers) ? item.serialNumbers.filter(Boolean) : []
+    if (keys.length > 0) label += `\nProduct Key${keys.length > 1 ? 's' : ''}: ${keys.join(', ')}`
+    if (serials.length > 0) label += `\nSerial No${serials.length > 1 ? 's' : ''}: ${serials.join(', ')}`
+    return label
+  }
+
   const tableBody = isNonGst
     ? data.calc.items.map((item, index) => [
         index + 1,
-        item.name + (item.sku ? `\nSKU: ${item.sku}` : ''),
+        itemLabel(item),
         item.quantity,
         item.rate.toFixed(2),
         item.amount.toFixed(2),
       ])
     : data.calc.items.map((item, index) => [
         index + 1,
-        item.name + (item.sku ? `\nSKU: ${item.sku}` : ''),
+        itemLabel(item),
         item.hsnCode || '-',
         item.quantity,
         item.rate.toFixed(2),

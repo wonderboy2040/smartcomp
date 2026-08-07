@@ -25,7 +25,7 @@
 
 const SCHEMAS = {
   Shop: ['id', 'name', 'owner', 'phone', 'email', 'address', 'gstNumber', 'state', 'invoicePrefix', 'quotationPrefix', 'termsInvoice', 'termsQuotation', 'upiId', 'bankName', 'bankAccount', 'bankIfsc', 'bankBranch', 'pdfTemplate', 'adBannerVariant', 'createdAt', 'updatedAt', 'deleted'],
-  Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'warrantyDays', 'createdAt', 'updatedAt', 'deleted'],
+  Items: ['id', 'name', 'sku', 'category', 'description', 'gstApplicable', 'gstRate', 'costPrice', 'sellingPrice', 'quantity', 'minQuantity', 'unit', 'hsnCode', 'supplierId', 'warrantyDays', 'isDigitalProduct', 'createdAt', 'updatedAt', 'deleted'],
   Customers: ['id', 'name', 'phone', 'email', 'address', 'gstNumber', 'state', 'creditBalance', 'creditLimit', 'creditDays', 'creditScore', 'birthday', 'createdAt', 'updatedAt', 'deleted'],
   Suppliers: ['id', 'name', 'phone', 'whatsappNumber', 'email', 'company', 'address', 'suppliedItems', 'active', 'includeInAutoEnquiry', 'createdAt', 'updatedAt', 'deleted'],
   Invoices: ['id', 'number', 'customerId', 'customerName', 'customerPhone', 'customerGstin', 'date', 'itemsJson', 'serialsJson', 'subtotal', 'gstAmount', 'courierCharges', 'otherCharges', 'discount', 'grandTotal', 'totalCost', 'profit', 'paymentType', 'paymentStatus', 'amountPaid', 'amountDue', 'notes', 'template', 'gstMode', 'shareToken', 'createdAt', 'deleted'],
@@ -35,7 +35,10 @@ const SCHEMAS = {
   Jobs: ['id', 'jobId', 'trackToken', 'customerName', 'customerMobile', 'deviceType', 'brandModel', 'serialNumber', 'problemDesc', 'accessories', 'serviceType', 'priority', 'estimatedAmount', 'advanceAmount', 'advanceMode', 'status', 'assignedEngineer', 'partsUsedJson', 'finalAmount', 'serviceCharge', 'paidAmount', 'paymentMode', 'paymentType', 'grossProfit', 'partsProfit', 'serviceProfit', 'notes', 'diagnosisNotes', 'warrantyDays', 'warrantyExpiry', 'statusHistoryJson', 'completedDate', 'reviewSent', 'reviewSentAt', 'feedbackRating', 'feedbackComment', 'feedbackAt', 'createdAt', 'updatedAt', 'deliveredAt', 'deleted'],
   ServicePayments: ['id', 'jobId', 'customerName', 'amount', 'mode', 'type', 'date', 'notes', 'createdAt', 'deleted'],
   Expenses: ['id', 'category', 'description', 'amount', 'mode', 'date', 'vendor', 'reference', 'notes', 'createdAt', 'deleted'],
-  ItemSerials: ['id', 'itemId', 'itemName', 'serialNumber', 'status', 'invoiceId', 'invoiceNumber', 'customerName', 'purchaseDate', 'warrantyDays', 'warrantyExpiry', 'costPrice', 'notes', 'createdAt', 'updatedAt', 'deleted'],
+  // `type` distinguishes a physical unit serial ('serial') from a digital
+  // licence / activation key ('key'). Both live here so one sheet tracks what
+  // was sold to whom, and both print on the invoice for the units sold.
+  ItemSerials: ['id', 'itemId', 'itemName', 'serialNumber', 'type', 'status', 'invoiceId', 'invoiceNumber', 'customerName', 'purchaseDate', 'warrantyDays', 'warrantyExpiry', 'costPrice', 'notes', 'createdAt', 'updatedAt', 'deleted'],
   PersonalExpenditure: ['id', 'type', 'category', 'description', 'amount', 'mode', 'date', 'person', 'notes', 'createdAt', 'deleted'],
   Campaigns: ['id', 'name', 'segment', 'segmentDataJson', 'message', 'status', 'totalRecipients', 'sentCount', 'deliveredCount', 'readCount', 'scheduledAt', 'sentAt', 'createdAt', 'deleted'],
   AMCContracts: ['id', 'contractNumber', 'customerId', 'customerName', 'customerPhone', 'customerAddress', 'devicesCoveredJson', 'startDate', 'endDate', 'fee', 'frequency', 'visitsIncluded', 'visitsUsed', 'lastVisitDate', 'nextVisitDate', 'status', 'notes', 'createdAt', 'updatedAt', 'deleted'],

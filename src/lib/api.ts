@@ -44,6 +44,79 @@ const timestamps = new Map<string, number>()
 const subscribers = new Map<string, Set<() => void>>()
 const inflight = new Map<string, Promise<any>>()
 
+// ===== PENDING CREATES — anti-clobber guard =====
+// apiPost/apiPostUltraFast insert an optimistic row, then POST in the
+// background. Panels commonly call refetch() right after the dialog closes,
+// so a GET can land BEFORE the POST response. That GET's payload does not
+// contain the new row yet, and setCache() replaced the whole list with it —
+// the optimistic row vanished, and when the POST finally resolved its
+// "replace tempId" pass found nothing to replace. Net effect: a newly added
+// stock item disappeared and only came back on a much later refetch.
+//
+// Keeping in-flight creates here lets doFetchWithRetry() re-merge them into
+// every server payload until the real row is confirmed.
+const pendingCreates = new Map<string, Map<string, any>>()
+
+function baseUrlOf(url: string): string {
+  return url.split('?')[0].split('#')[0]
+}
+
+function addPendingCreate(base: string, tempId: string, item: any) {
+  let m = pendingCreates.get(base)
+  if (!m) {
+    m = new Map()
+    pendingCreates.set(base, m)
+  }
+  m.set(tempId, item)
+}
+
+function clearPendingCreate(base: string, tempId: string) {
+  const m = pendingCreates.get(base)
+  if (!m) return
+  m.delete(tempId)
+  if (m.size === 0) pendingCreates.delete(base)
+}
+
+function mergePendingCreates(url: string, data: any): any {
+  if (!Array.isArray(data)) return data
+  const m = pendingCreates.get(baseUrlOf(url))
+  if (!m || m.size === 0) return data
+  const present = new Set(data.map((row: any) => String(row?.id)))
+  const missing = Array.from(m.values()).filter((row: any) => !present.has(String(row?.id)))
+  return missing.length > 0 ? [...missing, ...data] : data
+}
+
+/**
+ * Write a freshly created row into every cached list for its endpoint.
+ * Replaces the optimistic placeholder when it is still there, and otherwise
+ * prepends the row — the placeholder may have been dropped by a refetch that
+ * raced the POST.
+ */
+function commitCreatedRow(base: string, tempId: string, row: any) {
+  for (const key of Array.from(cache.keys())) {
+    if (baseUrlOf(key) !== base || !Array.isArray(cache.get(key))) continue
+    mutate<any[]>(key, (prev) => {
+      const list = prev ? prev.slice() : []
+      const idx = list.findIndex((x: any) => String(x?.id) === String(tempId))
+      const merged = { ...row, _pending: false, _optimistic: false, _failed: false }
+      if (idx !== -1) {
+        list[idx] = merged
+        return list
+      }
+      if (list.some((x: any) => String(x?.id) === String(row?.id))) return list
+      return [merged, ...list]
+    })
+  }
+}
+
+/** Drop the optimistic placeholder from every cached list for its endpoint. */
+function rollbackCreatedRow(base: string, tempId: string) {
+  for (const key of Array.from(cache.keys())) {
+    if (baseUrlOf(key) !== base || !Array.isArray(cache.get(key))) continue
+    mutate<any[]>(key, (prev) => (prev ? prev.filter((x: any) => String(x?.id) !== String(tempId)) : []))
+  }
+}
+
 // ===== LOCAL STORAGE PERSISTENCE — INSTANT LOADING =====
 // On page refresh, in-memory cache is lost → panels show "Loading..." for 2-5s
 // while fetch completes. By persisting cache to localStorage, we can restore
@@ -290,8 +363,13 @@ function setQuantumMem(key: string, data: any): string {
 const STALE_MS = 180 * 1000 // 180s — longer cache = fewer refetches = faster perceived load
 const RETRY_ATTEMPTS = 1
 const RETRY_DELAY = 400
-const FETCH_TIMEOUT_MS = 15000 // 15s for writes — server-side Apps Script needs 10s, add network buffer
-const QUANTUM_FETCH_TIMEOUT = 12000 // 12s for GET — server-side Apps Script needs 8s, add network buffer
+// Timeouts must exceed the SERVER's worst-case Apps Script budget, otherwise
+// the browser aborts a request the server is still legitimately retrying and
+// the user sees "server taking time" for a call that was about to succeed.
+// Server budget (see sheets-client.ts): GET 8s + 0.3s backoff + 6s = ~14.3s,
+// POST 10s + 0.3s backoff + 8s = ~18.3s. Add network buffer on top of each.
+const FETCH_TIMEOUT_MS = 26000 // writes
+const QUANTUM_FETCH_TIMEOUT = 20000 // GET
 const DASHBOARD_INVALIDATE_DEBOUNCE = 600
 
 // Offline detection
@@ -479,8 +557,12 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
   // This is what makes the app feel "ultra fast" on repeat visits.
   const loading = !!url && !hasEverLoaded && data === null
   const error = url ? (cache.get(`__error:${url}`) ?? null) : null
+  // Set when a background refresh failed but cached data is still on screen.
+  // Panels can show this as a soft "showing cached data" hint instead of the
+  // blocking error they used to get on every Apps Script hiccup.
+  const staleWarning = url ? (cache.get(`__stale:${url}`) ?? null) : null
 
-  return { data, loading, error, refetch, isOnline }
+  return { data, loading, error, staleWarning, refetch, isOnline }
 }
 
 async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1): Promise<any> {
@@ -519,7 +601,11 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
       throw new Error(errorMessage)
     }
     
-    const data = await res.json()
+    const raw = await res.json()
+    // Re-attach any create that is still in flight — the server payload cannot
+    // know about it yet, and dropping it here is what made a newly added item
+    // vanish from the list until the next stale refetch.
+    const data = mergePendingCreates(url, raw)
 
     // Quantum: hash check like lastCloudDataHash to skip redundant re-renders.
     // IMPORTANT: do NOT mutate lastDataHash here — setCache() is the single owner
@@ -533,6 +619,8 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
       if (existing !== undefined) {
         timestamps.set(url, Date.now())
         lastPullTime.set(url, Date.now())
+        cache.delete(`__error:${url}`)
+        cache.delete(`__stale:${url}`)
         return existing
       }
     }
@@ -542,6 +630,7 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
     const filtered = applyDeletedFilter(url, data)
     setCache(url, filtered)
     cache.delete(`__error:${url}`)
+    cache.delete(`__stale:${url}`)
     return filtered
   } catch (e: any) {
     if (attempt <= RETRY_ATTEMPTS && (e.name === 'AbortError' || e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
@@ -549,6 +638,19 @@ async function doFetchWithRetry(url: string, options?: RequestInit, attempt = 1)
       return doFetchWithRetry(url, options, attempt + 1)
     }
     const normalized = normalizeError(e)
+    // A failed BACKGROUND refresh must not blank out a panel that already has
+    // data. Google Apps Script is slow and occasionally times out; surfacing
+    // "server is slow" over a perfectly good cached list is what made the app
+    // feel broken. Keep showing the data, retry on the next cycle, and only
+    // report a hard error when there is nothing to show.
+    const existing = cache.get(url)
+    if (existing !== undefined) {
+      // Nudge the timestamp forward a little so the next render does not
+      // hammer the same failing endpoint on every keystroke.
+      timestamps.set(url, Date.now() - STALE_MS + 15000)
+      cache.set(`__stale:${url}`, normalized?.message || 'Refresh failed')
+      return existing
+    }
     cache.set(`__error:${url}`, normalized?.message || 'Failed')
     notify(url)
     throw normalized
@@ -573,15 +675,15 @@ function doFetch(url: string, options?: RequestInit) {
 // syncs to server in background, then replaces temp with real data.
 // On failure, removes temp item and throws.
 export async function apiPost(url: string, body: ApiBody) {
-  const base = url.split('?')[0].split('#')[0]
+  const base = baseUrlOf(url)
   const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   const tempItem = { ...body, id: tempId, _pending: true, createdAt: new Date().toISOString() }
 
-  const affectedKeys: string[] = []
+  // Register BEFORE the optimistic write so a refetch that lands mid-POST
+  // re-merges the row instead of dropping it.
+  addPendingCreate(base, tempId, tempItem)
   for (const key of Array.from(cache.keys())) {
-    const keyBase = key.split('?')[0].split('#')[0]
-    if (keyBase === base && Array.isArray(cache.get(key))) {
-      affectedKeys.push(key)
+    if (baseUrlOf(key) === base && Array.isArray(cache.get(key))) {
       // INSTANT optimistic — UI shows the item before server responds
       mutate<any[]>(key, (prev) => (prev ? [tempItem, ...prev] : [tempItem]))
     }
@@ -590,6 +692,7 @@ export async function apiPost(url: string, body: ApiBody) {
 
   // Offline mode — queue and return temp
   if (!isOnline) {
+    clearPendingCreate(base, tempId)
     try {
       const { addToQueue } = await import('./offline-queue')
       await addToQueue({
@@ -617,18 +720,12 @@ export async function apiPost(url: string, body: ApiBody) {
     const data = await r.json()
     if (!r.ok) throw new Error(data.error || 'Failed to create')
 
-    // Replace temp item with real server data
-    for (const key of affectedKeys) {
-      mutate<any[]>(key, (prev) =>
-        prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false } : x)) : []
-      )
-    }
+    clearPendingCreate(base, tempId)
+    commitCreatedRow(base, tempId, data)
     return data
   } catch (e) {
-    // Rollback — remove temp item
-    for (const key of affectedKeys) {
-      mutate<any[]>(key, (prev) => (prev ? prev.filter((x) => x.id !== tempId) : []))
-    }
+    clearPendingCreate(base, tempId)
+    rollbackCreatedRow(base, tempId)
     throw normalizeError(e)
   }
 }
@@ -637,7 +734,7 @@ export async function apiPost(url: string, body: ApiBody) {
 // Returns temp item INSTANTLY (<50ms), syncs to Google Sheets in background
 // If offline, queues to IndexedDB and syncs when online
 export async function apiPostUltraFast(url: string, body: ApiBody, options: { instantClose?: boolean } = {}): Promise<any> {
-  const base = url.split('?')[0].split('#')[0]
+  const base = baseUrlOf(url)
   const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   
   // Generate client-side number instantly for optimistic display
@@ -660,12 +757,11 @@ export async function apiPostUltraFast(url: string, body: ApiBody, options: { in
     createdAt: new Date().toISOString() 
   }
 
-  // INSTANT optimistic update
-  const affectedKeys: string[] = []
+  // INSTANT optimistic update. Registered as a pending create first so the
+  // refetch panels fire on dialog-close cannot wipe the row out again.
+  addPendingCreate(base, tempId, tempItem)
   for (const key of Array.from(cache.keys())) {
-    const keyBase = key.split('?')[0].split('#')[0]
-    if (keyBase === base && Array.isArray(cache.get(key))) {
-      affectedKeys.push(key)
+    if (baseUrlOf(key) === base && Array.isArray(cache.get(key))) {
       mutate<any[]>(key, (prev) => (prev ? [tempItem, ...prev] : [tempItem]))
     }
   }
@@ -673,6 +769,7 @@ export async function apiPostUltraFast(url: string, body: ApiBody, options: { in
 
   // If offline, queue and return temp instantly
   if (!isOnline) {
+    clearPendingCreate(base, tempId)
     try {
       const { addToQueue } = await import('./offline-queue')
       await addToQueue({
@@ -702,15 +799,15 @@ export async function apiPostUltraFast(url: string, body: ApiBody, options: { in
       const data = await r.json()
       if (!r.ok) throw new Error(data.error || 'Failed to create')
 
-      for (const key of affectedKeys) {
-        mutate<any[]>(key, (prev) =>
-          prev ? prev.map((x) => (x.id === tempId ? { ...data, _pending: false, _optimistic: false } : x)) : []
-        )
-      }
+      clearPendingCreate(base, tempId)
+      commitCreatedRow(base, tempId, data)
       return data
     } catch (e) {
-      // On failure, keep temp but mark as failed, or rollback
-      for (const key of affectedKeys) {
+      // On failure, keep the row visible but flag it so the user can see the
+      // create did not land (rather than silently losing what they typed).
+      clearPendingCreate(base, tempId)
+      for (const key of Array.from(cache.keys())) {
+        if (baseUrlOf(key) !== base || !Array.isArray(cache.get(key))) continue
         mutate<any[]>(key, (prev) => (prev ? prev.map((x) => x.id === tempId ? { ...x, _pending: false, _failed: true } : x) : []))
       }
       throw e

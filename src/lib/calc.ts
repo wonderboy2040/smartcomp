@@ -13,6 +13,14 @@ export interface LineItem {
   gstRate: number
   costPrice?: number
   discount?: number
+  /**
+   * Tracked units handed over with this line: physical serial numbers and
+   * digital licence / activation keys. Stored on the line (and therefore in
+   * the invoice's itemsJson) so the printed invoice is a permanent record of
+   * exactly which key the customer received.
+   */
+  serialNumbers?: string[]
+  productKeys?: string[]
 }
 
 export interface ComputedLineItem extends LineItem {

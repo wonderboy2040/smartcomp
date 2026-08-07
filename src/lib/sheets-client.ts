@@ -107,6 +107,35 @@ function isRecentlyDeleted(sheet: string, id: string): boolean {
   return true
 }
 
+// ===== STALE FALLBACK — last known good payload per key =====
+// Google Apps Script is a shared, cold-starting runtime: an occasional 8s
+// timeout is normal, not a real outage. Previously ANY such blip threw
+// straight through to the panel as "server taking time", even though we had
+// a perfectly usable copy of the data from 30 seconds earlier. Keeping the
+// last successful payload (well past the normal TTL) lets a failed refresh
+// degrade to slightly-stale data instead of an error screen.
+const staleCache = new Map<string, { data: any; at: number }>()
+const STALE_FALLBACK_MAX_AGE = 30 * 60 * 1000 // 30 min
+const MAX_STALE_SIZE = 300
+
+function getStale<T>(key: string): T | null {
+  const entry = staleCache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.at > STALE_FALLBACK_MAX_AGE) {
+    staleCache.delete(key)
+    return null
+  }
+  return entry.data as T
+}
+
+function setStale(key: string, data: any) {
+  if (staleCache.size >= MAX_STALE_SIZE) {
+    const firstKey = staleCache.keys().next().value
+    if (firstKey) staleCache.delete(firstKey)
+  }
+  staleCache.set(key, { data, at: Date.now() })
+}
+
 function getCached<T>(key: string): T | null {
   const entry = cache.get(key)
   if (!entry) return null
@@ -126,6 +155,7 @@ function setCached(key: string, data: any) {
     if (firstKey) cache.delete(firstKey)
   }
   cache.set(key, { data, expires: Date.now() + CACHE_TTL, hits: 0 })
+  setStale(key, data)
 }
 
 function invalidateCache(sheet?: string) {
@@ -300,7 +330,10 @@ function scheduleReconcile(sheet: string) {
     sheet,
     setTimeout(() => {
       reconcileTimers.delete(sheet)
-      listRows(sheet, { useCache: false }).catch(() => {})
+      // forceRefresh, NOT useCache:false. With useCache:false listRows skips
+      // setCached() entirely, so the reconcile burned an Apps Script call and
+      // threw the result away — the cache stayed exactly as stale as before.
+      listRows(sheet, { forceRefresh: true }).catch(() => {})
     }, reconcileDelayMs())
   )
 }
@@ -506,7 +539,17 @@ function diagnoseJsonAuthError(text: string): string | null {
 let circuitBrokenUntil = 0
 let consecutiveFailures = 0
 const CIRCUIT_BREAKER_THRESHOLD = 5
-const CIRCUIT_BREAKER_COOLDOWN = 30 * 1000
+// 30s of hard failures was punishing for what is usually a single Apps Script
+// cold start. Reads now fall back to staleCache anyway, so a short cooldown
+// recovers quickly without hammering a genuinely down backend.
+const CIRCUIT_BREAKER_COOLDOWN = 12 * 1000
+
+// Per-attempt timeouts. The SECOND attempt gets a shorter budget so the total
+// worst case stays predictable and the browser-side timeout can be set safely
+// above it (see FETCH_TIMEOUT_MS / QUANTUM_FETCH_TIMEOUT in src/lib/api.ts).
+const GET_TIMEOUTS = [8000, 6000]   // worst case ~14.3s incl. backoff
+const POST_TIMEOUTS = [10000, 8000] // worst case ~18.3s incl. backoff
+const RETRY_BACKOFF_MS = 300
 
 // v11: in-flight GET dedupe map (see getFromAppsScript)
 const inflightGets = new Map<string, Promise<any>>()
@@ -561,7 +604,7 @@ async function callAppsScript(payload: any): Promise<any> {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(sanitizeRowData(bodyWithPin)),
         redirect: 'follow',
-        signal: AbortSignal.timeout(10000) // 10s — Apps Script cold start can take 6-8s on first hit
+        signal: AbortSignal.timeout(POST_TIMEOUTS[attempt - 1] ?? 8000)
       })
       if (res.status === 404) {
         throw new Error(`Apps Script 404 (attempt ${attempt}/2). Redeploy needed.`)
@@ -602,7 +645,7 @@ async function callAppsScript(payload: any): Promise<any> {
         }
         throw e
       }
-      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
+      await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS))
     }
   }
   throw lastErr || new Error('Apps Script call failed after retries')
@@ -637,7 +680,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
         const res = await fetch(urlStr, {
           method: 'GET',
           redirect: 'follow',
-          signal: AbortSignal.timeout(8000) // 8s — was 4s. Apps Script cold start can take 6-8s.
+          signal: AbortSignal.timeout(GET_TIMEOUTS[attempt - 1] ?? 6000)
         })
         if (res.status === 404) throw new Error(`Apps Script 404 (attempt ${attempt}/2)`)
         if (!res.ok) throw new Error(`Apps Script HTTP ${res.status}`)
@@ -666,7 +709,7 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
           }
           throw e
         }
-        await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)))
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS))
       }
     }
     throw lastErr || new Error('Apps Script GET failed')
@@ -681,14 +724,16 @@ async function getFromAppsScript(params: Record<string, string>): Promise<any> {
 // ===== CRUD OPERATIONS =====
 export async function listRows<T = any>(
   sheet: string,
-  options: { filter?: string; search?: string; useCache?: boolean; includeDeleted?: boolean } = {}
+  options: { filter?: string; search?: string; useCache?: boolean; includeDeleted?: boolean; forceRefresh?: boolean } = {}
 ): Promise<T[]> {
   if (!isConfigured()) return [] as T[]
 
   const useCache = options.useCache !== false
   const cacheKey = `list:${sheet}:${options.filter || ''}:${options.search || ''}:${options.includeDeleted ? '1' : '0'}`
 
-  if (useCache) {
+  // forceRefresh skips the READ side of the cache but still writes the result
+  // back, which is what a background reconcile actually wants.
+  if (useCache && !options.forceRefresh) {
     const cached = getCached<T[]>(cacheKey)
     if (cached) return cached
   }
@@ -698,8 +743,23 @@ export async function listRows<T = any>(
   if (options.search) params.search = options.search
   if (options.includeDeleted) params.includeDeleted = 'true'
 
-  const res = await getFromAppsScript(params)
-  if (!res.success) throw new Error(res.error || 'Failed to list')
+  let res: any
+  try {
+    res = await getFromAppsScript(params)
+  } catch (e) {
+    // Apps Script timed out / circuit breaker tripped. Serve the last known
+    // good copy rather than failing the whole panel. Callers that explicitly
+    // opted out of the cache (exports, backups) still get the hard error —
+    // they must never silently receive stale rows.
+    const stale = useCache ? getStale<T[]>(cacheKey) : null
+    if (stale) return stale
+    throw e
+  }
+  if (!res.success) {
+    const stale = useCache ? getStale<T[]>(cacheKey) : null
+    if (stale) return stale
+    throw new Error(res.error || 'Failed to list')
+  }
   // Guard against resurrection: a list request that was already in flight when
   // a delete landed can come back still containing the deleted row. deleteRow()
   // records the id in deletedTracking for 5 min, so drop it here. Mirrors
@@ -733,9 +793,16 @@ export async function getRow<T = any>(sheet: string, id: string): Promise<T | nu
   const cacheKey = `get:${sheet}:${id}`
   const cached = getCached<T>(cacheKey)
   if (cached) return cached
-  
-  const res = await getFromAppsScript({ action: 'get', sheet, id })
-  if (!res.success) return null
+
+  let res: any
+  try {
+    res = await getFromAppsScript({ action: 'get', sheet, id })
+  } catch (e) {
+    const stale = getStale<T>(cacheKey)
+    if (stale) return stale
+    throw e
+  }
+  if (!res.success) return getStale<T>(cacheKey)
   if (res.data) setCached(cacheKey, res.data)
   return res.data as T
 }
@@ -848,8 +915,19 @@ export async function getDashboardStats(): Promise<any> {
   const cached = getCached<any>(cacheKey)
   if (cached) return cached
 
-  const res = await getFromAppsScript({ action: 'dashboard' })
-  if (!res.success) throw new Error(res.error || 'Failed to get dashboard')
+  let res: any
+  try {
+    res = await getFromAppsScript({ action: 'dashboard' })
+  } catch (e) {
+    const stale = getStale<any>(cacheKey)
+    if (stale) return stale
+    throw e
+  }
+  if (!res.success) {
+    const stale = getStale<any>(cacheKey)
+    if (stale) return stale
+    throw new Error(res.error || 'Failed to get dashboard')
+  }
   setCached(cacheKey, res.data)
   return res.data
 }
