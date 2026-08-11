@@ -198,7 +198,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const outstandingBeforePayment = money(Math.max(0, finalAmount - advance - alreadyPaid))
       const requestedPayment = body?.paymentReceivedNow !== undefined
         ? money(body?.paymentReceivedNow)
-        : outstandingBeforePayment
+        : 0
       const paymentReceivedNow = money(clamp(requestedPayment, 0, outstandingBeforePayment))
       const newPaidAmount = money(alreadyPaid + paymentReceivedNow)
       const balanceDueAfter = money(Math.max(0, finalAmount - advance - newPaidAmount))
