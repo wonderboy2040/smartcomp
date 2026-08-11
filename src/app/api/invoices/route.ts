@@ -87,13 +87,19 @@ export async function POST(req: NextRequest) {
     if (!check.allowed) return NextResponse.json({ error: 'Rate limited' }, { status: 429 })
 
     const body = await req.json()
-    const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, paymentType = 'cash', amountPaid = 0, notes = '', date, deductStock = true, template, gstMode = 'gst' } = body
+    const { customerId, items, courierCharges = 0, otherCharges = 0, discount = 0, paymentType = 'cash', amountPaid = 0, notes = '', date, deductStock = true, template = 'tally-classic', gstMode = 'gst', roundOff = false } = body
 
     if (!customerId) return NextResponse.json({ error: 'Customer required' }, { status: 400 })
     if (!Array.isArray(items) || items.length === 0) return NextResponse.json({ error: 'Items required' }, { status: 400 })
 
+    // Validate items have required fields
+    for (const item of items) {
+      if (!item.name) return NextResponse.json({ error: 'Item name required' }, { status: 400 })
+      if (item.quantity <= 0) return NextResponse.json({ error: 'Item quantity must be positive' }, { status: 400 })
+    }
+
     // Compute totals client-side for INSTANT optimistic UI
-    const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount })
+    const calc = computeInvoice(items as LineItem[], { courierCharges, otherCharges, discount, roundOff: roundOff === true })
     const paid = Number(amountPaid) || 0
     const due = Math.max(0, calc.grandTotal - paid)
 

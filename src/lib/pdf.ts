@@ -569,7 +569,9 @@ export async function generateInvoicePdf(data: PdfDocData): Promise<Buffer> {
   if (!isNonGst && data.calc.cgstAmount > 0) drawRow(`CGST (${halfGstRate}%)`, formatCurrency(data.calc.cgstAmount))
   if (!isNonGst && data.calc.sgstAmount > 0) drawRow(`SGST (${halfGstRate}%)`, formatCurrency(data.calc.sgstAmount))
   if (data.calc.courierCharges > 0) drawRow('Courier Charges', formatCurrency(data.calc.courierCharges))
+  if (data.calc.otherCharges > 0) drawRow('Other Charges', formatCurrency(data.calc.otherCharges))
   if (data.calc.discount > 0) drawRow('Discount', `- ${formatCurrency(data.calc.discount)}`, true, N.green)
+  if (data.roundOff && data.roundOff !== 0) drawRow('Round Off', `${data.roundOff > 0 ? '+' : ''}${formatCurrency(data.roundOff)}`)
 
   // Grand Total Highlight
   doc.setFillColor(...A)

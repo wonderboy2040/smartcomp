@@ -300,9 +300,12 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
           discount: i.discount || 0,
         }))
         setItems(parsedItems)
-        setCourierCharges(editing.courierCharges || 0)
-        setOtherCharges(editing.otherCharges || 0)
-        setDiscount(editing.discount || 0)
+        const editCourier = Number(editing.courierCharges) || 0
+        const editOther = Number(editing.otherCharges) || 0
+        const editDiscount = Number(editing.discount) || 0
+        setCourierCharges(editCourier)
+        setOtherCharges(editOther)
+        setDiscount(editDiscount)
         setDiscountPercent(0)
         setPaymentType(editing.paymentType || 'cash')
         setAmountPaid(editing.amountPaid || 0)
@@ -310,7 +313,20 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         setValidTill(editing.validTill ? new Date(editing.validTill).toISOString().slice(0, 10) : '')
         setDate(editing.date ? new Date(editing.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10))
         setSelectedTemplate(editing.template || editing.templateId || 'tally-classic')
-        setRoundOff(editing.roundOff === true || editing.roundOff === 'true')
+        // The sheet has no roundOff column, so infer it: rounding was on when
+        // the stored total equals the ROUNDED sum but not the raw sum. Without
+        // this, re-saving an edited invoice silently dropped the rounding.
+        const rawTotal = computeInvoice(parsedItems, {
+          courierCharges: editCourier,
+          otherCharges: editOther,
+          discount: editDiscount,
+        }).grandTotal
+        const storedTotal = Number(editing.grandTotal) || 0
+        setRoundOff(
+          storedTotal > 0 &&
+            Math.abs(storedTotal - Math.round(rawTotal)) < 0.005 &&
+            Math.abs(storedTotal - rawTotal) > 0.005,
+        )
         setGstMode(editing.gstMode === 'non-gst' ? 'non-gst' : 'gst')
       } else {
         setCustomerId('')
@@ -331,15 +347,14 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
     }
   }, [open, editing])
 
-  const calc = useMemo(() => {
-    let baseCalc = computeInvoice(items, { courierCharges, otherCharges, discount })
-    if (roundOff) {
-      const rounded = Math.round(baseCalc.grandTotal)
-      const diff = rounded - baseCalc.grandTotal
-      baseCalc = { ...baseCalc, grandTotal: rounded, otherCharges: baseCalc.otherCharges + diff }
-    }
-    return baseCalc
-  }, [items, courierCharges, otherCharges, discount, roundOff])
+  // Rounding is handled inside computeInvoice so the number shown here is
+  // byte-for-byte the number the API stores and the PDF prints. The old code
+  // rounded locally and pushed the difference into otherCharges, which was
+  // never sent — the saved document silently disagreed with this summary.
+  const calc = useMemo(
+    () => computeInvoice(items, { courierCharges, otherCharges, discount, roundOff }),
+    [items, courierCharges, otherCharges, discount, roundOff],
+  )
 
   const selectedCustomer = useMemo(() => {
     return allCustomers.find((c: any) => c.id === customerId)
@@ -513,9 +528,14 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         return rest
       })
 
+      // In non-GST mode, force all items to have gstApplicable: false
+      const finalItems = gstMode === 'non-gst'
+        ? cleanItems.map((i: any) => ({ ...i, gstApplicable: false, gstRate: 0 }))
+        : cleanItems
+
       const payload: any = {
         customerId,
-        items: cleanItems,
+        items: finalItems,
         courierCharges,
         otherCharges,
         discount,
@@ -523,9 +543,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
         date,
         template: selectedTemplate,
         gstMode,
-      }
-      if (gstMode === 'non-gst') {
-        payload.items = cleanItems.map((i: any) => ({ ...i, gstApplicable: false, gstRate: 0 }))
+        roundOff,
       }
       if (docType === 'invoice') {
         payload.paymentType = paymentType
@@ -602,8 +620,8 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
 
         <div className="p-4 sm:p-6 space-y-5">
           {/* Customer + Date + Template */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            <div className="lg:col-span-5">
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-4">
+            <div className="lg:col-span-4">
               <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" />Customer *
                 {selectedCustomer && (
@@ -654,7 +672,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
               <Label className="text-xs font-bold text-slate-700">Date</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1.5 h-11 bg-white border-slate-200" />
             </div>
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-2">
               <Label className="text-xs font-bold text-slate-700">PDF Template <span className="text-[10px] text-indigo-600 font-semibold">10 Premium</span></Label>
               <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
                 <SelectTrigger className="mt-1.5 h-11 bg-white border-slate-200"><SelectValue /></SelectTrigger>
@@ -985,6 +1003,7 @@ export function DocForm({ open, onOpenChange, docType, editing, onSaved }: DocFo
                   <div className="text-[10px] text-slate-400 pl-2">SGST: {formatCurrency(calc.sgstAmount)} | CGST: {formatCurrency(calc.cgstAmount)}</div>
                   {courierCharges > 0 && <div className="flex justify-between"><span className="text-slate-300">Courier:</span><span>{formatCurrency(courierCharges)}</span></div>}
                   {otherCharges > 0 && <div className="flex justify-between"><span className="text-slate-300">Other:</span><span>{formatCurrency(otherCharges)}</span></div>}
+                  {calc.roundOff !== 0 && <div className="flex justify-between"><span className="text-slate-300">Round Off:</span><span>{calc.roundOff > 0 ? '+' : '-'} {formatCurrency(Math.abs(calc.roundOff))}</span></div>}
                   <div className="border-t border-white/10 my-2"></div>
                   <div className="flex justify-between text-base font-bold"><span>Grand Total:</span><span className="text-lg text-white">{formatCurrency(calc.grandTotal)}</span></div>
                   {docType === 'invoice' && (
