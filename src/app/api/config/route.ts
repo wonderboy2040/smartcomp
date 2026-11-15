@@ -13,8 +13,6 @@ export async function GET() {
     urlPreview: url ? maskUrl(url) : null,
     // Only expose whether the URL ends with /exec — never the full URL itself
     endsWithExec: !!url && url.includes('/exec'),
-    // Whether the desktop runtime config file is being used (vs env var)
-    runtimeConfigActive: !!process.env.SMARTCOMP_CONFIG_PATH,
   })
 }
 

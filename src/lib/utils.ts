@@ -1,5 +1,24 @@
+import { NextResponse } from 'next/server'
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+
+export const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+} as const
+
+export function withSecurityHeaders<T>(response: NextResponse<T>): NextResponse<T> {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value)
+  }
+  return response
+}
+
+export function json<T>(data: T, init?: ResponseInit): NextResponse<T> {
+  const res = NextResponse.json(data, init)
+  return withSecurityHeaders(res)
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

@@ -115,10 +115,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Always return 200 to Razorpay
+    // Always return 200 to Razorpay on success. On actual errors, return 500
+    // so Razorpay knows to retry — the previous version swallowed all errors
+    // as 200, which silently dropped failed payment notifications.
     return NextResponse.json({ success: true })
   } catch (e: any) {
     console.error('[Razorpay Webhook] Error:', e?.message)
-    return NextResponse.json({ success: true }) // still 200 to prevent retries
+    return NextResponse.json({ success: false, error: 'Internal error' }, { status: 500 })
   }
 }

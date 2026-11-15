@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyWebhook, parseIncomingWebhook, markMessageAsRead } from '@/lib/whatsapp-cloud'
+import { verifyWebhook, parseIncomingWebhook, markMessageAsRead, normalizePhone } from '@/lib/whatsapp-cloud'
 import { listRows, updateRow, createRow } from '@/lib/sheets-client'
 import { parseRateResponseAdvanced } from '@/lib/whatsapp'
 
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     for (const s of suppliers) {
       const phones = [s.whatsappNumber, s.phone].filter(Boolean).map(String)
       for (const p of phones) {
-        const norm = normalizePhoneLocal(p)
+        const norm = normalizePhone(p)
         if (norm) suppliersByPhone.set(norm, s)
       }
     }
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
 
     let handled = 0
     for (const msg of messages) {
-      const normFrom = normalizePhoneLocal(msg.from)
+      const normFrom = normalizePhone(msg.from)
       if (!normFrom) continue
 
       // 1. Find matching supplier by phone
@@ -196,17 +196,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, handled })
   } catch (e: any) {
-    // Always return 200 to Meta so they don't retry endlessly; log the error
+    // Return 500 so Meta retries on processing failures.
     console.error('Webhook POST error:', e?.message)
-    return NextResponse.json({ success: false, error: e?.message }, { status: 200 })
+    return NextResponse.json({ success: false, error: 'Internal error' }, { status: 500 })
   }
-}
-
-// local helper (avoids importing the ESM normalizePhone for type issues)
-function normalizePhoneLocal(raw: string): string {
-  const s = String(raw || '').replace(/[^\d]/g, '')
-  if (s.length === 10) return '91' + s
-  if (s.length === 12 && s.startsWith('91')) return s
-  if (s.length === 11 && s.startsWith('0')) return '91' + s.slice(1)
-  return s
 }

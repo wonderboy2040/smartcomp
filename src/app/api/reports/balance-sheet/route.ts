@@ -29,13 +29,14 @@ export async function GET(req: NextRequest) {
       return new Date(d) <= asOnD
     }
 
-    const [items, invoices, payments, expenses, servicePayments, personalExp] = await Promise.all([
+    const [items, invoices, payments, expenses, servicePayments, personalExp, customers] = await Promise.all([
       listRows<any>('Items'),
       listRows<any>('Invoices'),
       listRows<any>('Payments'),
       listRows<any>('Expenses'),
       listRows<any>('ServicePayments'),
       listRows<any>('PersonalExpenditure'),
+      listRows<any>('Customers'),
     ])
 
     // ASSETS
@@ -93,10 +94,10 @@ export async function GET(req: NextRequest) {
     const totalAssets = stockValueCost + receivables + cashInHand + upiBalance + bankBalance
 
     // LIABILITIES
-    // Customer credit balance IS the same as receivables (outstanding invoice dues).
-    // Counting both would double-count. We set liabilities to 0 for now.
-    // Future: track supplier payables (purchase orders not yet paid) as real liabilities.
-    const totalLiabilities = 0
+    // 1. Customer credit balance = money received in advance (liability to deliver goods/services)
+    const customerCredit = customers.reduce((s, c) => s + (Number(c.creditBalance) || 0), 0)
+    // 2. Future: supplier payables (purchase orders not yet paid) can be added here
+    const totalLiabilities = customerCredit
 
     // Net Worth
     const netWorth = totalAssets - totalLiabilities
@@ -113,6 +114,8 @@ export async function GET(req: NextRequest) {
         total: totalAssets,
       },
       liabilities: {
+        customerCreditBalance: customerCredit,
+        supplierPayables: 0,
         total: totalLiabilities,
       },
       netWorth,
