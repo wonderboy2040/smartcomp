@@ -792,7 +792,7 @@ export async function getRow<T = any>(sheet: string, id: string): Promise<T | nu
   if (!isConfigured()) return null
   const cacheKey = `get:${sheet}:${id}`
   const cached = getCached<T>(cacheKey)
-  if (cached) return cached
+  if (cached && !isDeletedRow(cached)) return cached
 
   let res: any
   try {
@@ -802,7 +802,10 @@ export async function getRow<T = any>(sheet: string, id: string): Promise<T | nu
     if (stale) return stale
     throw e
   }
-  if (!res.success) return getStale<T>(cacheKey)
+  if (!res.success || isDeletedRow(res.data)) {
+    cache.delete(cacheKey)
+    return getStale<T>(cacheKey)
+  }
   if (res.data) setCached(cacheKey, res.data)
   return res.data as T
 }
@@ -839,6 +842,9 @@ export async function deleteRow(sheet: string, id: string): Promise<boolean> {
   if (!res.success) throw new Error(res.error || 'Failed to delete')
   // v11 write-through: mark the row deleted in every cached list instantly.
   patchListCache(sheet, { id, deleted: true }, 'delete')
+  // Also clear the detail cache so getRow returns null for a deleted row.
+  const getKey = `get:${sheet}:${id}`
+  cache.delete(getKey)
   invalidateAggregates()
   scheduleReconcile(sheet)
   return true
